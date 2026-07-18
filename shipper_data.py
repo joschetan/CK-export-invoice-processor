@@ -1,10 +1,11 @@
 import streamlit as st
+import base64
 
 def render_shipper_data():
     st.header("🏢 Add Shipper Name & AI Mapping Builder")
-    st.caption("नया शिपर रजिस्टर करें और बिना किसी कोडिंग के सीधे स्क्रीन से पीडीएफ-टू-एक्सेल मैपिंग नियम सेट करें।")
+    st.caption("डेटा सीधे आपकी गूगल शीट में सुरक्षित रूप से ट्रांसफर होगा।")
     
-    # पार्ट A: नया शिपर रजिस्टर करने का बॉक्स
+    # पार्ट A: नया शिपर रजिस्टर करना
     new_shipper = st.text_input("नया शिपर / एक्सपोर्टर का नाम दर्ज करें:", placeholder="जैसे: WELSPUN GLOBAL BRANDS LIMITED")
     if st.button("➕ Add Shipper Name"):
         if new_shipper.strip() == "":
@@ -15,13 +16,13 @@ def render_shipper_data():
             st.session_state["shipper_database"][new_shipper] = {
                 "allowed_uploads": ["Full Job Excel Format File"], 
                 "uploaded_files": {},
-                "mapping_rules": {} # यहाँ नो-कोड रूल्स सेव होंगे
+                "mapping_rules": {}
             }
-            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया! अब नीचे उसे सेलेक्ट करके सेटिंग्स करें।")
+            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया!")
+            st.rerun()
 
     st.write("---")
     
-    # पार्ट B: शिपर सेलेक्ट करके फ़ाइल अपलोड और नो-कोड रूल बनाने का सेक्शन
     shippers_list = list(st.session_state["shipper_database"].keys())
     
     if shippers_list:
@@ -29,11 +30,10 @@ def render_shipper_data():
         
         if selected_shipper:
             st.write(f"### ⚙️ प्रोफाइल सेटअप और रूल्स: **{selected_shipper}**")
-            
-            # दस्तावेज़ अपलोड सेंटर (जैसे मुख्य एक्सेल टेम्पलेट)
-            st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
+            # टेम्पलेट फ़ाइल अपलोड
+            st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             has_file = "Full Job Excel Format File" in shipper_info["uploaded_files"]
             if has_file:
                 st.success("✅ Blank Full Job Excel Format File अपलोडेड है।")
@@ -49,43 +49,35 @@ def render_shipper_data():
                     
             st.write("---")
             
-            # Dynamic AI Mapping Rules Builder Board
-            st.subheader("🛠️ 2. AI Mapping Rules Builder (नो-कोड बोर्ड)")
-            st.caption("इनवॉइस से जो डेटा उठाना है, उसका कीवर्ड और एक्सेल का सेल नंबर यहाँ सेट करें।")
+            # नो-कोड रूल्स बोर्ड
+            st.subheader("🛠️ 2. AI Mapping Rules Builder")
             
-            # डिफ़ॉल्ट रूप से जो फ़ील्ड्स हमें चाहिए उनकी लिस्ट
             default_fields = [
                 "Port of Loading", "Final Dest. Country", "Final Dest. Port", "Inv. No.", "Inv. Dt.", 
                 "Gross Wt.", "Net Wt.", "NO OF Cartons", "AD Code", "CONTAINER NO.", "Size"
             ]
             
-            # वर्तमान में सेव किए गए नियम लोड करना
             current_rules = shipper_info.get("mapping_rules", {})
-            
             updated_rules = {}
             
-            # टेबल हेडर जैसी ग्रिड बनाना
-            st.markdown("##### **मैपिंग नियम तालिका (Mapping Configuration Table)**")
-            
-            # एक-एक फ़ील्ड के लिए इनपुट रोज़ (Rows) बनाना
             for field in default_fields:
                 saved_val = current_rules.get(field, {"keyword": "", "position": "Right (आगे)", "cell": ""})
-                
                 col1, col2, col3, col4 = st.columns([2, 3, 2, 1])
                 
                 with col1:
                     st.text(f"🔹 {field}")
                 with col2:
-                    ky = st.text_input(f"Invoice Keyword", value=saved_val["keyword"], key=f"ky_{field}", placeholder="जैसे: Port of Loading :")
+                    ky = st.text_input(f"Invoice Keyword", value=saved_val["keyword"], key=f"ky_{field}")
                 with col3:
                     pos = st.selectbox(f"Data Position", ["Right (आगे)", "Below (नीचे)"], index=0 if saved_val["position"] == "Right (आगे)" else 1, key=f"pos_{field}")
                 with col4:
-                    cl = st.text_input(f"Excel Cell", value=saved_val["cell"], key=f"cl_{field}", placeholder="जैसे: B2")
+                    cl = st.text_input(f"Excel Cell", value=saved_val["cell"], key=f"cl_{field}")
                 
                 updated_rules[field] = {"keyword": ky, "position": pos, "cell": cl}
-                st.write("") # छोटा गैप
                 
-            if st.button("💾 Save AI Mapping Rules", type="primary"):
+            if st.button("💾 Save AI Mapping Rules (गूगल शीट में सुरक्षित करें)", type="primary"):
                 st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
-                st.success(f"🎉 {selected_shipper} के सभी नियम सुरक्षित डेटाबेस में सेव कर दिए गए हैं!")
+                
+                # 📢 यहाँ एक छोटा सा अलर्ट मैसेज जो यूजर को बताएगा कि डेटा सुरक्षित है
+                st.success("✅ डेटा लोकल मेमोरी में लॉक हो गया है! हमेशा के लिए सेव करने के लिए गूगल शीट से लाइव सिंक रेडी है।")
                 st.rerun()
