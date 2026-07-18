@@ -1,11 +1,9 @@
 import streamlit as st
 
 def render_master_data():
-    st.header("📋 Master Data - Shipper Registration")
+    st.header("🏢 Add Shipper Name & Configuration")
     
-    # पार्ट A: शिपर का नाम जोड़ना
-    st.subheader("🏢 Register New Shipper Name")
-    new_shipper = st.text_input("शिपर / एक्सपोर्टर का नाम दर्ज करें:", placeholder="जैसे: ABC Exports Pvt Ltd")
+    new_shipper = st.text_input("नया शिपर / एक्सपोर्टर का नाम दर्ज करें:", placeholder="जैसे: ABC Exports Pvt Ltd")
     if st.button("➕ Add Shipper Name"):
         if new_shipper.strip() == "":
             st.error("कृपया शिपर का नाम खाली न छोड़ें।")
@@ -13,29 +11,44 @@ def render_master_data():
             st.warning(f"⚠️ '{new_shipper}' नाम पहले से मौजूद है।")
         else:
             st.session_state["shipper_database"][new_shipper] = {"allowed_uploads": [], "uploaded_files": {}}
-            st.success(f"🎉 शिपर '{new_shipper}' का नाम मास्टर डेटा में जुड़ गया है!")
+            st.success(f"🎉 शिपर '{new_shipper}' का नाम जुड़ गया! अब नीचे उसकी सेटिंग्स करें।")
 
     st.write("---")
     
-    # पार्ट B: डायनेमिक डॉक्यूमेंट/डिक्शनरी टाइप्स जोड़ना
-    st.subheader("⚙️ Manage Specific Upload Buttons")
-    st.caption("यहाँ बनाए गए ऑप्शन्स पर्टिकुलर शिपर प्रोफाइल में फ़ाइल अपलोड बटन्स के रूप में दिखाई देंगे।")
-    
-    col_input, col_btn = st.columns([4, 1])
-    with col_input:
-        new_type = st.text_input("नया डॉक्यूमेंट बटन का नाम लिखें:", placeholder="जैसे: Extra Annexure, License Copy")
-    with col_btn:
-        st.write("##")
-        if st.button("➕ Add Type"):
-            if new_type.strip() != "" and new_type not in st.session_state["master_types"]:
-                st.session_state["master_types"].append(new_type.strip())
-                st.success(f"'{new_type}' लिस्ट में जुड़ गया है!")
+    # शिपर सेलेक्ट करके टिक लगाने और फाइल अपलोड करने का कंबाइंड सेक्शन
+    shippers_list = list(st.session_state["shipper_database"].keys())
+    if shippers_list:
+        selected_shipper = st.selectbox("कॉन्फ़िगर करने के लिए शिपर चुनें:", shippers_list, index=None, placeholder="शिपर का नाम चुनें...")
+        
+        if selected_shipper:
+            st.write(f"### ⚙️ प्रोफाइल सेटअप: **{selected_shipper}**")
+            
+            selected_uploads = []
+            current_allowed = st.session_state["shipper_database"][selected_shipper].get("allowed_uploads", [])
+            
+            for t in st.session_state["master_types"]:
+                is_checked = t in current_allowed
+                if st.checkbox(t, value=is_checked, key=f"chk_{selected_shipper}_{t}"):
+                    selected_uploads.append(t)
+            
+            if st.button("🔒 सेव शिपर कॉन्फ़िगरेशन"):
+                st.session_state["shipper_database"][selected_shipper]["allowed_uploads"] = selected_uploads
+                st.success(f"✅ '{selected_shipper}' के अपलोड ऑप्शंस अपडेट हो गए!")
                 st.rerun()
 
-    st.write("#### वर्तमान में उपलब्ध ऑप्शंस:")
-    for t in st.session_state["master_types"]:
-        c1, c2 = st.columns([4, 1])
-        c1.text(f"🔹 {t}")
-        if c2.button(f"❌ Remove", key=f"del_{t}"):
-            st.session_state["master_types"].remove(t)
-            st.rerun()
+            allowed_buttons = st.session_state["shipper_database"][selected_shipper].get("allowed_uploads", [])
+            if allowed_buttons:
+                st.write("#### 📁 इस शिपर के लिए फ़ाइलें अपलोड करें:")
+                for btn_name in allowed_buttons:
+                    has_file = btn_name in st.session_state["shipper_database"][selected_shipper]["uploaded_files"]
+                    if has_file:
+                        st.success(f"✅ {btn_name} अपलोडेड है।")
+                        if st.button(f"🗑️ Delete & Replace", key=f"del_ship_file_{selected_shipper}_{btn_name}"):
+                            del st.session_state["shipper_database"][selected_shipper]["uploaded_files"][btn_name]
+                            st.rerun()
+                    else:
+                        f_upload = st.file_uploader(f"➡️ Upload: {btn_name}", type=["xlsx", "xls", "pdf"], key=f"upload_{selected_shipper}_{btn_name}")
+                        if f_upload:
+                            st.session_state["shipper_database"][selected_shipper]["uploaded_files"][btn_name] = f_upload.getvalue()
+                            st.success(f"{btn_name} सेव्ड।")
+                            st.rerun()
