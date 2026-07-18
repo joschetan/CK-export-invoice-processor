@@ -22,7 +22,7 @@ def render_shipper_data():
                 "uploaded_files": {},
                 "mapping_rules": {}
             }
-            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया! मैपिंग रूल्स सेव करते ही यह गूगल शीट में चला जाएगा।")
+            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया!")
             st.rerun()
 
     st.write("---")
@@ -50,13 +50,8 @@ def render_shipper_data():
                     file_bytes = f_upload.getvalue()
                     shipper_info["uploaded_files"]["Full Job Excel Format File"] = file_bytes
                     
-                    # फ़ाइल को बेस64 में कन्वर्ट करके गूगल शीट में भेजना
                     file_b64 = base64.b64encode(file_bytes).decode("utf-8")
-                    payload = {
-                        "action": "save_file",
-                        "shipper": selected_shipper,
-                        "file_base64": file_b64
-                    }
+                    payload = {"action": "save_file", "shipper": selected_shipper, "file_base64": file_b64}
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps(payload))
                         st.success("टेम्पलेट फ़ाइल गूगल शीट में सुरक्षित सेव हो गई!")
@@ -66,8 +61,9 @@ def render_shipper_data():
                     
             st.write("---")
             
-            # 🛠️ नो-कोड रूल्स बोर्ड
+            # 🛠️ नो-कोड रूल्स बोर्ड (लॉजिक फ़िल्टर के साथ)
             st.subheader("🛠️ 2. AI Mapping Rules Builder")
+            st.caption("नोट: यदि नया AI Logic कॉलम स्क्रीन पर न दिखे, तो कृपया एक बार ब्राउज़र रीफ्रेश कर लें।")
             
             default_fields = [
                 "Port of Loading", "Final Dest. Country", "Final Dest. Port", "Inv. No.", "Inv. Dt.", 
@@ -77,48 +73,60 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
+            # हेडर लेआउट सेट करना
+            h_col1, h_col2, h_col3, h_col4, h_col5 = st.columns([2, 3, 2, 1, 2])
+            with h_col1: st.markdown("**Field Name**")
+            with h_col2: st.markdown("**Invoice Keyword**")
+            with h_col3: st.markdown("**Data Position**")
+            with h_col4: st.markdown("**Excel Cell**")
+            with h_col5: st.markdown("**AI Logic (विशेष नियम)**")
+            st.write("---")
+            
             for field in default_fields:
-                saved_val = current_rules.get(field, {"keyword": "", "position": "Right (आगे)", "cell": ""})
-                col1, col2, col3, col4 = st.columns([2, 3, 2, 1])
+                saved_val = current_rules.get(field, {"keyword": "", "position": "Right (आगे)", "cell": "", "logic": "None"})
+                
+                col1, col2, col3, col4, col5 = st.columns([2, 3, 2, 1, 2])
                 
                 with col1:
-                    st.text(f"🔹 {field}")
+                    st.write(f"🔹 **{field}**")
                 with col2:
-                    ky = st.text_input(f"Invoice Keyword", value=saved_val["keyword"], key=f"ky_{field}", placeholder="जैसे: Port of Loading :")
+                    ky = st.text_input(f"Keyword_{field}", value=saved_val.get("keyword", ""), label_visibility="collapsed")
                 with col3:
-                    pos = st.selectbox(f"Data Position", ["Right (आगे)", "Below (नीचे)"], index=0 if saved_val["position"] == "Right (आगे)" else 1, key=f"pos_{field}")
+                    pos = st.selectbox(f"Position_{field}", ["Right (आगे)", "Below (नीचे)"], index=0 if saved_val.get("position", "Right (आगे)") == "Right (आगे)" else 1, label_visibility="collapsed")
                 with col4:
-                    cl = st.text_input(f"Excel Cell", value=saved_val["cell"], key=f"cl_{field}", placeholder="जैसे: B2")
+                    cl = st.text_input(f"Cell_{field}", value=saved_val.get("cell", ""), label_visibility="collapsed")
+                with col5:
+                    # पांचवां कॉलम - ड्रॉपडाउन लॉजिक
+                    logic_options = ["None", "Container No (4 Alpha + 7 Num)", "Pure Numbers Only"]
+                    saved_lg = saved_val.get("logic", "None")
+                    if saved_lg not in logic_options:
+                        saved_lg = "None"
+                    lg = st.selectbox(f"Logic_{field}", logic_options, index=logic_options.index(saved_lg), label_visibility="collapsed")
                 
-                updated_rules[field] = {"keyword": ky, "position": pos, "cell": cl}
+                updated_rules[field] = {"keyword": ky, "position": pos, "cell": cl, "logic": lg}
                 
             if st.button("💾 Save AI Mapping Rules (गूगल शीट में सुरक्षित करें)", type="primary"):
-                # लोकल सेशन अपडेट
                 st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
                 
-                # 📤 गूगल शीट API के लिए रूल्स एरे (Array) तैयार करना
                 rules_payload = []
-                # सभी शिप्स का पुराना डेटा भी रखना ताकि ओवरराइट न हो
                 for s_name, s_data in st.session_state["shipper_database"].items():
                     s_rules = s_data.get("mapping_rules", {})
                     for f_name, r_info in s_rules.items():
                         rules_payload.append({
                             "shipper": s_name,
                             "field": f_name,
-                            "keyword": r_info["keyword"],
-                            "position": r_info["position"],
-                            "cell": r_info["cell"]
+                            "keyword": r_info.get("keyword", ""),
+                            "position": r_info.get("position", "Right (आगे)"),
+                            "cell": r_info.get("cell", ""),
+                            "logic": r_info.get("logic", "None")
                         })
                 
-                payload = {
-                    "action": "save_rules",
-                    "rules": rules_payload
-                }
+                payload = {"action": "save_rules", "rules": rules_payload}
                 
                 with st.spinner("डेटाबेस गूगल शीट में सिंक हो रहा है..."):
                     try:
-                        res = requests.post(WEB_APP_URL, data=json.dumps(payload))
-                        st.success("🎉 बधाई हो भाई! सारा डेटा आपकी लाइव Google Sheet में हमेशा के लिए लॉक हो गया है!")
+                        requests.post(WEB_APP_URL, data=json.dumps(payload))
+                        st.success("🎉 बधाई हो भाई! लॉजिक रूल्स के साथ डेटा गूगल शीट में लॉक हो गया है!")
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
                 st.rerun()
