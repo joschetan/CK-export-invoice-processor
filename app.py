@@ -1,4 +1,6 @@
 import streamlit as st
+import pickle
+import os
 from global_masters import render_global_masters
 from manage_buttons import render_manage_buttons
 from shipper_data import render_shipper_data
@@ -7,64 +9,98 @@ from processor import render_processor
 # --- मुख्य विंडो सेटिंग्स ---
 st.set_page_config(page_title="CK Export Invoice Processor", layout="wide")
 
-# 🔒 सुरक्षा - लॉगिन पासवर्ड
-PASSWORD = "admin" 
+DB_FILE = "database.pkl"
 
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+# 💾 डेटाबेस को फाइल से लोड और सेव करने के फंक्शन्स
+def load_database():
+    if os.path.exists(DB_FILE):
+        try:
+            with open(DB_FILE, "rb") as f:
+                return pickle.load(f)
+        except Exception:
+            pass
+    return {"shipper_database": {}, "master_types": ["Full Job Excel Format File", "DEEC File", "Packing List"], "global_dictionaries": {}}
 
-if not st.session_state["authenticated"]:
-    st.subheader("🔒 CK Export Invoice Processor - Login")
-    pwd = st.text_input("कृपया पासवर्ड दर्ज करें:", type="password")
-    if st.button("लॉगिन करें"):
-        if pwd == PASSWORD:
-            st.session_state["authenticated"] = True
+def save_database():
+    db_to_save = {
+        "shipper_database": st.session_state["shipper_database"],
+        "master_types": st.session_state["master_types"],
+        "global_dictionaries": st.session_state["global_dictionaries"]
+    }
+    with open(DB_FILE, "rb+") if os.path.exists(DB_FILE) else open(DB_FILE, "wb") as f:
+        pickle.dump(db_to_save, f)
+
+# --- डेटाबेस को सेशन में लोड करना ---
+if "db_loaded" not in st.session_state:
+    data = load_database()
+    st.session_state["shipper_database"] = data.get("shipper_database", {})
+    st.session_state["master_types"] = data.get("master_types", ["Full Job Excel Format File", "DEEC File", "Packing List"])
+    st.session_state["global_dictionaries"] = data.get("global_dictionaries", {})
+    st.session_state["db_loaded"] = True
+
+if "processed_file_ready" not in st.session_state:
+    st.session_state["processed_file_ready"] = None
+
+# --- साइडबार नेविगेशन ---
+st.sidebar.title("📌 Navigation")
+
+# डिफ़ॉल्ट रूप से यूजर सीधे प्रोसेसिंग पेज पर रहेगा
+main_menu = st.sidebar.radio(
+    "मुख्य मेनू (Main Menu)",
+    ["📄 Upload & Process Invoice"]
+)
+
+st.sidebar.write("---")
+
+# 🔒 एडमिन पैनल लॉक/अनलॉक (डिफ़ॉल्ट रूप से बंद)
+if "admin_authenticated" not in st.session_state:
+    st.session_state["admin_authenticated"] = False
+
+with st.sidebar.expander("🛠️ Admin Panel Access"):
+    if not st.session_state["admin_authenticated"]:
+        pwd = st.text_input("एडमिन पासवर्ड डालें:", type="password", key="admin_pwd")
+        if st.button("लॉगिन करें"):
+            if pwd == "admin":
+                st.session_state["admin_authenticated"] = True
+                st.success("अनलॉक हो गया!")
+                st.rerun()
+            else:
+                st.error("गलत पासवर्ड!")
+    else:
+        st.success("🔒 एडमिन मोड एक्टिव है")
+        if st.button("लॉगआउट एडमिन"):
+            st.session_state["admin_authenticated"] = False
             st.rerun()
-        else:
-            st.error("गलत पासवर्ड! कृपया दोबारा प्रयास करें।")
-else:
-    # --- सेंट्रलाइज्ड डेटाबेस (पूरी ऐप के लिए एक कॉमन स्टोरेज) ---
-    if "shipper_database" not in st.session_state:
-        st.session_state["shipper_database"] = {}
-    if "master_types" not in st.session_state:
-        st.session_state["master_types"] = ["Full Job Excel Format File", "DEEC File", "Packing List"]
-    if "global_dictionaries" not in st.session_state:
-        st.session_state["global_dictionaries"] = {}
-    if "processed_file_ready" not in st.session_state:
-        st.session_state["processed_file_ready"] = None
 
-    st.title("🚢 CK Export Invoice Processor Pro")
-    st.write("---")
-
-    # --- मुख्य मेनू (सिर्फ 2 बड़े बटन) ---
-    main_menu = st.sidebar.radio(
-        "मुख्य मेनू (Main Menu)",
+# अगर एडमिन लॉग इन है, तभी मास्टर डेटा के विकल्प दिखेंगे
+if st.session_state["admin_authenticated"]:
+    st.sidebar.write("---")
+    sub_menu = st.sidebar.radio(
+        "📋 एडमिन सेटिंग्स (Master Data)",
         [
-            "1. Add Master Data",
-            "2. Upload & Process Invoice"
+            "i. 🌍 Global Masters & Common Dictionaries",
+            "ii. ⚙️ Manage Specific Upload Buttons",
+            "iii. 🏢 Add Shipper Name & Setup"
         ]
     )
+    
+    st.title("🚢 CK Export Processor - Admin Mode")
+    st.write("---")
+    
+    if sub_menu == "i. 🌍 Global Masters & Common Dictionaries":
+        render_global_masters()
+        save_database() # हर बदलाव के बाद डेटा सेव करना
+    elif sub_menu == "ii. ⚙️ Manage Specific Upload Buttons":
+        render_manage_buttons()
+        save_database()
+    elif sub_menu == "iii. 🏢 Add Shipper Name & Setup":
+        render_shipper_data()
+        save_database()
 
-    # --- 1. ADD MASTER DATA के अंदर के 3 सब-मेनू ---
-    if main_menu == "1. Add Master Data":
-        st.sidebar.write("---")
-        sub_menu = st.sidebar.radio(
-            "📋 मास्टर डेटा विकल्प (Sub-Menu)",
-            [
-                "i. 🌍 Global Masters & Common Dictionaries",
-                "ii. ⚙️ Manage Specific Upload Buttons",
-                "iii. 🏢 Add Shipper Name & Setup"
-            ]
-        )
-        
-        # यहाँ अलग-अलग फाइलों से कोड लोड हो रहा है
-        if sub_menu == "i. 🌍 Global Masters & Common Dictionaries":
-            render_global_masters()
-        elif sub_menu == "ii. ⚙️ Manage Specific Upload Buttons":
-            render_manage_buttons()
-        elif sub_menu == "iii. 🏢 Add Shipper Name & Setup":
-            render_shipper_data()
-
-    # --- 2. UPLOAD & PROCESS INVOICE ---
-    elif main_menu == "2. Upload & Process Invoice":
+# डिफ़ॉल्ट यूजर व्यू (मेन पेज)
+else:
+    st.title("🚢 CK Export Invoice Processor Pro")
+    st.write("---")
+    if main_menu == "📄 Upload & Process Invoice":
         render_processor()
+        save_database()
