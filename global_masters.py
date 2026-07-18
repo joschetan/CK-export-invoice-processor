@@ -10,7 +10,6 @@ def render_global_masters():
     for dict_name in predefined_dicts:
         st.write(f"### 📊 {dict_name}")
         
-        # चेक करना कि क्या फाइल पहले से अपलोडेड है
         is_uploaded = dict_name in st.session_state["global_dictionaries"]
         
         if is_uploaded:
