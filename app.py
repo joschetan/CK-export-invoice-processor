@@ -6,12 +6,16 @@ from manage_buttons import render_manage_buttons
 from shipper_data import render_shipper_data
 from processor import render_processor
 
-# --- मुख्य विंडो सेटिंग्स ---
-st.set_page_config(page_title="CK Export Invoice Processor", layout="wide")
+# --- 🚀 मुख्य विंडो सेटिंग्स (यहाँ हमने साइडबार को डिफ़ॉल्ट रूप से हाइड/बंद कर दिया है) ---
+st.set_page_config(
+    page_title="CK Export Invoice Processor", 
+    layout="wide",
+    initial_sidebar_state="collapsed"  # ऐप खुलते ही साइडबार छुपा रहेगा
+)
 
 DB_FILE = "database.pkl"
 
-# 💾 डेटाबेस को फाइल से लोड और सेव करने के फंक्शन्स
+# 💾 डेटाबेस फंक्शन्स
 def load_database():
     if os.path.exists(DB_FILE):
         try:
@@ -30,7 +34,7 @@ def save_database():
     with open(DB_FILE, "wb") as f:
         pickle.dump(db_to_save, f)
 
-# --- डेटाबेस और वेरिएबल्स को सेशन में लोड करना ---
+# --- डेटाबेस और वेरिएबल्स लोड करना ---
 if "db_loaded" not in st.session_state:
     data = load_database()
     st.session_state["shipper_database"] = data.get("shipper_database", {})
@@ -38,26 +42,23 @@ if "db_loaded" not in st.session_state:
     st.session_state["global_dictionaries"] = data.get("global_dictionaries", {})
     st.session_state["db_loaded"] = True
 
-# 🔒 एड敏न पैनल वेरिएबल्स की शुरुआती घोषणा (ताकि NameError न आए)
 if "admin_authenticated" not in st.session_state:
     st.session_state["admin_authenticated"] = False
 
 if "processed_file_ready" not in st.session_state:
     st.session_state["processed_file_ready"] = None
 
-# --- साइडबार नेविगेशन ---
-st.sidebar.title("📌 Navigation")
+# --- 🛠️ साइडबार कॉन्फ़िगरेशन (यह सिर्फ तीर पर क्लिक करने पर ही दिखेगा) ---
+st.sidebar.title("⚙️ Control Panel")
+st.sidebar.caption("वापस छुपाने के लिए ऊपर << बटन दबाएं")
 
-# डिफ़ॉल्ट रूप से यूजर सीधे प्रोसेसिंग पेज पर रहेगा
-main_menu = st.sidebar.radio(
-    "मुख्य मेनू (Main Menu)",
-    ["📄 Upload & Process Invoice"]
-)
+# मुख्य यूजर व्यू हमेशा एक्टिव रहेगा
+main_menu = "📄 Upload & Process Invoice"
 
 st.sidebar.write("---")
 
-# 🔒 एडमिन पैनल लॉक/अनलॉक एक्सपैंडर
-with st.sidebar.expander("🛠️ Admin Panel Access"):
+# 🔒 एडमिन पैनल एक्सेस बॉक्स
+with st.sidebar.expander("🛠️ Admin Settings Access"):
     if not st.session_state["admin_authenticated"]:
         pwd = st.text_input("एडमिन पासवर्ड डालें:", type="password", key="admin_pwd")
         if st.button("लॉगिन करें"):
@@ -73,7 +74,7 @@ with st.sidebar.expander("🛠️ Admin Panel Access"):
             st.session_state["admin_authenticated"] = False
             st.rerun()
 
-# --- मुख्य स्क्रीन का डिस्प्ले (सही ऑर्डर में कंडीशन्स) ---
+# --- 🖥️ मुख्य स्क्रीन डिस्प्ले लॉजिक ---
 if st.session_state["admin_authenticated"]:
     st.sidebar.write("---")
     sub_menu = st.sidebar.radio(
@@ -98,8 +99,10 @@ if st.session_state["admin_authenticated"]:
         render_global_masters()
         save_database()
 else:
+    # डिफ़ॉल्ट साफ-सुथरा फ्रंट पेज (फुल स्क्रीन वर्क ज़ोन)
     st.title("🚢 CK Export Invoice Processor Pro")
+    st.caption("💡 साइडबार खोलने के लिए बाएं कोने में सबसे ऊपर दिए गए छोटे तीर (>) के निशान पर क्लिक करें।")
     st.write("---")
-    if main_menu == "📄 Upload & Process Invoice":
-        render_processor()
-        save_database()
+    
+    render_processor()
+    save_database()
