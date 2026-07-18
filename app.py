@@ -11,54 +11,61 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 🔗 आपका लाइव Google Web App URL और शीट आईडी
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
-# 📥 गूगल शीट से लाइव डेटा लोड करने का फुल-प्रूफ फंक्शन
 def load_data_from_gsheet():
     shipper_db = {}
     
-    # 1. पहले 'Shipper_Files' शीट से सभी अपलोडेड एक्सेल टेम्पलेट्स लोड करें
+    # 1. पहले रूल्स लोड करके प्रोफाइल स्ट्रक्चर तैयार करें
+    try:
+        rules_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Rules"
+        df_rules = pd.read_csv(rules_url)
+        
+        if not df_rules.empty:
+            # कॉलम नामों को साफ़ करना (ताकि स्पेस की दिक्कत न हो)
+            df_rules.columns = df_rules.columns.str.strip()
+            
+            for _, row in df_rules.iterrows():
+                if "ShipperName" in df_rules.columns and pd.notna(row["ShipperName"]):
+                    s_name = str(row["ShipperName"]).strip()
+                    if s_name and s_name.lower() != "nan":
+                        if s_name not in shipper_db:
+                            shipper_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": {}}
+                        
+                        field = str(row["FieldName"]).strip() if "FieldName" in df_rules.columns else None
+                        if field and pd.notna(row["FieldName"]):
+                            shipper_db[s_name]["mapping_rules"][field] = {
+                                "keyword": row["Keyword"] if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else "",
+                                "position": row["Position"] if "Position" in df_rules.columns and pd.notna(row["Position"]) else "Right (आगे)",
+                                "cell": row["Cell"] if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else ""
+                            }
+    except Exception:
+        pass
+
+    # 2. अब अपलोडेड फाइल्स लोड करें और उन्हें सही शिपर से मैच करें
     try:
         files_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Files"
         df_files = pd.read_csv(files_url)
         
-        if not df_files.empty and "ShipperName" in df_files.columns:
+        if not df_files.empty:
+            df_files.columns = df_files.columns.str.strip()
+            
             for _, row in df_files.iterrows():
-                s_name = str(row["ShipperName"]).strip()
-                if s_name and s_name != "nan":
+                if "ShipperName" in df_files.columns and pd.notna(row["ShipperName"]):
+                    s_name = str(row["ShipperName"]).strip()
+                    
+                    # अगर शिpper रूल्स में नहीं था, तो भी प्रोफाइल बनाएं
                     if s_name not in shipper_db:
                         shipper_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": {}}
                     
                     if "FileBase64" in df_files.columns and pd.notna(row["FileBase64"]):
                         try:
-                            file_bytes = base64.b64decode(row["FileBase64"])
+                            file_bytes = base64.b64decode(str(row["FileBase64"]).strip())
+                            # हमेशा लेटेस्ट अपलोडेड फ़ाइल को स्टोर करना
                             shipper_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = file_bytes
                         except Exception:
                             pass
-    except Exception:
-        pass
-
-    # 2. अब 'Shipper_Rules' शीट से मैपिंग रूल्स लोड करें
-    try:
-        rules_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Rules"
-        df_rules = pd.read_csv(rules_url)
-        
-        if not df_rules.empty and "ShipperName" in df_rules.columns:
-            for _, row in df_rules.iterrows():
-                s_name = str(row["ShipperName"]).strip()
-                if s_name and s_name != "nan":
-                    if s_name not in shipper_db:
-                        shipper_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": {}}
-                    
-                    field = row["FieldName"]
-                    if pd.notna(field):
-                        shipper_db[s_name]["mapping_rules"][field] = {
-                            "keyword": row["Keyword"] if pd.notna(row["Keyword"]) else "",
-                            "position": row["Position"] if pd.notna(row["Position"]) else "Right (आगे)",
-                            "cell": row["Cell"] if pd.notna(row["Cell"]) else ""
-                        }
     except Exception:
         pass
                     
@@ -79,7 +86,7 @@ if "admin_authenticated" not in st.session_state:
 if "processed_file_ready" not in st.session_state:
     st.session_state["processed_file_ready"] = None
 
-# --- 🛠️ साइडबार कॉन्फ़िगरेशन ---
+# --- SideBar Settings ---
 st.sidebar.title("⚙️ Control Panel")
 st.sidebar.write("---")
 
@@ -99,7 +106,7 @@ with st.sidebar.expander("🛠️ Admin Settings Access"):
             st.session_state["admin_authenticated"] = False
             st.rerun()
 
-# --- 🖥️ मुख्य स्क्रीन डिस्प्ले लॉजिक ---
+# --- Main Page Display ---
 if st.session_state["admin_authenticated"]:
     st.sidebar.write("---")
     from shipper_data import render_shipper_data
