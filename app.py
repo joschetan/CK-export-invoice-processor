@@ -10,19 +10,22 @@ from processor import render_processor
 st.set_page_config(
     page_title="CK Export Invoice Processor", 
     layout="wide",
-    initial_sidebar_state="collapsed"  # डिफ़ॉल्ट स्ट्रीमलिट सेटिंग
+    initial_sidebar_state="collapsed"  # ऐप खुलने पर डिफ़ॉल्ट बंद रखेगा
 )
 
-# 🪄 जादुई CSS: यह रीफ्रेश या लिंक खोलने पर साइडबार को जबरन बंद (Hide) रखेगा
+# 🪄 सुधरा हुआ CSS: यह साइडबार को बंद रखेगा, लेकिन खोलने वाले तीर (>) बटन को गायब नहीं करेगा
 st.markdown(
     """
     <style>
-        /* स्ट्रीमलिट के साइडबार को पहली बार में बंद रखने के लिए मजबूर करना */
+        /* अगर साइडबार बंद है, तो उसे बंद ही रखो जब तक तीर पर क्लिक न हो */
+        section[data-testid="stSidebar"][aria-expanded="false"] {
+            margin-left: -21rem;
+        }
+        /* खोलने वाले छोटे तीर (>) बटन को हमेशा दिखाना सुनिश्चित करें */
         [data-testid="stSidebarCollapsedControl"] {
             display: flex !important;
-        }
-        section[data-testid="stSidebar"] {
-            margin-left: -21rem;
+            visibility: visible !important;
+            left: 10px !important;
         }
     </style>
     """,
@@ -64,7 +67,7 @@ if "admin_authenticated" not in st.session_state:
 if "processed_file_ready" not in st.session_state:
     st.session_state["processed_file_ready"] = None
 
-# --- 🛠️ साइडबार कॉन्फ़िगरेशन (तीर पर क्लिक करने पर ही दिखेगा) ---
+# --- 🛠️ साइडबार कॉन्फ़िगरेशन ---
 st.sidebar.title("⚙️ Control Panel")
 st.sidebar.caption("वापस छुपाने के लिए ऊपर << बटन दबाएं")
 
@@ -113,7 +116,7 @@ if st.session_state["admin_authenticated"]:
         render_global_masters()
         save_database()
 else:
-    # डिफ़ॉल्ट साफ-सुथरा फ्रंट पेज (फुल स्क्रीन वर्क ज़ोन)
+    # डिफ़ॉल्ट साफ-सुथरा फ्रंट पेज
     st.title("🚢 CK Export Invoice Processor Pro")
     st.caption("💡 साइडबार खोलने के लिए बाएं कोने में सबसे ऊपर दिए गए छोटे तीर (>) के निशान पर क्लिक करें।")
     st.write("---")
