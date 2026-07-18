@@ -11,11 +11,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 📊 आपकी गूगल शीट का आईडी और लिंक्स
+# 🔗 आपका लाइव Google Web App URL
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
-# डेटाबेस सिंक करने के लिए हम Google Apps Script या डायरेक्ट HTTP मेथड्स का सपोर्ट लेते हैं
-# लेकिन बिना किसी कोडिंग/सेटअप के डायरेक्ट रीड करने का सबसे तेज़ तरीका:
+# 📥 गूगल शीट से लाइव डेटा लोड करने का फंक्शन
 def load_data_from_gsheet():
     try:
         # Rules Sheet लोड करना
@@ -26,17 +26,15 @@ def load_data_from_gsheet():
         files_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Files"
         df_files = pd.read_csv(files_url)
         
-        # ऐप के पुराने डिक्शनरी फॉर्मेट में री-बिल्ड करना
         shipper_db = {}
         
-        # पहले शिपर प्रोफाइल्स तैयार करना
+        # 1. रूल्स को डिक्शनरी फॉर्मेट में री-बिल्ड करना
         if not df_rules.empty and "ShipperName" in df_rules.columns:
             for _, row in df_rules.iterrows():
                 s_name = row["ShipperName"]
                 if s_name not in shipper_db:
                     shipper_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": {}}
                 
-                # नियम जोड़ना
                 field = row["FieldName"]
                 shipper_db[s_name]["mapping_rules"][field] = {
                     "keyword": row["Keyword"] if pd.notna(row["Keyword"]) else "",
@@ -44,26 +42,21 @@ def load_data_from_gsheet():
                     "cell": row["Cell"] if pd.notna(row["Cell"]) else ""
                 }
         
-        # अपलोडेड टेम्पलेट फाइल्स को रिकवर करना
+        # 2. अपलोडेड एक्सेल टेम्पलेट्स को रिकवर करना
         if not df_files.empty and "ShipperName" in df_files.columns:
             for _, row in df_files.iterrows():
                 s_name = row["ShipperName"]
-                if s_name in shipper_db and pd.notna(row["FileBase64"]):
-                    # Base64 स्ट्रिंग को वापस ओरिजिनल बाइनरी बाइट्स में बदलना
+                # अगर शिपर नाम रूल्स में नहीं था तो नया प्रोफाइल बनाएं
+                if s_name not in shipper_db:
+                    shipper_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": {}}
+                
+                if pd.notna(row["FileBase64"]):
                     file_bytes = base64.b64decode(row["FileBase64"])
                     shipper_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = file_bytes
                     
         return shipper_db
-    except Exception as e:
-        # अगर शीट खाली है या पहली बार चल रही है
+    except Exception:
         return {}
-
-# 💾 गूगल शीट में डेटा हमेशा के लिए राइट (सेव) करने का बैकअप फंक्शन
-# नोट: रीयल-टाइम में बिना क्रेडेंशियल शीट में लिखने के लिए एक 2-लाइन का गूगल मैक्रो स्क्रिप्ट बेस्ट होता है
-# अभी के लिए हम सेशन स्टेट बैकअप इनेबल रख रहे हैं जब तक हम मैक्रो लिंक न जोड़ें
-def save_data_to_gsheet():
-    # यह आपके डेटा को सुरक्षित रखने के लिए बैकअप लॉजिक है
-    pass
 
 # --- डेटाबेस को लोड करना ---
 if "shipper_database" not in st.session_state or "db_loaded" not in st.session_state:
@@ -84,10 +77,9 @@ if "processed_file_ready" not in st.session_state:
 st.sidebar.title("⚙️ Control Panel")
 st.sidebar.write("---")
 
-# 🔒 एडमिन पैनल एक्सेस बॉक्स
 with st.sidebar.expander("🛠️ Admin Settings Access"):
     if not st.session_state["admin_authenticated"]:
-        pwd = st.text_input("एड敏न पासवर्ड डालें:", type="password", key="admin_pwd")
+        pwd = st.text_input("एडमिन पासवर्ड डालें:", type="password", key="admin_pwd")
         if st.button("लॉगिन करें"):
             if pwd == "admin":
                 st.session_state["admin_authenticated"] = True
