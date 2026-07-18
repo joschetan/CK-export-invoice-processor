@@ -6,30 +6,11 @@ from manage_buttons import render_manage_buttons
 from shipper_data import render_shipper_data
 from processor import render_processor
 
-# --- 🚀 मुख्य विंडो सेटिंग्स ---
+# --- 🚀 मुख्य विंडो सेटिंग्स (साफ़ और सीधा डिफ़ॉल्ट लेआउट) ---
 st.set_page_config(
     page_title="CK Export Invoice Processor", 
     layout="wide",
-    initial_sidebar_state="collapsed"  # ऐप खुलने पर डिफ़ॉल्ट बंद रखेगा
-)
-
-# 🪄 सुधरा हुआ CSS: यह साइडबार को बंद रखेगा, लेकिन खोलने वाले तीर (>) बटन को गायब नहीं करेगा
-st.markdown(
-    """
-    <style>
-        /* अगर साइडबार बंद है, तो उसे बंद ही रखो जब तक तीर पर क्लिक न हो */
-        section[data-testid="stSidebar"][aria-expanded="false"] {
-            margin-left: -21rem;
-        }
-        /* खोलने वाले छोटे तीर (>) बटन को हमेशा दिखाना सुनिश्चित करें */
-        [data-testid="stSidebarCollapsedControl"] {
-            display: flex !important;
-            visibility: visible !important;
-            left: 10px !important;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
+    initial_sidebar_state="collapsed"  # ऐप खुलने पर साइडबार बंद रहेगा
 )
 
 DB_FILE = "database.pkl"
@@ -67,11 +48,8 @@ if "admin_authenticated" not in st.session_state:
 if "processed_file_ready" not in st.session_state:
     st.session_state["processed_file_ready"] = None
 
-# --- 🛠️ साइडबार कॉन्फ़िगरेशन ---
+# --- 🛠️ साइडबार कॉन्फ़िगरेशन (बिना किसी खराब CSS के) ---
 st.sidebar.title("⚙️ Control Panel")
-st.sidebar.caption("वापस छुपाने के लिए ऊपर << बटन दबाएं")
-
-main_menu = "📄 Upload & Process Invoice"
 st.sidebar.write("---")
 
 # 🔒 एडमिन पैनल एक्सेस बॉक्स
@@ -91,7 +69,7 @@ with st.sidebar.expander("🛠️ Admin Settings Access"):
             st.session_state["admin_authenticated"] = False
             st.rerun()
 
-# --- 🖥️ मुख्य स्क्रीन डिस्प्ले लॉजिक ---
+# --- 🖥️ मुख्य स्क्रीन डिस्प्ले लॉजिक (डेटा को बीच में रखने के लिए कॉलम सेटअप) ---
 if st.session_state["admin_authenticated"]:
     st.sidebar.write("---")
     sub_menu = st.sidebar.radio(
@@ -116,10 +94,15 @@ if st.session_state["admin_authenticated"]:
         render_global_masters()
         save_database()
 else:
-    # डिफ़ॉल्ट साफ-सुथरा फ्रंट पेज
-    st.title("🚢 CK Export Invoice Processor Pro")
-    st.caption("💡 साइडबार खोलने के लिए बाएं कोने में सबसे ऊपर दिए गए छोटे तीर (>) के निशान पर क्लिक करें।")
-    st.write("---")
+    # 🎯 लेआउट को एकदम बीच (Center) में रखने के लिए 3 कॉलम्स का इस्तेमाल
+    # बाएं और दाएं खाली जगह रहेगी, बीच वाले कॉलम में आपका मुख्य काम दिखेगा
+    col_left, col_center, col_right = st.columns([1, 4, 1])
     
-    render_processor()
-    save_database()
+    with col_center:
+        st.title("🚢 CK Export Invoice Processor Pro")
+        st.caption("💡 साइडबार खोलने या एडमिन पैनल में जाने के लिए ऊपर बाएं कोने में दिए गए छोटे तीर (>) पर क्लिक करें।")
+        st.write("---")
+        
+        # यहाँ आपका मुख्य अपलोड और प्रोसेस मेनू रेंडर होगा, जो अब बिल्कुल बीच में दिखेगा
+        render_processor()
+        save_database()
