@@ -4,7 +4,6 @@ import requests
 import json
 import base64
 
-# --- 🚀 मुख्य विंडो सेटिंग्स ---
 st.set_page_config(
     page_title="CK Export Invoice Processor", 
     layout="wide",
@@ -17,13 +16,12 @@ SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 def load_data_from_gsheet():
     shipper_db = {}
     
-    # 1. पहले रूल्स लोड करके प्रोफाइल स्ट्रक्चर तैयार करें
+    # 1. पहले रूल्स लोड करें
     try:
         rules_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Rules"
         df_rules = pd.read_csv(rules_url)
         
         if not df_rules.empty:
-            # कॉलम नामों को साफ़ करना (ताकि स्पेस की दिक्कत न हो)
             df_rules.columns = df_rules.columns.str.strip()
             
             for _, row in df_rules.iterrows():
@@ -35,15 +33,17 @@ def load_data_from_gsheet():
                         
                         field = str(row["FieldName"]).strip() if "FieldName" in df_rules.columns else None
                         if field and pd.notna(row["FieldName"]):
+                            # 🎯 यहाँ हमने सीधा 'Logic' नाम से डेटा फेच किया है, कॉलम E या F की सिरदर्दी खत्म
                             shipper_db[s_name]["mapping_rules"][field] = {
                                 "keyword": row["Keyword"] if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else "",
                                 "position": row["Position"] if "Position" in df_rules.columns and pd.notna(row["Position"]) else "Right (आगे)",
-                                "cell": row["Cell"] if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else ""
+                                "cell": row["Cell"] if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else "",
+                                "logic": row["Logic"] if "Logic" in df_rules.columns and pd.notna(row["Logic"]) else "None"
                             }
     except Exception:
         pass
 
-    # 2. अब अपलोडेड फाइल्स लोड करें और उन्हें सही शिपर से मैच करें
+    # 2. अब अपलोडेड फाइल्स लोड करें
     try:
         files_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Files"
         df_files = pd.read_csv(files_url)
@@ -54,15 +54,12 @@ def load_data_from_gsheet():
             for _, row in df_files.iterrows():
                 if "ShipperName" in df_files.columns and pd.notna(row["ShipperName"]):
                     s_name = str(row["ShipperName"]).strip()
-                    
-                    # अगर शिpper रूल्स में नहीं था, तो भी प्रोफाइल बनाएं
                     if s_name not in shipper_db:
                         shipper_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": {}}
                     
                     if "FileBase64" in df_files.columns and pd.notna(row["FileBase64"]):
                         try:
                             file_bytes = base64.b64decode(str(row["FileBase64"]).strip())
-                            # हमेशा लेटेस्ट अपलोडेड फ़ाइल को स्टोर करना
                             shipper_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = file_bytes
                         except Exception:
                             pass
@@ -106,7 +103,6 @@ with st.sidebar.expander("🛠️ Admin Settings Access"):
             st.session_state["admin_authenticated"] = False
             st.rerun()
 
-# --- Main Page Display ---
 if st.session_state["admin_authenticated"]:
     st.sidebar.write("---")
     from shipper_data import render_shipper_data
