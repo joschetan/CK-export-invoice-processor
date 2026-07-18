@@ -6,11 +6,27 @@ from manage_buttons import render_manage_buttons
 from shipper_data import render_shipper_data
 from processor import render_processor
 
-# --- 🚀 मुख्य विंडो सेटिंग्स (यहाँ हमने साइडबार को डिफ़ॉल्ट रूप से हाइड/बंद कर दिया है) ---
+# --- 🚀 मुख्य विंडो सेटिंग्स ---
 st.set_page_config(
     page_title="CK Export Invoice Processor", 
     layout="wide",
-    initial_sidebar_state="collapsed"  # ऐप खुलते ही साइडबार छुपा रहेगा
+    initial_sidebar_state="collapsed"  # डिफ़ॉल्ट स्ट्रीमलिट सेटिंग
+)
+
+# 🪄 जादुई CSS: यह रीफ्रेश या लिंक खोलने पर साइडबार को जबरन बंद (Hide) रखेगा
+st.markdown(
+    """
+    <style>
+        /* स्ट्रीमलिट के साइडबार को पहली बार में बंद रखने के लिए मजबूर करना */
+        [data-testid="stSidebarCollapsedControl"] {
+            display: flex !important;
+        }
+        section[data-testid="stSidebar"] {
+            margin-left: -21rem;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
 )
 
 DB_FILE = "database.pkl"
@@ -48,13 +64,11 @@ if "admin_authenticated" not in st.session_state:
 if "processed_file_ready" not in st.session_state:
     st.session_state["processed_file_ready"] = None
 
-# --- 🛠️ साइडबार कॉन्फ़िगरेशन (यह सिर्फ तीर पर क्लिक करने पर ही दिखेगा) ---
+# --- 🛠️ साइडबार कॉन्फ़िगरेशन (तीर पर क्लिक करने पर ही दिखेगा) ---
 st.sidebar.title("⚙️ Control Panel")
 st.sidebar.caption("वापस छुपाने के लिए ऊपर << बटन दबाएं")
 
-# मुख्य यूजर व्यू हमेशा एक्टिव रहेगा
 main_menu = "📄 Upload & Process Invoice"
-
 st.sidebar.write("---")
 
 # 🔒 एडमिन पैनल एक्सेस बॉक्स
