@@ -1,7 +1,7 @@
 import streamlit as st
 from global_masters import render_global_masters
+from manage_buttons import render_manage_buttons
 from master_data import render_master_data
-from shipper_data import render_shipper_data
 from processor import render_processor
 
 st.set_page_config(page_title="CK Export Invoice Processor", layout="wide")
@@ -34,23 +34,34 @@ else:
     st.title("🚢 CK Export Invoice Processor Pro")
     st.write("---")
 
-    # --- मुख्य मेनू ---
-    menu = st.sidebar.radio(
+    # --- मुख्य मेनू (सिर्फ 2 बड़े बटन) ---
+    main_menu = st.sidebar.radio(
         "मुख्य मेनू (Main Menu)",
         [
-            "1. Global Masters (Common Dictionaries)",
-            "2. Add Master Data (Shipper Register)", 
-            "3. Add Shipper Data (Format Setup)", 
-            "4. Upload & Process Invoices"
+            "1. Add Master Data",
+            "2. Upload & Process Invoice"
         ]
     )
 
-    # अलग-अलग फाइलों से फंक्शन्स को कॉल करना
-    if menu == "1. Global Masters (Common Dictionaries)":
-        render_global_masters()
-    elif menu == "2. Add Master Data (Shipper Register)":
-        render_master_data()
-    elif menu == "3. Add Shipper Data (Format Setup)":
-        render_shipper_data()
-    elif menu == "4. Upload & Process Invoices":
+    # --- 1. ADD MASTER DATA के अंदर के 3 सब-मेनू ---
+    if main_menu == "1. Add Master Data":
+        st.sidebar.write("---")
+        sub_menu = st.sidebar.radio(
+            "📋 मास्टर डेटा विकल्प (Sub-Menu)",
+            [
+                "i. 🌍 Global Masters & Common Dictionaries",
+                "ii. ⚙️ Manage Specific Upload Buttons",
+                "iii. 🏢 Add Shipper Name & Setup"
+            ]
+        )
+        
+        if sub_menu == "i. 🌍 Global Masters & Common Dictionaries":
+            render_global_masters()
+        elif sub_menu == "ii. ⚙️ Manage Specific Upload Buttons":
+            render_manage_buttons()
+        elif sub_menu == "iii. 🏢 Add Shipper Name & Setup":
+            render_master_data()
+
+    # --- 2. UPLOAD & PROCESS INVOICE ---
+    elif main_menu == "2. Upload & Process Invoice":
         render_processor()
