@@ -6,7 +6,6 @@ from io import BytesIO
 # --- कॉन्फिगरेशन और बेसिक सेटिंग्स ---
 st.set_page_config(page_title="CK Export Invoice Processor", layout="wide")
 
-# पासवर्ड प्रोटेक्शन
 PASSWORD = "admin" 
 
 if "authenticated" not in st.session_state:
@@ -22,149 +21,157 @@ if not st.session_state["authenticated"]:
         else:
             st.error("गलत पासवर्ड! कृपया दोबारा प्रयास करें।")
 else:
-    # --- सेंट्रलाइज्ड डेटाबेस (Session State) ---
-    # इसमें शिपर का नाम और उसकी एक्सेल फाइल बाइनरी फॉर्मेट में सेव रहेगी
+    # --- सेंट्रलाइज्ड डेटाबेस मैनेजमेंट ---
     if "shipper_database" not in st.session_state:
         st.session_state["shipper_database"] = {}
+    
+    # डायनेमिक डॉक्यूमेंट और मास्टर टाइप्स की लिस्ट (शुरुआती डिफ़ॉल्ट वैल्यूज के साथ)
+    if "master_types" not in st.session_state:
+        st.session_state["master_types"] = ["Full Job Excel Format File", "DEEC File", "Packing List", "Port of Loading Codes", "HS Code & DBK Dictionary"]
+        
     if "processed_file_ready" not in st.session_state:
         st.session_state["processed_file_ready"] = None
 
     st.title("🚢 CK Export Invoice Processor Pro")
-    st.caption("Step-by-Step Custom Database & Flow Setup")
+    st.caption("Advanced Dynamic Configuration & Seamless Processing")
     st.write("---")
 
-    # --- मुख्य मेनू ---
+    # --- मुख्य मेनू (अब सिर्फ 3 ऑप्शंस हैं) ---
     menu = st.sidebar.radio(
         "मुख्य मेनू (Main Menu)",
         [
             "1. Add Master Data", 
             "2. Add Shipper Data", 
-            "3. Upload & Process Invoices", 
-            "4. Download Processed Files"
+            "3. Upload & Process Invoices"
         ]
     )
 
     # ==========================================
-    # 1. ADD MASTER DATA (सिर्फ शिपर का नाम जोड़ने के लिए)
+    # 1. ADD MASTER DATA (डायनेमिक + बटन के साथ)
     # ==========================================
     if menu == "1. Add Master Data":
-        st.header("📋 Master Data - Shipper Registration")
+        st.header("📋 Master Data & Document Configuration")
         
-        new_shipper = st.text_input("नया शिपर / एक्सपोर्टर का नाम दर्ज करें:", placeholder="जैसे: ABC Exports Pvt Ltd")
-        
+        # पार्ट A: शिपर का नाम जोड़ना
+        st.subheader("🏢 Register New Shipper Name")
+        new_shipper = st.text_input("शिपर / एक्सपोर्टर का नाम दर्ज करें:", placeholder="जैसे: ABC Exports Pvt Ltd")
         if st.button("➕ Add Shipper Name"):
             if new_shipper.strip() == "":
                 st.error("कृपया शिपर का नाम खाली न छोड़ें।")
             elif new_shipper in st.session_state["shipper_database"]:
-                st.warning(f"⚠️ '{new_shipper}' नाम पहले से ही डेटाबेस में मौजूद है।")
+                st.warning(f"⚠️ '{new_shipper}' नाम पहले से मौजूद है।")
             else:
-                # डेटाबेस में शिपर का नाम रजिस्टर करना (अभी कोई एक्सेल फाइल नहीं है)
-                st.session_state["shipper_database"][new_shipper] = {"excel_template": None}
-                st.success(f"🎉 शिपर '{new_shipper}' का नाम सफलतापूर्वक मास्टर डेटा में जुड़ गया है!")
+                st.session_state["shipper_database"][new_shipper] = {"allowed_uploads": [], "uploaded_files": {}}
+                st.success(f"🎉 शिपर '{new_shipper}' का नाम मास्टर डेटा में जुड़ गया है!")
 
-        # वर्तमान में एडेड सिर्फ नाम की लिस्ट दिखाना
-        if st.session_state["shipper_database"]:
-            st.write("---")
-            st.subheader("📜 रजिस्टर्ड शिपर लिस्ट:")
-            for idx, s_name in enumerate(st.session_state["shipper_database"].keys(), 1):
-                st.text(f"{idx}. {s_name}")
+        st.write("---")
+        
+        # पार्ट B: डायनेमिक डॉक्यूमेंट/डिक्शनरी टाइप्स जोड़ना (+ और ❌ के साथ)
+        st.subheader("⚙️ Manage Upload Buttons & Dictionaries")
+        st.caption("यहाँ आप जो भी नाम जोड़ेंगे, वह आगे शिपर कॉन्फ़िगरेशन में अपलोड बटन के रूप में दिखाई देगा।")
+        
+        # नया टाइप जोड़ने के लिए इनपुट और बटन
+        col_input, col_btn = st.columns([4, 1])
+        with col_input:
+            new_type = st.text_input("नया डॉक्यूमेंट या डिक्शनरी का नाम लिखें:", placeholder="जैसे: Port of Discharge Codes, Rodtep Rules")
+        with col_btn:
+            st.write("##") # अलाइनमेंट के लिए
+            if st.button("➕ Add Type"):
+                if new_type.strip() != "" and new_type not in st.session_state["master_types"]:
+                    st.session_state["master_types"].append(new_type.strip())
+                    st.success(f"'{new_type}' लिस्ट में जुड़ गया है!")
+                    st.rerun()
+
+        # वर्तमान लिस्ट दिखाना और डिलीट करने का ऑप्शन
+        st.write("#### वर्तमान में उपलब्ध ऑप्शंस:")
+        for t in st.session_state["master_types"]:
+            c1, c2 = st.columns([4, 1])
+            c1.text(f"🔹 {t}")
+            if c2.button(f"❌ Remove", key=f"del_{t}"):
+                st.session_state["master_types"].remove(t)
+                st.rerun()
 
     # ==========================================
-    # 2. ADD SHIPPER DATA (फॉर्मेट अपलोड करने के लिए)
+    # 2. ADD SHIPPER DATA (शिपर-वाइज बटन डिफाइन करना)
     # ==========================================
     elif menu == "2. Add Shipper Data":
-        st.header("🏢 Shipper Data Configuration")
-        
-        # बटन दबाने पर ही आगे का प्रोसेस खुलेगा
-        if st.button("📂 Add Full Job Excel Format"):
-            st.session_state["show_upload_section"] = True
-            
-        if st.session_state.get("show_upload_section", False):
-            st.write("---")
-            shippers_list = list(st.session_state["shipper_database"].keys())
-            
-            if not shippers_list:
-                st.warning("⚠️ पहले '1. Add Master Data' में जाकर शिपर का नाम ऐड करें।")
-            else:
-                # Search-cum-Dropdown बॉक्स
-                selected_shipper = st.selectbox(
-                    "शिपर का नाम चुनें या सर्च करें:", 
-                    shippers_list, 
-                    index=None, 
-                    placeholder="यहाँ शिपर का नाम टाइप या सेलेक्ट करें..."
-                )
-                
-                if selected_shipper:
-                    st.info(f"चयनित शिपर: **{selected_shipper}**")
-                    format_excel = st.file_uploader(
-                        f"'{selected_shipper}' के लिए Full Job Excel Format File अपलोड करें", 
-                        type=["xlsx", "xls"]
-                    )
-                    
-                    if format_excel:
-                        # एक्सेल फाइल को बाइनरी (bytes) में शिपर के नाम के साथ सेव करना
-                        st.session_state["shipper_database"][selected_shipper]["excel_template"] = format_excel.getvalue()
-                        st.success(f"✅ '{selected_shipper}' के लिए एक्सेल फॉर्मेट फाइल डेटाबेस में सुरक्षित सेव हो गई है!")
-
-        # डेटाबेस का स्टेटस दिखाना कि किस शिपर की एक्सेल फाइल अपलोडेड है
-        if st.session_state["shipper_database"]:
-            st.write("---")
-            st.subheader("📊 फॉर्मेट फाइल स्टेटस:")
-            for s_name, data in st.session_state["shipper_database"].items():
-                status = "✅ Excel Format Saved" if data["excel_template"] is not None else "❌ No Excel File Added"
-                st.text(f"🏢 {s_name} ---> Status: {status}")
-
-    # ==========================================
-    # 3. UPLOAD & PROCESS INVOICES (प्रोसेसिंग जोन)
-    # ==========================================
-    elif menu == "3. Upload & Process Invoices":
-        st.header("📤 Invoice Processing Zone")
+        st.header("🏢 Shipper Upload Controls Setup")
         
         shippers_list = list(st.session_state["shipper_database"].keys())
         
         if not shippers_list:
-            st.warning("⚠️ डेटाबेस में कोई शिपर उपलब्ध नहीं है। कृपया पहले स्टेप 1 और 2 पूरा करें।")
+            st.warning("⚠️ पहले '1. Add Master Data' में जाकर शिपर का नाम रजिस्टर करें।")
         else:
-            # Search-cum-Dropdown बॉक्स
-            selected_shipper = st.selectbox(
-                "किस शिपर का इनवॉइस प्रोसेस करना है? चुनें या सर्च करें:", 
-                shippers_list,
-                index=None,
-                placeholder="यहाँ शिपर का नाम टाइप या सेलेक्ट करें..."
-            )
+            selected_shipper = st.selectbox("शिपर का नाम चुनें या सर्च करें:", shippers_list, index=None, placeholder="यहाँ शिपर का नाम टाइप या सेलेक्ट करें...")
             
             if selected_shipper:
-                # चेक करना कि इस शिपर की एक्सेल फॉर्मेट फाइल अपलोडेड है या नहीं
-                shipper_data = st.session_state["shipper_database"][selected_shipper]
+                st.write(f"### ⚙️ कॉन्फ़िगर करें: **{selected_shipper}**")
+                st.info("इस शिपर के लिए कौन-कौन से अपलोड ऑप्शंस एक्टिव करने हैं? टिक करें:")
                 
-                if shipper_data["excel_template"] is None:
-                    st.error(f"❌ त्रुटि: '{selected_shipper}' के लिए कोई एक्सेल फॉर्मेट फाइल सेव नहीं है! कृपया पहले स्टेप 2 में जाकर फॉर्मेट अपलोड करें।")
-                else:
-                    st.success(f"🔒 '{selected_shipper}' का एक्सेल फॉर्मेट मिल गया है। अब इनवॉइस अपलोड करें।")
+                # सभी मास्टर टाइप्स को चेकबॉक्स के रूप में दिखाना
+                selected_uploads = []
+                current_allowed = st.session_state["shipper_database"][selected_shipper].get("allowed_uploads", [])
+                
+                for t in st.session_state["master_types"]:
+                    # अगर पहले से अलाउड है तो डिफ़ॉल्ट टिक रहेगा
+                    is_checked = t in current_allowed
+                    if st.checkbox(t, value=is_checked, key=f"chk_{selected_shipper}_{t}"):
+                        selected_uploads.append(t)
+                
+                if st.button("🔒 सेव शिपर कॉन्फ़िगरेशन"):
+                    st.session_state["shipper_database"][selected_shipper]["allowed_uploads"] = selected_uploads
+                    st.success(f"✅ '{selected_shipper}' के लिए अपलोड ऑप्शंस अपडेट कर दिए गए हैं!")
+
+                # पार्ट C: जो भी ऑप्शंस टिक किए गए हैं, उनके लिए एक्चुअल फ़ाइल अपलोड करने के बटन दिखाना
+                allowed_buttons = st.session_state["shipper_database"][selected_shipper].get("allowed_uploads", [])
+                if allowed_buttons:
+                    st.write("---")
+                    st.subheader("📁 आवश्यक फ़ाइलें / डिक्शनरी अपलोड करें")
                     
-                    # इनवॉइस अपलोड करने का ऑप्शन
-                    invoice_file = st.file_uploader(
-                        f"'{selected_shipper}' का PDF या Excel Invoice अपलोड करें", 
-                        type=["pdf", "xlsx", "xls"]
-                    )
+                    for btn_name in allowed_buttons:
+                        f_upload = st.file_uploader(f"➡️ Upload: {btn_name}", type=["xlsx", "xls", "pdf"], key=f"upload_{selected_shipper}_{btn_name}")
+                        if f_upload:
+                            # फ़ाइल डेटा को शिपर के डेटाबेस में स्टोर करना
+                            st.session_state["shipper_database"][selected_shipper]["uploaded_files"][btn_name] = f_upload.getvalue()
+                            st.caption(f"✅ {btn_name} डेटा सुरक्षित सेव्ड।")
+
+    # ==========================================
+    # 3. UPLOAD & PROCESS INVOICES (इन-प्लेस डाउनलोड)
+    # ==========================================
+    elif menu == "3. Upload & Process Invoices":
+        st.header("📤 Invoice Processing & Instant Download Zone")
+        
+        shippers_list = list(st.session_state["shipper_database"].keys())
+        
+        if not shippers_list:
+            st.warning("⚠️ डेटाबेस में कोई शिपर उपलब्ध नहीं है। कृपया पहले स्टेप 1 पूरा करें।")
+        else:
+            selected_shipper = st.selectbox("किस शिपर का इनवॉ送स प्रोसेस करना है?", shippers_list, index=None, placeholder="यहाँ शिपर का नाम टाइप या सेलेक्ट करें...")
+            
+            if selected_shipper:
+                shipper_info = st.session_state["shipper_database"][selected_shipper]
+                
+                # चेक करना कि क्या कम से कम 'Full Job Excel Format File' अपलोडेड है
+                if "Full Job Excel Format File" not in shipper_info["uploaded_files"]:
+                    st.error(f"❌ त्रुटि: इस शिपर के लिए मुख्य 'Full Job Excel Format File' अपलोड नहीं की गई है! कृपया पहले स्टेप 2 में जाकर इसे अपलोड करें।")
+                else:
+                    st.success(f"🔒 '{selected_shipper}' का प्रोफाइल लोड हो गया है।")
+                    
+                    # इनवॉइस फ़ाइल अपलोडर
+                    invoice_file = st.file_uploader(f"'{selected_shipper}' का PDF या Excel Invoice अपलोड करें", type=["pdf", "xlsx", "xls"])
                     
                     if invoice_file:
                         if st.button("🚀 Process & Fill Data"):
-                            st.info("इनवॉइस से डेटा निकाला जा रहा है और आपकी ओरिजिनल एक्सेल फॉर्मेट में भरा जा रहा है...")
+                            st.info("डेटा एक्सट्रैक्शन चालू है... कृपया रुकें...")
                             
-                            # --- यहाँ हमारा मैपिंग और एक्सट्रैक्शन स्क्रिप्ट का लॉजिक काम करेगा ---
-                            # अभी के लिए, हम उसकी ओरिजिनल एक्सेल फाइल को ही लोड करके डाउनलोड के लिए तैयार कर रहे हैं
-                            original_template_bytes = shipper_data["excel_template"]
-                            
-                            # उदाहरण के लिए openpyxl से उस फाइल को रीड करना
+                            # ओरिजिनल टेम्पलेट लोड करना
+                            original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
                             wb = openpyxl.load_workbook(BytesIO(original_template_bytes))
                             ws = wb.active
                             
-                            # उदाहरण के तौर पर हम A1 या किसी खाली सेल में एक डमी टेस्ट लिख रहे हैं ताकि पुष्टि हो सके
-                            # जब हम स्क्रिप्ट लिखेंगे, तो असली डेटा यहाँ सही सेल्स में जाएगा
-                            ws["A1"] = "PROCESSED BY CK AI" 
+                            # डमी एक्सट्रैक्शन मार्कर (इसे बाद में रिप्लेस करेंगे)
+                            ws["A1"] = "PROCESSED & FILLED BY CK SMART AUTOMATION" 
                             
-                            # वापस बाइनरी में सेव करना डाउनलोड के लिए
                             output = BytesIO()
                             wb.save(output)
                             
@@ -172,23 +179,14 @@ else:
                                 "filename": f"{selected_shipper}_Filled_Job.xlsx",
                                 "data": output.getvalue()
                             }
-                            st.success("🎉 डेटा सफलतापूर्वक भर दिया गया है! कृपया मेनू 4 में जाकर फाइल डाउनलोड करें।")
-
-    # ==========================================
-    # 4. DOWNLOAD PROCESSED FILES
-    # ==========================================
-    elif menu == "4. Download Processed Files":
-        st.header("📥 Download Center")
-        
-        file_data = st.session_state.get("processed_file_ready", None)
-        
-        if file_data:
-            st.success(f"📄 आपकी फाइल '**{file_data['filename']}**' डाउनलोड के लिए तैयार है।")
-            st.download_button(
-                label="📁 ओरिजिनल एक्सेल फ़ाइल डाउनलोड करें",
-                data=file_data["data"],
-                file_name=file_data["filename"],
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        else:
-            st.info("अभी डाउनलोड करने के लिए कोई फाइल प्रोसेस नहीं की गई है। कृपया पहले स्टेप 3 पूरा करें।")
+                            st.success("🎉 डेटा सफलतापूर्वक भर दिया गया है!")
+                        
+                        # अगर फ़ाइल प्रोसेस हो चुकी है, तो डाउनलोड बटन तुरंत यही नीचे दिखाई देगा
+                        if st.session_state["processed_file_ready"]:
+                            st.write("---")
+                            st.download_button(
+                                label="📥 प्रोसेस्ड एक्सेल फ़ाइल तुरंत डाउनलोड करें",
+                                data=st.session_state["processed_file_ready"]["data"],
+                                file_name=st.session_state["processed_file_ready"]["filename"],
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
