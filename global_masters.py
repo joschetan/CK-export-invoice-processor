@@ -5,15 +5,13 @@ import json
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
 def render_global_masters():
-    st.header("🌍 Global Master Fields Manager")
-    st.caption("यहाँ आप जो भी फ़ील्ड्स ऐड करेंगे, वे पूरे सॉफ्टवेयर के लिए एक 'मास्टर टेम्पलेट' बन जाएंगे।")
+    st.header("🌍 Global Master Fields & Rules Template")
+    st.caption("यहाँ आप जो भी रूल्स और सेल नंबर सेट करेंगे, वह पूरे सॉफ्टवेयर के लिए परमानेंट 'मास्टर टेम्पलेट बोर्ड' बन जाएगा।")
     
-    # 🎯 भाई, यह रहा आपका वन-टाइम जादुई बटन जो वेल्सपन से 56 फ़ील्ड्स कॉपी करेगा
+    # ⚡ वेल्सपन से पूरे ५६ रूल्स (डेटा सहित) खींचने का वन-टाइम महा-बटन
     st.subheader("⚡ One-Time Helper (मेहनत बचाओ)")
-    if st.button("🔥 Copy All 56 Fields from WELSPUN to Master List", type="secondary"):
+    if st.button("🔥 Copy All 56 Fields WITH Rules from WELSPUN to Master Board", type="secondary"):
         db = st.session_state.get("shipper_database", {})
-        
-        # वेल्सपन का सही नाम ढूंढना (चाहे छोटे-बड़े अक्षर हों)
         welspun_key = None
         for k in db.keys():
             if "welspun" in k.lower():
@@ -21,61 +19,73 @@ def render_global_masters():
                 break
                 
         if welspun_key:
-            welspun_fields = list(db[welspun_key].get("mapping_rules", {}).keys())
-            if welspun_fields:
-                # वर्तमान मास्टर लिस्ट में वेल्सपन के फ़ील्ड्स को मर्ज करना (डुप्लिकेट्स हटाकर)
-                existing_masters = st.session_state.get("master_fields", [])
-                for f in welspun_fields:
-                    if f not in existing_masters:
-                        existing_masters.append(f)
-                        
-                st.session_state["master_fields"] = existing_masters
-                st.success(f"🎉 वेल्सपन से {len(welspun_fields)} फ़ील्ड्स सफलतापूर्वक यहाँ कॉपी हो गए हैं! नीचे दिए गए नीले बटन को दबाकर गूगल शीट में सेव कर दें।")
+            welspun_rules = db[welspun_key].get("mapping_rules", {})
+            if welspun_rules:
+                # सीधे पूरे रूल्स ब्लॉक (कीवर्ड, सेल सहित) को मास्टर टेम्पलेट में कॉपी करना
+                st.session_state["master_rules_template"] = dict(welspun_rules)
+                st.success(f"🎉 वेल्सपन के सभी {len(welspun_rules)} फ़ील्ड्स उनके कीवर्ड्स और सेल नंबर के साथ यहाँ मास्टर में लोड हो गए हैं! नीचे लिस्ट देखें और नीले बटन से सेव करें।")
+                st.rerun()
             else:
-                st.error("वेल्सपन प्रोफाइल में कोई फ़ील्ड्स नहीं मिले।")
+                st.error("वेल्सपन प्रोफाइल में कोई रूल्स नहीं मिले।")
         else:
-            st.error("डेटाबेस में वेल्सपन (WELSPUN) नाम का कोई शिपर नहीं मिला। कृपया नाम चेक करें।")
+            st.error("डेटाबेस में वेल्सपन शिपर नहीं मिला।")
             
     st.write("---")
-
-    # ➕ नया फ़ील्ड मास्टर में मैन्युअल जोड़ना
-    st.subheader("➡️ नया फ़ील्ड जोड़ें")
-    new_m_field = st.text_input("ग्लोबल मास्टर फ़ील्ड नाम लिखें (जैसे: Container Type):")
-    if st.button("➕ Add to Master List"):
-        if new_m_field.strip() == "":
-            st.error("फ़ील्ड का नाम खाली नहीं हो सकता।")
-        elif new_m_field.strip() in st.session_state["master_fields"]:
-            st.warning("यह फ़ील्ड पहले से मास्टर लिस्ट में मौजूद है।")
-        else:
-            st.session_state["master_fields"].append(new_m_field.strip())
-            st.success(f"'{new_m_field}' को लिस्ट में जोड़ दिया गया है।")
+    
+    # 🛠️ मास्टर रूल्स बिल्डर लेआउट (हूबहू आपकी पसंद का 2nd स्क्रीनशॉट लेआउट)
+    st.subheader("🛠️ Master Rules Template Builder")
+    
+    col_t, col_add = st.columns([8, 2])
+    with col_add:
+        if st.button("➕ Add Master Row", use_container_width=True):
+            st.session_state["master_rules_template"]["New Field"] = {"keyword": "", "position": "Right (आगे)", "cell": "", "logic": ""}
             st.rerun()
             
-    st.write("---")
-    st.subheader("📋 वर्तमान मास्टर फ़ील्ड्स लिस्ट")
+    current_masters = st.session_state.get("master_rules_template", {})
+    updated_masters = {}
     
-    # लिस्ट दिखाना और डिलीट का ऑप्शन देना
-    updated_master = []
-    for field in list(st.session_state["master_fields"]):
-        col_name, col_del = st.columns([8, 2])
-        with col_name:
-            st.write(f"🔹 {field}")
-        with col_del:
-            if st.button("🗑️", key=f"del_master_{field}"):
-                st.session_state["master_fields"].remove(field)
+    h_col1, h_col2, h_col3, h_col4, h_col5, h_col6 = st.columns([2.5, 3, 2, 1, 3, 0.7])
+    with h_col1: st.markdown("**Field Name**")
+    with h_col2: st.markdown("**Default Keyword**")
+    with h_col3: st.markdown("**Default Position**")
+    with h_col4: st.markdown("**Default Cell**")
+    with h_col5: st.markdown("**Custom AI Logic**")
+    st.write("---")
+    
+    for field in list(current_masters.keys()):
+        saved_val = current_masters[field]
+        col1, col2, col3, col4, col5, col6 = st.columns([2.5, 3, 2, 1, 3, 0.7])
+        
+        with col1: edited_name = st.text_input(f"m_fl_{field}", value=field, label_visibility="collapsed")
+        with col2: ky = st.text_input(f"m_ky_{field}", value=saved_val.get("keyword", ""), label_visibility="collapsed")
+        with col3: pos = st.selectbox(f"m_pos_{field}", ["Right (आगे)", "Below (नीचे)"], index=0 if saved_val.get("position", "Right (आगे)") == "Right (आगे)" else 1, label_visibility="collapsed")
+        with col4: cl = st.text_input(f"m_cl_{field}", value=saved_val.get("cell", ""), label_visibility="collapsed")
+        with col5: lg = st.text_input(f"m_lg_{field}", value=saved_val.get("logic", ""), placeholder="जैसे: 4 alpha + 7 numbers", label_visibility="collapsed")
+        with col6:
+            if st.button("🗑️", key=f"m_del_{field}"):
+                del st.session_state["master_rules_template"][field]
                 st.rerun()
                 
+        updated_masters[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "logic": lg}
+        
     st.write("---")
-    
-    # 💾 गूगल शीट में परमानेंट लॉक करने का बटन
-    if st.button("💾 Save Master Fields to Google Sheet", type="primary", use_container_width=True):
-        payload = {
-            "action": "save_master_fields",
-            "fields": st.session_state["master_fields"]
-        }
-        with st.spinner("मास्टर फ़ील्ड्स गूगल शीट में सिंक हो रहे हैं..."):
-            try:
-                requests.post(WEB_APP_URL, data=json.dumps(payload))
-                st.success("🎉 बधाई हो भाई! आपके 56+ फ़ील्ड्स हमेशा के लिए गूगल शीट में मास्टर टेम्पलेट बन चुके हैं!")
-            except Exception as e:
-                st.error(f"सिंक एरर: {str(e)}")
+    if st.button("💾 Save Entire Master Template Board to Google Sheet", type="primary", use_container_width=True):
+        st.session_state["master_rules_template"] = updated_masters
+        
+        # पेलोड तैयार करना
+        fields_payload = []
+        for f_name, r_info in updated_masters.items():
+            fields_payload.append({
+                "field": f_name,
+                "keyword": r_info.get("keyword", ""),
+                "position": r_info.get("position", "Right (आगे)"),
+                "cell": r_info.get("cell", ""),
+                "logic": r_info.get("logic", "")
+            })
+            
+        payload = {"action": "save_master_fields", "fields": fields_payload}
+        try:
+            requests.post(WEB_APP_URL, data=json.dumps(payload))
+            st.success("🎉 बधाई हो भाई! पूरा का पूरा 5-कॉलम मास्टर बोर्ड रूल्स और सेल नंबर सहित गूगल शीट में लॉक हो गया है!")
+        except Exception as e:
+            st.error(f"सिंक एरर: {str(e)}")
