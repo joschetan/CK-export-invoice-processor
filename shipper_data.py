@@ -63,7 +63,6 @@ def render_shipper_data():
             
             # 🛠️ नो-कोड रूल्स बोर्ड (लॉजिक फ़िल्टर के साथ)
             st.subheader("🛠️ 2. AI Mapping Rules Builder")
-            st.caption("नोट: यदि नया AI Logic कॉलम स्क्रीन पर न दिखे, तो कृपया एक बार ब्राउज़र रीफ्रेश कर लें।")
             
             default_fields = [
                 "Port of Loading", "Final Dest. Country", "Final Dest. Port", "Inv. No.", "Inv. Dt.", 
@@ -73,19 +72,19 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            # हेडर लेआउट सेट करना
-            h_col1, h_col2, h_col3, h_col4, h_col5 = st.columns([2, 3, 2, 1, 2])
+            # हेडर लेआउट सेट करना (लॉजिक बॉक्स को थोड़ा और बड़ा स्पेस दिया)
+            h_col1, h_col2, h_col3, h_col4, h_col5 = st.columns([2, 3, 2, 1, 3])
             with h_col1: st.markdown("**Field Name**")
             with h_col2: st.markdown("**Invoice Keyword**")
             with h_col3: st.markdown("**Data Position**")
             with h_col4: st.markdown("**Excel Cell**")
-            with h_col5: st.markdown("**AI Logic (विशेष नियम)**")
+            with h_col5: st.markdown("**Custom AI Logic / Instructions**")
             st.write("---")
             
             for field in default_fields:
-                saved_val = current_rules.get(field, {"keyword": "", "position": "Right (आगे)", "cell": "", "logic": "None"})
+                saved_val = current_rules.get(field, {"keyword": "", "position": "Right (आगे)", "cell": "", "logic": ""})
                 
-                col1, col2, col3, col4, col5 = st.columns([2, 3, 2, 1, 2])
+                col1, col2, col3, col4, col5 = st.columns([2, 3, 2, 1, 3])
                 
                 with col1:
                     st.write(f"🔹 **{field}**")
@@ -96,12 +95,13 @@ def render_shipper_data():
                 with col4:
                     cl = st.text_input(f"Cell_{field}", value=saved_val.get("cell", ""), label_visibility="collapsed")
                 with col5:
-                    # पांचवां कॉलम - ड्रॉपडाउन लॉजिक
-                    logic_options = ["None", "Container No (4 Alpha + 7 Num)", "Pure Numbers Only"]
-                    saved_lg = saved_val.get("logic", "None")
-                    if saved_lg not in logic_options:
-                        saved_lg = "None"
-                    lg = st.selectbox(f"Logic_{field}", logic_options, index=logic_options.index(saved_lg), label_visibility="collapsed")
+                    # 🎯 ड्रॉपडाउन की जगह बिल्कुल ओपन टेक्स्ट बॉक्स जहाँ आप निर्देश लिख सकते हैं
+                    lg = st.text_input(
+                        f"Logic_{field}", 
+                        value=saved_val.get("logic", ""), 
+                        placeholder="जैसे: 4 alphabet + 7 numbers", 
+                        label_visibility="collapsed"
+                    )
                 
                 updated_rules[field] = {"keyword": ky, "position": pos, "cell": cl, "logic": lg}
                 
@@ -118,7 +118,7 @@ def render_shipper_data():
                             "keyword": r_info.get("keyword", ""),
                             "position": r_info.get("position", "Right (आगे)"),
                             "cell": r_info.get("cell", ""),
-                            "logic": r_info.get("logic", "None")
+                            "logic": r_info.get("logic", "")
                         })
                 
                 payload = {"action": "save_rules", "rules": rules_payload}
@@ -126,7 +126,7 @@ def render_shipper_data():
                 with st.spinner("डेटाबेस गूगल शीट में सिंक हो रहा है..."):
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps(payload))
-                        st.success("🎉 बधाई हो भाई! लॉजिक रूल्स के साथ डेटा गूगल शीट में लॉक हो गया है!")
+                        st.success("🎉 आपके कस्टम निर्देशों के साथ डेटा गूगल शीट में लॉक हो गया है!")
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
                 st.rerun()
