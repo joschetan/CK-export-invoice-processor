@@ -19,14 +19,13 @@ def render_shipper_data():
     new_shipper = st.text_input("नया शिपर / एक्सपोर्टर का नाम दर्ज करें:")
     if st.button("➕ Add Shipper Name"):
         if new_shipper.strip() and new_shipper not in st.session_state["shipper_database"]:
-            # नया शिपर बनते ही सीधे मास्टर टेम्पलेट का पूरा डेटा कॉपी होना
             initial_rules = dict(st.session_state.get("master_rules_template", {}))
             st.session_state["shipper_database"][new_shipper] = {
                 "allowed_uploads": ["Full Job Excel Format File"], 
                 "uploaded_files": {},
                 "mapping_rules": initial_rules
             }
-            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया और मास्टर का पूरा ढांचा लोड हो गया!")
+            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया!")
             st.rerun()
 
     st.write("---")
@@ -50,19 +49,16 @@ def render_shipper_data():
             col_title, col_sync, col_add = st.columns([5, 3, 2])
             with col_title: st.subheader("🛠️ 2. AI Mapping Rules Builder")
             with col_sync:
-                # 🎯 मास्टर बोर्ड से कीवर्ड और सेल सहित सब कुछ सिंक करने का जादुई बटन
                 if st.button("🔄 Sync from Master Template", type="secondary", use_container_width=True):
                     current_rules = shipper_info.get("mapping_rules", {})
                     added_count = 0
                     master_tpl = st.session_state.get("master_rules_template", {})
-                    
                     for mf, m_vals in master_tpl.items():
                         if mf not in current_rules:
-                            # अगर फ़ील्ड नया है, तो मास्टर की पूरी वैल्यू (सेल, कीवर्ड) कॉपी करो
                             current_rules[mf] = dict(m_vals)
                             added_count += 1
                     shipper_info["mapping_rules"] = current_rules
-                    st.success(f"🎉 मास्टर टेम्पलेट से {added_count} नए फ़ील्ड्स (सेल और कीवर्ड सहित) जोड़ दिए गए!")
+                    st.success(f"🎉 मास्टर टेम्पलेट से {added_count} नए फ़ील्ड्स जोड़ दिए गए!")
                     st.rerun()
             with col_add:
                 if st.button("➕ Add Field", type="secondary", use_container_width=True): add_custom_field_dialog(selected_shipper)
@@ -75,7 +71,7 @@ def render_shipper_data():
             with h_col2: st.markdown("**Invoice Keyword**")
             with h_col3: st.markdown("**Data Position**")
             with h_col4: st.markdown("**Excel Cell**")
-            with h_col5: st.markdown("**Custom AI Logic / Instructions**")
+            with h_col5: st.markdown("**Custom AI Logic**")
             st.write("---")
             
             for field in list(current_rules.keys()):
@@ -86,7 +82,29 @@ def render_shipper_data():
                 with col2: ky = st.text_input(f"ky_{field}", value=saved_val.get("keyword", ""), label_visibility="collapsed")
                 with col3: pos = st.selectbox(f"pos_{field}", ["Right (आगे)", "Below (नीचे)"], index=0 if saved_val.get("position", "Right (आगे)") == "Right (आगे)" else 1, label_visibility="collapsed")
                 with col4: cl = st.text_input(f"cl_{field}", value=saved_val.get("cell", ""), label_visibility="collapsed")
-                with col5: lg = st.text_input(f"lg_{field}", value=saved_val.get("logic", ""), label_visibility="collapsed")
+                
+                # 🎯 हाइब्रिड लॉजिक इंजन (5th Column)
+                with col5:
+                    saved_lg = saved_val.get("logic", "")
+                    preset_options = ["None", "Table_Item", "Container No (4 Alpha + 7 Num)", "Write Custom Instruction..."]
+                    
+                    # डिफ़ॉल्ट इंडेक्स सेट करना
+                    current_idx = 0
+                    if saved_lg == "Table_Item": current_idx = 1
+                    elif saved_lg == "Container No (4 Alpha + 7 Num)": current_idx = 2
+                    elif saved_lg and saved_lg not in ["None", "Table_Item", "Container No (4 Alpha + 7 Num)"]:
+                        current_idx = 3 # यानी कस्टम लिखा हुआ डेटा है
+                        
+                    sel_lg = st.selectbox(f"sel_lg_{field}", preset_options, index=current_idx, label_visibility="collapsed")
+                    
+                    # अगर ड्रॉपडाउन में कस्टम निर्देश चुना है, तभी टेक्स्ट बॉक्स खुलेगा
+                    if sel_lg == "Write Custom Instruction...":
+                        lg = st.text_input(f"txt_lg_{field}", value=saved_lg if saved_lg not in preset_options else "", placeholder="जैसे: 2 digit country code", label_visibility="collapsed")
+                    elif sel_lg == "None":
+                        lg = ""
+                    else:
+                        lg = sel_lg
+                
                 with col6:
                     if st.button("🗑️", key=f"del_{field}"):
                         del st.session_state["shipper_database"][selected_shipper]["mapping_rules"][field]
