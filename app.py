@@ -86,16 +86,28 @@ if "shipper_database" not in st.session_state or "master_rules_template" not in 
 if "admin_authenticated" not in st.session_state: st.session_state["admin_authenticated"] = False
 if "processed_file_ready" not in st.session_state: st.session_state["processed_file_ready"] = None
 
+# ==========================================
+# ⚙️ SIDEBAR CONTROL PANEL CONFIGURATION
+# ==========================================
 st.sidebar.title("⚙️ Control Panel")
 st.sidebar.write("---")
 
-# ↩️ जादुई बटन: एडमिन मोड से सीधे मुख्य स्क्रीन पर जाने के लिए
+# 1️⃣ सबसे ऊपर: वापस जाने वाला मुख्य बटन (यदि एडमिन लॉगिन है)
 if st.session_state["admin_authenticated"]:
     if st.sidebar.button("↩️ Back to Main Invoice Processor", type="primary", use_container_width=True):
         st.session_state["admin_authenticated"] = False
         st.rerun()
     st.sidebar.write("---")
 
+# 2️⃣ भाई, यहाँ आया आपका मुख्य रेडियो मेनू (एडमिन सेटिंग्स) सबसे ऊपर!
+if st.session_state["admin_authenticated"]:
+    sub_menu = st.sidebar.radio(
+        "📋 एडमिन सेटिंग्स (Master Data)", 
+        ["i. 🏢 Add Shipper Name & Setup", "iii. 🌍 Global Masters & Common Dictionaries"]
+    )
+    st.sidebar.write("---")
+
+# 3️⃣ उसके नीचे: पासवर्ड एक्सेस डिब्बा
 with st.sidebar.expander("🛠️ Admin Settings Access"):
     if not st.session_state["admin_authenticated"]:
         pwd = st.text_input("एडमिन पासवर्ड डालें:", type="password", key="admin_pwd")
@@ -110,7 +122,7 @@ with st.sidebar.expander("🛠️ Admin Settings Access"):
             st.session_state["admin_authenticated"] = False
             st.rerun()
 
-# बैकअप / रीस्टोर
+# 4️⃣ सबसे लास्ट में: बैकअप और रीस्टोर वाला ज़ोन
 if st.session_state["admin_authenticated"]:
     st.sidebar.write("---")
     st.sidebar.subheader("📦 System Backup & Restore")
@@ -145,18 +157,20 @@ if st.session_state["admin_authenticated"]:
                 st.rerun()
             except Exception as e: st.sidebar.error(f"फेल: {str(e)}")
 
-# स्क्रीन रेंडर लॉजिक
+# ==========================================
+# MAIN PAGE ROUTING DISPLAY
+# ==========================================
 if st.session_state["admin_authenticated"]:
-    st.sidebar.write("---")
-    from shipper_data import render_shipper_data
-    from global_masters import render_global_masters
-    
-    sub_menu = st.sidebar.radio("📋 एडमिन सेटिंग्स (Master Data)", ["i. 🏢 Add Shipper Name & Setup", "iii. 🌍 Global Masters & Common Dictionaries"])
     st.title("🚢 CK Export Processor - Admin Mode")
     st.write("---")
     
-    if sub_menu == "i. 🏢 Add Shipper Name & Setup": render_shipper_data()
-    elif sub_menu == "iii. 🌍 Global Masters & Common Dictionaries": render_global_masters()
+    from shipper_data import render_shipper_data
+    from global_masters import render_global_masters
+    
+    if sub_menu == "i. 🏢 Add Shipper Name & Setup": 
+        render_shipper_data()
+    elif sub_menu == "iii. 🌍 Global Masters & Common Dictionaries": 
+        render_global_masters()
 else:
     from processor import render_processor
     col_l, col_c, col_r = st.columns([1, 4, 1])
