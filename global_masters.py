@@ -16,7 +16,6 @@ def add_master_field_dialog():
         elif new_master_name in st.session_state["master_rules_template"]:
             st.warning("यह फ़ील्ड मास्टर में पहले से मौजूद है!")
         else:
-            # मास्टर टेम्पलेट डिक्शनरी में नया खाली स्ट्रक्चर जोड़ना
             st.session_state["master_rules_template"][new_master_name] = {
                 "keyword": "",
                 "position": "Right (आगे)",
@@ -36,7 +35,6 @@ def render_global_masters():
     with col_t:
         st.subheader("🛠️ Master Rules Template Builder")
     with col_add:
-        # 🎯 पॉपअप खोलने वाला प्लस बटन
         if st.button("➕ Add Master Row", type="secondary", use_container_width=True):
             add_master_field_dialog()
             
@@ -62,12 +60,32 @@ def render_global_masters():
         with col2: ky = st.text_input(f"m_ky_{field}", value=saved_val.get("keyword", ""), label_visibility="collapsed")
         with col3: pos = st.selectbox(f"m_pos_{field}", ["Right (आगे)", "Below (नीचे)"], index=0 if saved_val.get("position", "Right (आगे)") == "Right (आगे)" else 1, label_visibility="collapsed")
         with col4: cl = st.text_input(f"m_cl_{field}", value=saved_val.get("cell", ""), label_visibility="collapsed")
-        with col5: lg = st.text_input(f"m_lg_{field}", value=saved_val.get("logic", ""), placeholder="जैसे: 4 alpha + 7 numbers", label_visibility="collapsed")
+        
+        # 🎯 जादुई हाइब्रिड डिब्बा (मास्टर पेज के लिए भी)
+        with col5:
+            saved_lg = saved_val.get("logic", "")
+            preset_options = ["None", "Table_Item", "Container No (4 Alpha + 7 Num)", "Write Custom Instruction..."]
+            
+            # पुराना सेव डेटा के हिसाब से डिफ़ॉल्ट ऑप्शन सेट करना
+            current_idx = 0
+            if saved_lg == "Table_Item": current_idx = 1
+            elif saved_lg == "Container No (4 Alpha + 7 Num)": current_idx = 2
+            elif saved_lg and saved_lg not in ["None", "Table_Item", "Container No (4 Alpha + 7 Num)"]:
+                current_idx = 3 # यदि कोई खुद का लिखा कस्टम निर्देश है
+                
+            sel_lg = st.selectbox(f"m_sel_lg_{field}", preset_options, index=current_idx, label_visibility="collapsed")
+            
+            # अगर ड्रॉपडाउन में कस्टम निर्देश चुना जाए, तभी नीचे या बगल में टेक्स्ट बॉक्स दिखेगा
+            if sel_lg == "Write Custom Instruction...":
+                lg = st.text_input(f"m_txt_lg_{field}", value=saved_lg if saved_lg not in preset_options else "", placeholder="जैसे: 2 digit country code", label_visibility="collapsed")
+            elif sel_lg == "None":
+                lg = ""
+            else:
+                lg = sel_lg
+                
         with col6:
-            # 🗑️ मास्टर रो डिलीट बटन
             if st.button("🗑️", key=f"m_del_{field}"):
                 del st.session_state["master_rules_template"][field]
-                st.toast(f"❌ '{field}' मास्टर से हटा दिया गया।")
                 st.rerun()
                 
         updated_masters[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "logic": lg}
@@ -90,6 +108,6 @@ def render_global_masters():
         with st.spinner("मास्टर बोर्ड गूगल शीट में सुरक्षित किया जा रहा है..."):
             try:
                 requests.post(WEB_APP_URL, data=json.dumps(payload))
-                st.success("🎉 बधाई हो भाई! पूरा का पूरा मास्टर टेम्पलेट बोर्ड गूगल शीट में लॉक हो गया है!")
+                st.success("🎉 बधाई हो भाई! मास्टर टेम्पलेट बोर्ड ड्रॉपडाउन और कस्टम लॉजिक के साथ गूगल शीट में लॉक हो गया है!")
             except Exception as e:
                 st.error(f"सिंक एरर: {str(e)}")
