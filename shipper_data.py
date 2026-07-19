@@ -7,7 +7,7 @@ WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqh
 
 @st.dialog("➕ Add New Custom Field")
 def add_custom_field_dialog(selected_shipper):
-    st.write("यहाँ जो नाम आप डालेंगे, वह इस शिपर के रूल्स बोर्ड में एक नई रो के रूप में जुड़ जाएगा।")
+    st.write("यहाँ जो नाम आप डालेंगे, वह इस शिपर के रूल्स बोर्ड में एक नई रो के रूप में जुड़ जाएगा।")
     new_field_name = st.text_input("Field Name (जैसे: Notify Party, BL No):", placeholder="यहाँ नाम लिखें...")
     
     if st.button("Confirm & Add Row", type="primary"):
@@ -22,7 +22,7 @@ def add_custom_field_dialog(selected_shipper):
                 "cell": "",
                 "logic": ""
             }
-            st.success(f"🎉 फ़ील्ड '{new_field_name}' सफलतापूर्वक जुड़ गया!")
+            st.success(f"🎉 फ़ील्ड '{new_field_name}' सफलतापूर्वक जुड़ गया!")
             st.rerun()
 
 def render_shipper_data():
@@ -44,7 +44,7 @@ def render_shipper_data():
                 "uploaded_files": {},
                 "mapping_rules": initial_rules
             }
-            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया और मास्टर ढांचा लोड हो गया!")
+            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया और मास्टर ढांचा लोड हो गया!")
             st.rerun()
 
     st.write("---")
@@ -58,13 +58,24 @@ def render_shipper_data():
             st.write(f"### ⚙️ प्रोफाइल सेटअप और रूल्स: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
-            # 📁 टेम्पलेट फ़ाइल अपलोड
+            # 📁 टेम्पलेट फ़ाइल अपलोड ज़ोन
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             has_file = "Full Job Excel Format File" in shipper_info["uploaded_files"]
             if has_file:
                 st.success("✅ Blank Full Job Excel Format File अपलोडेड है।")
+                
+                # 🎯 यहाँ हमने पक्का नियम लगा दिया है: बटन दबाते ही गूगल शीट से वो रो साफ़ हो जाएगी
                 if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
+                    # 1. पहले ऐप के लोकल मेमोरी से डिलीट करें
                     del shipper_info["uploaded_files"]["Full Job Excel Format File"]
+                    
+                    # 2. गूगल शीट को डिलीट करने का ऐक्शन भेजें (ताकि बीच में ब्लैंक रो न छूटे)
+                    delete_payload = {"action": "delete_file", "shipper": selected_shipper}
+                    try:
+                        requests.post(WEB_APP_URL, data=json.dumps(delete_payload))
+                        st.toast("🔥 गूगल शीट से पुरानी फाइल रो पूरी तरह साफ़ कर दी गई है!")
+                    except Exception:
+                        st.warning("लोकल डिलीट हुआ, शीट सिंक में दिक्कत आई।")
                     st.rerun()
             else:
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
@@ -107,7 +118,7 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            # हेडर लेआउट (चौड़ाई सेट की)
+            # हेडर लेआउट (चौड़ाई सेट की)
             h_col1, h_col2, h_col3, h_col4, h_col5, h_col6 = st.columns([2.5, 3, 2, 1, 3, 0.7])
             with h_col1: st.markdown("**Field Name**")
             with h_col2: st.markdown("**Invoice Keyword**")
@@ -135,18 +146,16 @@ def render_shipper_data():
                     saved_lg = saved_val.get("logic", "")
                     preset_options = ["None", "Table_Item", "Container No (4 Alpha + 7 Num)", "Write Custom Instruction..."]
                     
-                    # सेव किए हुए डेटा के आधार पर सही डिफ़ॉल्ट इंडेक्स चुनना
                     current_idx = 0
                     if saved_lg == "Table_Item": 
                         current_idx = 1
                     elif saved_lg == "Container No (4 Alpha + 7 Num)": 
                         current_idx = 2
                     elif saved_lg and saved_lg not in ["None", "Table_Item", "Container No (4 Alpha + 7 Num)"]:
-                        current_idx = 3 # यानी पहले से कोई कस्टम निर्देश लिखा हुआ है
+                        current_idx = 3
                         
                     sel_lg = st.selectbox(f"sel_lg_{field}", preset_options, index=current_idx, label_visibility="collapsed")
                     
-                    # अगर ड्रॉपडाउन में कस्टम निर्देश चुना है, तभी टेक्स्ट बॉक्स दिखेगा
                     if sel_lg == "Write Custom Instruction...":
                         lg = st.text_input(
                             f"txt_lg_{field}", 
