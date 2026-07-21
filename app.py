@@ -4,7 +4,12 @@ import requests
 import json
 import base64
 
-st.set_page_config(page_title="CK Export Invoice Processor", layout="wide", initial_sidebar_state="collapsed")
+# 📌 1. साइडबार को डिफ़ॉल्ट रूप से छुपाने (Collapsed) के लिए कॉन्फ़िगरेशन
+st.set_page_config(
+    page_title="CK Export Invoice Processor", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
@@ -13,7 +18,7 @@ def load_data_from_gsheet():
     shipper_db = {}
     master_rules_template = {}
     
-    # 1. ग्लोबल मास्टर लोड करना
+    # 1️⃣ ग्लोबल मास्टर लोड करना (8-Columns Compatible)
     try:
         master_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Global_Masters"
         df_m = pd.read_csv(master_url)
@@ -26,12 +31,15 @@ def load_data_from_gsheet():
                         "keyword": row["Keyword"] if "Keyword" in df_m.columns and pd.notna(row["Keyword"]) else "",
                         "position": row["Position"] if "Position" in df_m.columns and pd.notna(row["Position"]) else "Right (आगे)",
                         "cell": row["Cell"] if "Cell" in df_m.columns and pd.notna(row["Cell"]) else "",
-                        "logic": row["Logic"] if "Logic" in df_m.columns and pd.notna(row["Logic"]) else ""
+                        "match_mode": row["MatchMode"] if "MatchMode" in df_m.columns and pd.notna(row["MatchMode"]) else "Exact Word",
+                        "stop_kw": row["StopKw"] if "StopKw" in df_m.columns and pd.notna(row["StopKw"]) else "",
+                        "filter": row["Filter"] if "Filter" in df_m.columns and pd.notna(row["Filter"]) else "None",
+                        "logic": row["Logic"] if "Logic" in df_m.columns and pd.notna(row["Logic"]) else "None"
                     }
     except Exception:
         pass
 
-    # 2. रूल्स लोड करना
+    # 2️⃣ शिपर्स के रूल्स लोड करना (8-Columns Compatible)
     try:
         rules_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Rules"
         df_rules = pd.read_csv(rules_url)
@@ -50,12 +58,15 @@ def load_data_from_gsheet():
                                 "keyword": row["Keyword"] if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else "",
                                 "position": row["Position"] if "Position" in df_rules.columns and pd.notna(row["Position"]) else "Right (आगे)",
                                 "cell": row["Cell"] if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else "",
-                                "logic": row["Logic"] if "Logic" in df_rules.columns and pd.notna(row["Logic"]) else ""
+                                "match_mode": row["MatchMode"] if "MatchMode" in df_rules.columns and pd.notna(row["MatchMode"]) else "Exact Word",
+                                "stop_kw": row["StopKw"] if "StopKw" in df_rules.columns and pd.notna(row["StopKw"]) else "",
+                                "filter": row["Filter"] if "Filter" in df_rules.columns and pd.notna(row["Filter"]) else "None",
+                                "logic": row["Logic"] if "Logic" in df_rules.columns and pd.notna(row["Logic"]) else "None"
                             }
     except Exception:
         pass
 
-    # 3. फाइल्स लोड करना
+    # 3️⃣ टेम्पलेट फाइल्स लोड करना
     try:
         files_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Files"
         df_files = pd.read_csv(files_url)
@@ -73,7 +84,7 @@ def load_data_from_gsheet():
                     
     return shipper_db, master_rules_template
 
-# सेशन स्टेट सिंक इंजन
+# 🔄 सेशन स्टेट सिंक इंजन
 if "shipper_database" not in st.session_state or "master_rules_template" not in st.session_state:
     st.info("🔄 लाइव डेटाबेस और मास्टर बोर्ड सिंक हो रहे हैं...")
     db, m_template = load_data_from_gsheet()
@@ -92,14 +103,14 @@ if "processed_file_ready" not in st.session_state: st.session_state["processed_f
 st.sidebar.title("⚙️ Control Panel")
 st.sidebar.write("---")
 
-# 1️⃣ सबसे ऊपर: वापस जाने वाला मुख्य बटन (यदि एडमिन लॉगिन है)
+# 1️⃣ एडमिन मोड एक्टिव होने पर मुख्य बटन
 if st.session_state["admin_authenticated"]:
     if st.sidebar.button("↩️ Back to Main Invoice Processor", type="primary", use_container_width=True):
         st.session_state["admin_authenticated"] = False
         st.rerun()
     st.sidebar.write("---")
 
-# 2️⃣ भाई, यहाँ आया आपका मुख्य रेडियो मेनू (एडमिन सेटिंग्स) सबसे ऊपर!
+# 2️⃣ एडमिन रेडियो मेनू
 if st.session_state["admin_authenticated"]:
     sub_menu = st.sidebar.radio(
         "📋 एडमिन सेटिंग्स (Master Data)", 
@@ -107,7 +118,7 @@ if st.session_state["admin_authenticated"]:
     )
     st.sidebar.write("---")
 
-# 3️⃣ उसके नीचे: पासवर्ड एक्सेस डिब्बा
+# 3️⃣ पासवर्ड एक्सेस ब्लॉक
 with st.sidebar.expander("🛠️ Admin Settings Access"):
     if not st.session_state["admin_authenticated"]:
         pwd = st.text_input("एडमिन पासवर्ड डालें:", type="password", key="admin_pwd")
@@ -122,7 +133,7 @@ with st.sidebar.expander("🛠️ Admin Settings Access"):
             st.session_state["admin_authenticated"] = False
             st.rerun()
 
-# 4️⃣ सबसे लास्ट में: बैकअप और रीस्टोर वाला ज़ोन
+# 4️⃣ बैकअप और रीस्टोर ज़ोन
 if st.session_state["admin_authenticated"]:
     st.sidebar.write("---")
     st.sidebar.subheader("📦 System Backup & Restore")
@@ -150,7 +161,17 @@ if st.session_state["admin_authenticated"]:
                         imported_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = base64.b64decode(b64_str)
                         requests.post(WEB_APP_URL, data=json.dumps({"action": "save_file", "shipper": s_name, "file_base64": b64_str}))
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
-                        rules_payload.append({"shipper": s_name, "field": f_name, "keyword": r_info.get("keyword", ""), "position": r_info.get("position", "Right (आगे)"), "cell": r_info.get("cell", ""), "logic": r_info.get("logic", "")})
+                        rules_payload.append({
+                            "shipper": s_name, 
+                            "field": f_name, 
+                            "keyword": r_info.get("keyword", ""), 
+                            "position": r_info.get("position", "Right (आगे)"), 
+                            "cell": r_info.get("cell", ""), 
+                            "match_mode": r_info.get("match_mode", "Exact Word"),
+                            "stop_kw": r_info.get("stop_kw", ""),
+                            "filter": r_info.get("filter", "None"),
+                            "logic": r_info.get("logic", "None")
+                        })
                 st.session_state["shipper_database"] = imported_db
                 requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}))
                 st.sidebar.success("🎉 रीस्टोर सफल!")
