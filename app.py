@@ -1,6 +1,6 @@
 import streamlit as st
 
-# 📌 1. शुरुआती कॉन्फ़िगरेशन
+# 📌 1. शुरुआती कॉन्फ़िगरेशन (साइडबार डिफ़ॉल्ट बंद)
 st.set_page_config(
     page_title="CK Export Invoice Processor Pro", 
     page_icon="🚢",
@@ -8,15 +8,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 📌 2. 🔥 CSS Injection Fix (यह साइडबार को ब्राउज़र लेवल पर डिफ़ॉल्ट बंद/छिपा देगा)
+# 📌 2. 🔥 सही CSS (इससे साइडबार डिफ़ॉल्ट बंद रहेगा पर Toggle Button हमेशा दिखेगा)
 st.markdown("""
     <style>
-        /* पहली बार लोड होने पर साइडबार को ज़बरदस्ती बंद रखना */
-        [data-testid="stSidebar"][aria-expanded="true"] {
-            margin-left: -336px;
-        }
-        [data-testid="stSidebar"] {
-            transition: margin-left 0.3s ease;
+        /* Unhide / Toggle Arrow Button को हमेशा दृश्यमान (Visible) रखना */
+        [data-testid="stSidebarCollapseButton"], 
+        [data-testid="stSidebarCollapsedControl"] {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            z-index: 999999 !important;
         }
     </style>
 """, unsafe_allow_html=True)
