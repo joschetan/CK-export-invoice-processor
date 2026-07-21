@@ -4,11 +4,11 @@ import json
 import base64
 import pdfplumber
 import re
-from io import BytesIO  # 👈 यहाँ BytesIO इम्पोर्ट किया
+from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-# 🎯 लाइव टेस्ट का जादुई पॉपअप (Dialog Box - Fixed)
+# 🎯 लाइव टेस्ट का जादुई पॉपअप (Dialog Box - BytesIO Fixed)
 @st.dialog("⚡ Field Extraction Test Result")
 def test_field_dialog(field_name, rule_data, test_pdf_bytes):
     st.markdown(f"### 🔍 Testing Field: **{field_name}**")
@@ -21,7 +21,6 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
     pdf_lines = []
     
     try:
-        # ⚡ फिक्स: BytesIO(test_pdf_bytes) लगाकर भेजा
         with pdfplumber.open(BytesIO(test_pdf_bytes)) as pdf:
             for page in pdf.pages:
                 t = page.extract_text()
@@ -171,10 +170,10 @@ def render_shipper_data():
                 st.info("💡 सैंपल PDF तैयार है! अब नीचे किसी भी रो के सामने '⚡ Test' बटन दबाकर लाइव रिजल्ट देखें।")
             st.write("---")
             
-            # 🛠️ 3. 8-Column Rules Builder with Live Test
+            # 🛠️ 3. Rules Builder
             col_title, col_sync, col_add = st.columns([5, 3, 2])
             with col_title:
-                st.subheader("🛠️ 3. Advanced 8-Column Rules Builder")
+                st.subheader("🛠️ 3. AI Mapping Rules Builder")
             with col_sync:
                 if st.button("🔄 Sync from Master Template", type="secondary", use_container_width=True):
                     current_rules = shipper_info.get("mapping_rules", {})
@@ -183,9 +182,9 @@ def render_shipper_data():
                         if mf not in current_rules:
                             current_rules[mf] = dict(m_vals)
                         else:
-                            for key_attr in ["match_mode", "stop_kw", "filter"]:
+                            for key_attr in ["match_mode", "stop_kw", "filter", "logic"]:
                                 if key_attr not in current_rules[mf] or not current_rules[mf][key_attr]:
-                                    current_rules[mf][key_attr] = m_vals.get(key_attr, "None" if key_attr == "filter" else ("Exact Word" if key_attr == "match_mode" else ""))
+                                    current_rules[mf][key_attr] = m_vals.get(key_attr, "None" if key_attr in ["filter", "logic"] else ("Exact Word" if key_attr == "match_mode" else ""))
                     shipper_info["mapping_rules"] = current_rules
                     st.success("🎉 मास्टर टेम्पलेट सिंक हो गया!")
                     st.rerun()
@@ -196,7 +195,7 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            # 8 हेडर कॉलम्स
+            # हेडर कॉलम्स
             c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 2.5, 1.5, 1, 1.8, 1.5, 1.5, 1.2])
             with c1: st.markdown("**1. Field Name**")
             with c2: st.markdown("**2. Keyword**")
@@ -219,24 +218,39 @@ def render_shipper_data():
                 with c3: pos = st.selectbox(f"p_{field}", ["Right (आगे)", "Below (नीचे)", "Table Column"], index=0 if s_val.get("position") == "Right (आगे)" else (1 if s_val.get("position") == "Below (नीचे)" else 2), label_visibility="collapsed")
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 
+                # 🎯 5. Match Mode (State Preservation Fix)
                 with c5:
                     m_opts = ["Exact Word", "Full Line", "Full Block", "Table Extraction"]
-                    m_idx = m_opts.index(s_val.get("match_mode")) if s_val.get("match_mode") in m_opts else 0
+                    saved_mm = s_val.get("match_mode", "Exact Word")
+                    m_idx = m_opts.index(saved_mm) if saved_mm in m_opts else 0
                     m_mode = st.selectbox(f"mm_{field}", m_opts, index=m_idx, label_visibility="collapsed")
                     
+                # 🎯 6. Stop Keyword
                 with c6:
                     stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), placeholder="e.g. Date", label_visibility="collapsed")
                     
+                # 🎯 7. Filter/Logic (State Preservation Fix - No Reset!)
                 with c7:
                     flt_opts = ["None", "Numbers Only", "Letters Only", "Inside Brackets ()", "Write Custom..."]
-                    curr_flt = s_val.get("filter", "None")
-                    f_idx = flt_opts.index(curr_flt) if curr_flt in flt_opts else (4 if curr_flt and curr_flt != "None" else 0)
+                    saved_flt = s_val.get("filter", "None")
+                    saved_lg = s_val.get("logic", "None")
+                    
+                    # सही ड्रॉपडाउन इंडेक्स ढूँढना
+                    if saved_flt in flt_opts and saved_flt != "Write Custom...":
+                        f_idx = flt_opts.index(saved_flt)
+                    elif saved_lg and saved_lg != "None":
+                        f_idx = 4 # Write Custom...
+                    else:
+                        f_idx = 0 # None
+                        
                     sel_flt = st.selectbox(f"flt_{field}", flt_opts, index=f_idx, label_visibility="collapsed")
                     
                     if sel_flt == "Write Custom...":
-                        cust_lg = st.text_input(f"lg_{field}", value=s_val.get("logic", ""), placeholder="कस्टम निर्देश...", label_visibility="collapsed")
+                        cust_lg = st.text_input(f"lg_{field}", value=saved_lg if saved_lg != "None" else "", placeholder="कस्टम निर्देश...", label_visibility="collapsed")
+                        final_flt = "Write Custom..."
                     else:
-                        cust_lg = sel_flt
+                        cust_lg = "None"
+                        final_flt = sel_flt
                         
                 with c8:
                     act_col1, act_col2 = st.columns([1, 1])
@@ -245,7 +259,7 @@ def render_shipper_data():
                             if test_pdf_data:
                                 current_rule_data = {
                                     "keyword": ky, "position": pos, "cell": cl,
-                                    "match_mode": m_mode, "stop_kw": stop_kw, "filter": sel_flt, "logic": cust_lg
+                                    "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": cust_lg
                                 }
                                 test_field_dialog(field, current_rule_data, test_pdf_data)
                             else:
@@ -257,11 +271,13 @@ def render_shipper_data():
                 
                 updated_rules[edited_name] = {
                     "keyword": ky, "position": pos, "cell": cl,
-                    "match_mode": m_mode, "stop_kw": stop_kw, "filter": sel_flt, "logic": cust_lg
+                    "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": cust_lg
                 }
                 
             st.write("---")
-            if st.button("💾 Save 8-Column AI Rules to Google Sheet", type="primary", use_container_width=True):
+            
+            # 🎯 💾 साफ़ बटन और ज़बरदस्त कंफर्मेशन अलर्ट
+            if st.button("💾 Save AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
                 
                 rules_payload = []
@@ -271,13 +287,14 @@ def render_shipper_data():
                             "shipper": s_name, "field": f_name, "keyword": r_info.get("keyword", ""),
                             "position": r_info.get("position", "Right (आगे)"), "cell": r_info.get("cell", ""),
                             "match_mode": r_info.get("match_mode", "Exact Word"), "stop_kw": r_info.get("stop_kw", ""),
-                            "filter": r_info.get("filter", "None"), "logic": r_info.get("logic", "")
+                            "filter": r_info.get("filter", "None"), "logic": r_info.get("logic", "None")
                         })
                 
-                with st.spinner("8-कॉलम डेटाबेस गूगल शीट में सेव हो रहा है..."):
+                with st.spinner("डेटाबेस गूगल शीट में सिंक हो रहा है..."):
                     try:
-                        requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}))
-                        st.success("🎉 8-कॉलम रूल्स गूगल शीट में सुरक्षित सेव हो गए हैं!")
+                        res = requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}))
+                        st.success("🎉 सफलता! आपके सभी AI रूल्स और लॉजिक गूगल शीट में सुरक्षित सेव हो गए हैं!")
+                        st.balloons() # सेलिब्रेशन एनिमेशन!
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
                 st.rerun()
