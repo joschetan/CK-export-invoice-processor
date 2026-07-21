@@ -1,6 +1,5 @@
 import streamlit as st
 
-# 📌 1. शुरुआती कॉन्फ़िगरेशन (साइडबार डिफ़ॉल्ट बंद)
 st.set_page_config(
     page_title="CK Export Invoice Processor Pro", 
     page_icon="🚢",
@@ -8,19 +7,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 📌 2. 🔥 सही CSS (इससे साइडबार डिफ़ॉल्ट बंद रहेगा पर Toggle Button हमेशा दिखेगा)
-st.markdown("""
-    <style>
-        /* Unhide / Toggle Arrow Button को हमेशा दृश्यमान (Visible) रखना */
-        [data-testid="stSidebarCollapseButton"], 
-        [data-testid="stSidebarCollapsedControl"] {
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            z-index: 999999 !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+# 🎯 JS Auto-Collapse (पेज लोड होते ही अगर साइडबार खुला मिले, तो खुद बंद कर दे)
+import streamlit.components.v1 as components
+components.html("""
+    <script>
+        window.addEventListener('load', function() {
+            var btn = window.parent.document.querySelector('button[data-testid="stSidebarCollapseButton"]');
+            var sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]');
+            if (sidebar && sidebar.getAttribute('aria-expanded') === 'true') {
+                if (btn) { btn.click(); }
+            }
+        });
+    </script>
+""", height=0)
 
 import pandas as pd
 import requests
@@ -34,7 +33,6 @@ def load_data_from_gsheet():
     shipper_db = {}
     master_rules_template = {}
     
-    # 1️⃣ ग्लोबल मास्टर लोड करना
     try:
         master_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Global_Masters"
         df_m = pd.read_csv(master_url)
@@ -55,7 +53,6 @@ def load_data_from_gsheet():
     except Exception:
         pass
 
-    # 2️⃣ शिपर्स के रूल्स लोड करना
     try:
         rules_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Rules"
         df_rules = pd.read_csv(rules_url)
@@ -82,7 +79,6 @@ def load_data_from_gsheet():
     except Exception:
         pass
 
-    # 3️⃣ टेम्पलेट फाइल्स लोड करना
     try:
         files_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Files"
         df_files = pd.read_csv(files_url)
@@ -100,7 +96,6 @@ def load_data_from_gsheet():
                     
     return shipper_db, master_rules_template
 
-# 🔄 सेशन स्टेट सिंक इंजन
 if "shipper_database" not in st.session_state or "master_rules_template" not in st.session_state:
     st.info("🔄 लाइव डेटाबेस और मास्टर बोर्ड सिंक हो रहे हैं...")
     db, m_template = load_data_from_gsheet()
