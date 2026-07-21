@@ -9,7 +9,7 @@ from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-# 🎯 लाइव टेस्ट का पॉपअप
+# 🎯 लाइव टेस्ट का स्मार्ट पॉपअप (Container, Seal & Size Auto-Extract Fix)
 @st.dialog("⚡ Field Extraction Test Result")
 def test_field_dialog(field_name, rule_data, test_pdf_bytes):
     st.markdown(f"### 🔍 Testing Field: **{field_name}**")
@@ -43,7 +43,7 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                     if pos == "Right (आगे)":
                         start_idx = line.lower().find(kw.lower()) + len(kw)
                         raw_found = line[start_idx:].strip()
-                    elif pos == "Below (नीचे)":
+                    elif pos == "Below (नीचे)" or pos == "Table Column":
                         if idx + 1 < len(pdf_lines):
                             raw_found = pdf_lines[idx + 1].strip()
                     break
@@ -51,31 +51,59 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
             raw_found = pdf_text
             
         if raw_found:
+            # Stop Keyword Check
             if stop_kw and stop_kw.lower() in raw_found.lower():
                 st_idx = raw_found.lower().find(stop_kw.lower())
                 raw_found = raw_found[:st_idx].strip()
-                
-            if flt == "Numbers Only":
-                nums = re.findall(r'[\d,.]+', raw_found)
-                extracted_val = nums[0].strip() if nums else ""
-            elif flt == "Letters Only":
-                lets = re.findall(r'[a-zA-Z]+', raw_found)
-                extracted_val = " ".join(lets).strip() if lets else ""
-            elif flt == "Inside Brackets ()":
-                match = re.search(r'\(([^)]+)\)', raw_found)
-                extracted_val = match.group(1).strip() if match else raw_found
-            elif mode == "Exact Word":
-                if ":" in raw_found: raw_found = raw_found.split(":", 1)[1].strip()
-                parts = raw_found.split()
-                extracted_val = parts[0].strip() if parts else ""
-            else:
-                extracted_val = raw_found.strip()
-                
+            
+            # 🎯 स्मार्ट पैटर्न डिटेक्शन (Container, Size, Seal Smart Filter)
+            f_lower = field_name.lower()
+            
+            if "container" in f_lower or "cntr" in f_lower:
+                # 4 अक्षरों + 7 अंकों वाला कंटेनर नंबर पैटर्न (जैसे HLBU3075456)
+                cntr_match = re.search(r'\b[A-Z]{4}\d{7}\b', raw_found)
+                if cntr_match:
+                    extracted_val = cntr_match.group(0)
+            
+            elif "size" in f_lower or "type" in f_lower:
+                # साइज पैटर्न (जैसे 20FT, 40HC, 40FT, 20GP, 40' आदि)
+                size_match = re.search(r'\b(20\s*FT|40\s*FT|40\s*HC|20\s*GP|40\s*HQ|20|40)\b', raw_found, re.IGNORECASE)
+                if size_match:
+                    extracted_val = size_match.group(0)
+
+            elif "seal" in f_lower:
+                # सील नंबर (अक्षर + अंक पैटर्न जो कंटेनर नंबर से अलग हो)
+                seals = re.findall(r'\b[A-Z0-9]{6,12}\b', raw_found)
+                # कंटेनर नंबर और साइज को हटाकर सील नंबर ढूँढना
+                valid_seals = [s for s in seals if not re.match(r'^[A-Z]{4}\d{7}$', s) and s not in ["40HC", "20FT", "40FT"]]
+                if valid_seals:
+                    extracted_val = " / ".join(valid_seals)
+
+            # अगर ऊपर में से कोई विशेष मैच नहीं हुआ तो स्टैंडर्ड फिल्टर्स चलेंगे
+            if not extracted_val:
+                if flt == "Numbers Only":
+                    nums = re.findall(r'[\d,.]+', raw_found)
+                    extracted_val = nums[0].strip() if nums else ""
+                elif flt == "Letters Only":
+                    lets = re.findall(r'[a-zA-Z]+', raw_found)
+                    extracted_val = " ".join(lets).strip() if lets else ""
+                elif flt == "Inside Brackets ()":
+                    match = re.search(r'\(([^)]+)\)', raw_found)
+                    extracted_val = match.group(1).strip() if match else raw_found
+                elif mode == "Exact Word":
+                    if ":" in raw_found: raw_found = raw_found.split(":", 1)[1].strip()
+                    parts = raw_found.split()
+                    extracted_val = parts[0].strip() if parts else ""
+                else:
+                    extracted_val = raw_found.strip()
+                    
+            # Custom Logic Checks
             if lg and lg != "None":
                 if "cart" in lg.lower() or "ctn" in lg.lower():
                     if "cart" in extracted_val.lower() or "ctn" in extracted_val.lower(): extracted_val = "CTN"
                 if "rosctl" in lg.lower():
                     extracted_val = "YES" if "rosctl" in pdf_text.lower() or "under rosctl" in pdf_text.lower() else "NO"
+
     except Exception as e:
         st.error(f"पार्सिंग एरर: {str(e)}")
         
@@ -160,7 +188,7 @@ def render_shipper_data():
                     
             st.write("---")
             
-            # 🧪 2. लाइव टेस्टिंग के लिए सैंपल PDF अपलोडर (अब यह हमेशा खुला/Visible रहेगा)
+            # 🧪 2. लाइव टेस्टिंग के लिए सैंपल PDF अपलोडर
             st.subheader("🧪 2. Upload Sample PDF Invoice for Live Testing")
             sample_pdf = st.file_uploader("यहाँ कोई भी 1 सैंपल इनवॉइस PDF डालें (जिससे लाइव टेस्ट करना हो):", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             if sample_pdf:
