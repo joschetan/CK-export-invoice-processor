@@ -4,47 +4,70 @@ import pdfplumber
 import re
 from io import BytesIO
 
-def extract_custom_logic_value(raw_text, logic_str, keyword_found=""):
-    """यूजर के लिखे कस्टम निर्देशों को प्रोसेस करने वाला स्मार्ट एआई लॉजिक"""
-    if not logic_str:
-        return raw_text.strip()
+def clean_extracted_value(text, pos, logic_str=""):
+    """कीवर्ड के आगे से केवल सटीक डेटा निकालने वाला क्लीनर"""
+    if not text:
+        return ""
     
-    logic_lower = logic_str.lower()
+    text = text.strip()
     
-    # 1. ROSCTL / Fixed String match
-    if "rosctl" in logic_lower or "write:yes" in logic_lower:
-        if "rosctl" in raw_text.lower() or "under rosctl" in raw_text.lower():
-            return "YES"
-        return "NO"
+    # 1. यदि कोई कस्टम लॉजिक/निर्देश दिया गया हो
+    if logic_str and logic_str.strip() != "" and logic_str.lower() != "none":
+        lg_lower = logic_str.lower()
+        
+        # ROSCTL
+        if "rosctl" in lg_lower or "write:yes" in lg_lower:
+            return "YES" if "rosctl" in text.lower() or "under rosctl" in text.lower() else "NO"
+            
+        # ब्रैकेट वाला लॉजिक () -> KGS
+        if "bracket" in lg_lower or "parentheses" in lg_lower or "()" in lg_lower:
+            match = re.search(r'\(([^)]+)\)', text)
+            if match:
+                return match.group(1).strip()
+                
+        # DA / Payment terms
+        if "bl / awb date" in lg_lower or "da" in lg_lower:
+            if "days" in text.lower() or "bl" in text.lower() or "awb" in text.lower():
+                return "DA"
+                
+        # LUT Mode
+        if "w/o paymenmt" in lg_lower or "lut" in lg_lower:
+            if "w/o paymenmt" in text.lower() or "letter of undertaking" in text.lower() or "lut" in text.lower():
+                return "LUT"
+                
+        # CTN / CART
+        if "cart" in lg_lower or "ctn" in lg_lower:
+            if "cart" in text.lower() or "ctn" in text.lower():
+                return "CTN"
 
-    # 2. Bracket Extractor () -> (KGS) => KGS
-    if "bracket" in logic_lower or "parentheses" in logic_lower or "()" in logic_lower:
-        match = re.search(r'\(([^)]+)\)', raw_text)
-        if match:
-            return match.group(1).strip()
+    # 2. डिफ़ॉल्ट क्लीनिंग (जब Logic = None हो)
+    # Right (आगे): कीवर्ड के तुरंत बाद वाला पहला शब्द/नंबर ही उठाओ (बाकी पूरी लाइन छोड़ दो!)
+    if pos == "Right (आगे)":
+        # कोलोन या हाइफन के बाद का हिस्सा लो
+        if ":" in text:
+            text = text.split(":", 1)[1].strip()
+        
+        # स्पेस से स्प्लिट करके सिर्फ पहला वर्ड/नंबर पकड़ो
+        parts = text.split()
+        if parts:
+            return parts[0].strip()
+            
+    # Below (नीचे): नीचे वाली लाइन का पहला वर्ड या साफ़ ब्लॉक
+    elif pos == "Below (नीचे)":
+        lines = text.split("\n")
+        if lines:
+            first_line = lines[0].strip()
+            # अगर देश का नाम या कंटेनर नंबर है तो पूरा शब्द लो
+            parts = first_line.split()
+            if parts:
+                return parts[0].strip()
 
-    # 3. Days / Payment terms -> DA/AP/DP/LC
-    if "bl / awb date" in logic_lower or "da" in logic_lower:
-        if "days" in raw_text.lower() or "bl" in raw_text.lower() or "awb" in raw_text.lower():
-            return "DA"
-
-    # 4. IGST / LUT Mode
-    if "w/o paymenmt" in logic_lower or "lut" in logic_lower:
-        if "w/o paymenmt" in raw_text.lower() or "letter of undertaking" in raw_text.lower() or "lut" in raw_text.lower():
-            return "LUT"
-
-    # 5. CART / CTN
-    if "cart" in logic_lower or "ctn" in logic_lower:
-        if "cart" in raw_text.lower() or "ctn" in raw_text.lower():
-            return "CTN"
-
-    # Default fallback
-    return raw_text.strip()
+    return text.strip()
 
 
 def render_processor():
-    st.header("📤 Invoice Processing Zone (Advanced Smart Parser)")
-    st.caption("यहाँ इनवॉइस अपलोड करें — स्मार्ट AI पार्सर ब्रैकेट, ब्लॉक्स और टेबल डेटा को सही से मैप करेगा।")
+    st.header("📤 Invoice Processing Zone")
+    st.caption("रूल्स बिल्डर के आधार पर सटीक सिंगल डेटा और टेबल एक्सट्रैक्शन।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -66,7 +89,7 @@ def render_processor():
                     st.write("---")
                     
                     if st.button("🚀 Process & Generate Excel", type="primary"):
-                        with st.spinner("पीडीएफ से स्मार्ट डेटा एक्सट्रैक्ट किया जा रहा है..."):
+                        with st.spinner("पीडीएफ से रूल्स के अनुसार सटीक डेटा निकाला जा रहा है..."):
                             rules = shipper_info.get("mapping_rules", {})
                             
                             original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
@@ -77,62 +100,49 @@ def render_processor():
                             pdf_lines = []
                             pdf_tables = []
                             
-                            # 📑 1. पूरे PDF को रीड करना
                             with pdfplumber.open(invoice_file) as pdf:
                                 for page in pdf.pages:
                                     t = page.extract_text()
                                     if t:
                                         pdf_text += t + "\n"
                                         pdf_lines.extend(t.split("\n"))
-                                    
                                     tbls = page.extract_tables()
                                     if tbls:
                                         pdf_tables.extend(tbls)
                             
                             invoice_number = "INV"
                             
-                            # 2. 🎯 सिंगल ब्लॉक/कीवर्ड फ़ील्ड्स निष्कर्षण (Extraction)
+                            # 1. 🎯 सिंगल सेल रूल्स प्रोसेस करना (B2, B9, B3 आदि)
                             for field, r_info in rules.items():
                                 kw = r_info.get("keyword", "").strip()
                                 pos = r_info.get("position", "Right (आगे)")
                                 target_cell = r_info.get("cell", "").strip()
                                 lg = r_info.get("logic", "").strip()
                                 
-                                # केवल सिंगल सेल वाले फ़ील्ड्स (जैसे B2, B3, D2)
+                                # केवल वही जो टेबल आइटम नहीं हैं और जिनका सेल नंबर फिक्स है (जैसे B9, D2)
                                 if "table_item" not in lg.lower() and target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
                                     found_val = ""
                                     
-                                    # अगर कीवर्ड खाली है पर कस्टम लॉजिक लिखा है (जैसे ROSCTL)
-                                    if not kw and lg:
-                                        found_val = extract_custom_logic_value(pdf_text, lg)
-                                    elif kw:
-                                        # पूरे टेक्स्ट में कीवर्ड ढूंढना
+                                    if kw:
                                         for idx, line in enumerate(pdf_lines):
                                             if kw.lower() in line.lower():
                                                 if pos == "Right (आगे)":
-                                                    parts = line.split(":", 1)
-                                                    if len(parts) > 1 and parts[1].strip():
-                                                        found_val = parts[1].strip()
-                                                    else:
-                                                        # अगर कोलोन नहीं है तो आगे का टेक्स्ट उठाओ
-                                                        found_val = line.lower().replace(kw.lower(), "").strip()
-                                                
+                                                    # कीवर्ड के आगे वाला हिस्सा
+                                                    start_idx = line.lower().find(kw.lower()) + len(kw)
+                                                    raw_after = line[start_idx:].strip()
+                                                    found_val = clean_extracted_value(raw_after, pos, lg)
+                                                    
                                                 elif pos == "Below (नीचे)":
-                                                    # नीचे की 1 या 2 लाइन्स को कैप्चर करना (Address Block के लिए)
-                                                    block_lines = []
-                                                    for offset in range(1, 3):
-                                                        if idx + offset < len(pdf_lines):
-                                                            nxt = pdf_lines[idx + offset].strip()
-                                                            if nxt and not any(k in nxt.lower() for k in ["port", "pre-carriage", "vessel", "date"]):
-                                                                block_lines.append(nxt)
-                                                    found_val = " ".join(block_lines) if block_lines else ""
+                                                    # नीचे वाली लाइन
+                                                    if idx + 1 < len(pdf_lines):
+                                                        raw_below = pdf_lines[idx + 1].strip()
+                                                        found_val = clean_extracted_value(raw_below, pos, lg)
                                                 break
-                                                
-                                        # कस्टम लॉजिक फ़िल्टर लगाना
-                                        if lg:
-                                            found_val = extract_custom_logic_value(found_val if found_val else pdf_text, lg, kw)
-                                    
-                                    # डिफ़ॉल्ट 0 लॉजिक (अगर कुछ न मिले)
+                                    elif lg:
+                                        # बिना कीवर्ड वाले फ़ील्ड्स (जैसे ROSCTL)
+                                        found_val = clean_extracted_value(pdf_text, pos, lg)
+                                        
+                                    # अगर खाली है और डिस्काउंट/डिडक्शन है तो 0 लिखें
                                     if not found_val and ("deduction" in field.lower() or "discount" in field.lower()):
                                         found_val = "0"
                                         
@@ -141,33 +151,21 @@ def render_processor():
                                     if "inv. no" in field.lower() or "invoice no" in field.lower():
                                         if found_val: invoice_number = found_val
 
-                            # 3. 🚀 टेबल डेटा एक्सट्रैक्शन (1 or 100+ Items + Container Table)
-                            # आइटम्स टेबल (J2 से चालू)
+                            # 2. 🚀 टेबल आइटम्स एक्सट्रैक्शन
                             item_start_row = 2
-                            container_start_row = 20
-                            
                             parsed_item_rows = []
-                            parsed_container_rows = []
                             
-                            # पीडीएफ की सभी लाइनों से साफ़ टेबल पंक्तियाँ पहचानना
                             for line in pdf_lines:
                                 line_str = line.strip()
-                                # अगर लाइन HS Code (63026090) से शुरू होती है
+                                # HS Code से शुरू होने वाली लाइन
                                 if re.match(r'^6302\d{4}', line_str) or re.match(r'^\d{8}', line_str):
                                     parts = [p.strip() for p in line_str.split() if p.strip()]
                                     if len(parts) >= 4:
                                         parsed_item_rows.append(parts)
-                                
-                                # कंटेनर टेबल लाइन पहचानना (जैसे GAOU7179835 या HLBU3075456)
-                                if re.search(r'[A-Z]{4}\d{7}', line_str):
-                                    parts = [p.strip() for p in line_str.split() if p.strip()]
-                                    parsed_container_rows.append(parts)
 
-                            # आइटम्स एक्सेल में लिखना
                             if parsed_item_rows:
                                 for idx, item in enumerate(parsed_item_rows):
                                     curr_row = item_start_row + idx
-                                    # रूल्स के अनुसार कॉलम मैपिंग
                                     for field, r_info in rules.items():
                                         col = r_info.get("cell", "").strip()
                                         lg = r_info.get("logic", "").strip()
@@ -181,20 +179,7 @@ def render_processor():
                                             
                                             ws[f"{col}{curr_row}"] = val
 
-                            # कंटेनर जानकारी लिखना
-                            if parsed_container_rows:
-                                for idx, con in enumerate(parsed_container_rows):
-                                    curr_row = container_start_row + idx
-                                    # कंटेनर नंबर, साइज़ और सील
-                                    for part in con:
-                                        if re.match(r'^[A-Z]{4}\d{7}$', part):
-                                            ws[f"B{curr_row}"] = part # Container No
-                                        elif "40HC" in part or "20FT" in part or "40FT" in part:
-                                            ws[f"C{curr_row}"] = part # Size
-                                        elif re.match(r'^[A-Z0-9]{7,12}$', part) and not part.isdigit():
-                                            ws[f"E{curr_row}"] = part # Seal ID
-
-                            # 4. फ़ाइल सेव करना
+                            # 3. फ़ाइल जनरेट करना
                             output = BytesIO()
                             wb.save(output)
                             
@@ -206,7 +191,7 @@ def render_processor():
                                 "filename": final_filename,
                                 "data": output.getvalue()
                             }
-                            st.success(f"🎉 इनवॉइस '{final_filename}' सफलतापूर्वक प्रोसेस हो गया है!")
+                            st.success(f"🎉 इनवॉइस '{final_filename}' सटीक डेटा के साथ जनरेट हो गया है!")
                     
                     if st.session_state.get("processed_file_ready", None):
                         st.write("")
