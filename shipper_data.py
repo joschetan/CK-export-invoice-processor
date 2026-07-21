@@ -84,16 +84,26 @@ def render_shipper_data():
             with col_title:
                 st.subheader("🛠️ 2. Advanced 8-Column AI Rules Builder")
             with col_sync:
+                # 🎯 सिंक इंजन फिक्स: अब यह पुराने फ़ील्ड्स में भी नए 8-कॉलम्स को फ़ोर्स सिंक करेगा!
                 if st.button("🔄 Sync from Master Template", type="secondary", use_container_width=True):
                     current_rules = shipper_info.get("mapping_rules", {})
-                    added_count = 0
                     master_tpl = st.session_state.get("master_rules_template", {})
+                    
+                    synced_count = 0
                     for mf, m_vals in master_tpl.items():
                         if mf not in current_rules:
+                            # नया फ़ील्ड सीधे जोड़ो
                             current_rules[mf] = dict(m_vals)
-                            added_count += 1
+                            synced_count += 1
+                        else:
+                            # मौजूदा फ़ील्ड में नए 8-कॉलम प्रॉपर्टीज (Match Mode, StopKw, Filter) सिंक करो
+                            for key_attr in ["match_mode", "stop_kw", "filter"]:
+                                if key_attr not in current_rules[mf] or not current_rules[mf][key_attr]:
+                                    current_rules[mf][key_attr] = m_vals.get(key_attr, "None" if key_attr == "filter" else ("Exact Word" if key_attr == "match_mode" else ""))
+                            synced_count += 1
+                            
                     shipper_info["mapping_rules"] = current_rules
-                    st.success(f"🎉 मास्टर से {added_count} नए रूल्स सिंक हो गए!")
+                    st.success(f"🎉 मास्टर टेम्पलेट से पूरा 8-कॉलम स्ट्रक्चर सिंक हो गया!")
                     st.rerun()
             with col_add:
                 if st.button("➕ Add Field", type="secondary", use_container_width=True):
