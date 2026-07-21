@@ -1,15 +1,17 @@
 import streamlit as st
+
+# 📌 1. यह कमांड ऐप में सबसे पहली लाइन पर होना चाहिए
+st.set_page_config(
+    page_title="CK Export Invoice Processor Pro", 
+    page_icon="🚢",
+    layout="wide", 
+    initial_sidebar_state="collapsed" # 👈 साइडबार डिफ़ॉल्ट बंद
+)
+
 import pandas as pd
 import requests
 import json
 import base64
-
-# 📌 1. साइडबार को डिफ़ॉल्ट रूप से छुपाने (Collapsed) के लिए कॉन्फ़िगरेशन
-st.set_page_config(
-    page_title="CK Export Invoice Processor", 
-    layout="wide", 
-    initial_sidebar_state="collapsed"
-)
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
@@ -18,7 +20,7 @@ def load_data_from_gsheet():
     shipper_db = {}
     master_rules_template = {}
     
-    # 1️⃣ ग्लोबल मास्टर लोड करना (8-Columns Compatible)
+    # 1️⃣ ग्लोबल मास्टर लोड करना
     try:
         master_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Global_Masters"
         df_m = pd.read_csv(master_url)
@@ -39,7 +41,7 @@ def load_data_from_gsheet():
     except Exception:
         pass
 
-    # 2️⃣ शिपर्स के रूल्स लोड करना (8-Columns Compatible)
+    # 2️⃣ शिपर्स के रूल्स लोड करना
     try:
         rules_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Rules"
         df_rules = pd.read_csv(rules_url)
@@ -103,14 +105,12 @@ if "processed_file_ready" not in st.session_state: st.session_state["processed_f
 st.sidebar.title("⚙️ Control Panel")
 st.sidebar.write("---")
 
-# 1️⃣ एडमिन मोड एक्टिव होने पर मुख्य बटन
 if st.session_state["admin_authenticated"]:
     if st.sidebar.button("↩️ Back to Main Invoice Processor", type="primary", use_container_width=True):
         st.session_state["admin_authenticated"] = False
         st.rerun()
     st.sidebar.write("---")
 
-# 2️⃣ एडमिन रेडियो मेनू
 if st.session_state["admin_authenticated"]:
     sub_menu = st.sidebar.radio(
         "📋 एडमिन सेटिंग्स (Master Data)", 
@@ -118,7 +118,6 @@ if st.session_state["admin_authenticated"]:
     )
     st.sidebar.write("---")
 
-# 3️⃣ पासवर्ड एक्सेस ब्लॉक
 with st.sidebar.expander("🛠️ Admin Settings Access"):
     if not st.session_state["admin_authenticated"]:
         pwd = st.text_input("एडमिन पासवर्ड डालें:", type="password", key="admin_pwd")
@@ -133,7 +132,6 @@ with st.sidebar.expander("🛠️ Admin Settings Access"):
             st.session_state["admin_authenticated"] = False
             st.rerun()
 
-# 4️⃣ बैकअप और रीस्टोर ज़ोन
 if st.session_state["admin_authenticated"]:
     st.sidebar.write("---")
     st.sidebar.subheader("📦 System Backup & Restore")
