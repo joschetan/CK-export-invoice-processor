@@ -1,39 +1,21 @@
 import streamlit as st
-
-# 📌 1. साइडबार को डिफ़ॉल्ट रूप से पूरी तरह बंद (Collapsed) रखना
-st.set_page_config(
-    page_title="CK Export Invoice Processor Pro", 
-    page_icon="🚢",
-    layout="wide", 
-    initial_sidebar_state="collapsed"
-)
-
 import pandas as pd
 import requests
 import json
 import base64
 
+# --- 🚀 मुख्य विंडो सेटिंग्स (साफ़ और सीधा डिफ़ॉल्ट लेआउट) ---
+st.set_page_config(
+    page_title="CK Export Invoice Processor Pro", 
+    page_icon="🚢",
+    layout="wide", 
+    initial_sidebar_state="collapsed"  # ऐप खुलने पर साइडबार बंद रहेगा
+)
+
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
-# 🎯 URL Parameter Check for Admin Access (e.g. website.com/?admin=true)
-query_params = st.query_params
-if "admin" in query_params and query_params["admin"] == "true":
-    st.session_state["admin_authenticated"] = True
-
-if "admin_authenticated" not in st.session_state: st.session_state["admin_authenticated"] = False
-if "processed_file_ready" not in st.session_state: st.session_state["processed_file_ready"] = None
-
-# 🎯 जब तक एडमिन मोड ऑन न हो, साइडबार को 100% हाइड (Invisible) रखना
-if not st.session_state["admin_authenticated"]:
-    st.markdown("""
-        <style>
-            [data-testid="stSidebar"] { display: none !important; }
-            [data-testid="stSidebarCollapseButton"] { display: none !important; }
-            [data-testid="stSidebarCollapsedControl"] { display: none !important; }
-        </style>
-    """, unsafe_allow_html=True)
-
+# 💾 गूगल शीट से डेटा लोड करना (बिना किसी st.rerun() लूप के)
 def load_data_from_gsheet():
     shipper_db = {}
     master_rules_template = {}
@@ -101,50 +83,69 @@ def load_data_from_gsheet():
                     
     return shipper_db, master_rules_template
 
-# 🔄 सेशन स्टेट सिंक इंजन
+# --- डेटाबेस और वेरिएबल्स लोड करना (बिना st.rerun() के) ---
 if "shipper_database" not in st.session_state or "master_rules_template" not in st.session_state:
     db, m_template = load_data_from_gsheet()
     st.session_state["shipper_database"] = db
     st.session_state["master_rules_template"] = m_template
     st.session_state["master_types"] = ["Full Job Excel Format File"]
-    st.session_state["db_loaded"] = True
 
-# ==========================================
-# ⚙️ SIDEBAR CONTROL PANEL CONFIGURATION
-# ==========================================
+if "admin_authenticated" not in st.session_state:
+    st.session_state["admin_authenticated"] = False
+
+if "processed_file_ready" not in st.session_state:
+    st.session_state["processed_file_ready"] = None
+
+# --- 🛠️ साइडबार कॉन्फ़िगरेशन (बिना किसी खराब CSS के) ---
+st.sidebar.title("⚙️ Control Panel")
+st.sidebar.write("---")
+
+# 🔒 एडमिन पैनल एक्सेस बॉक्स
+with st.sidebar.expander("🛠️ Admin Settings Access"):
+    if not st.session_state["admin_authenticated"]:
+        pwd = st.text_input("एडमिन पासवर्ड डालें:", type="password", key="admin_pwd")
+        if st.button("लॉगिन करें"):
+            if pwd == "admin":
+                st.session_state["admin_authenticated"] = True
+                st.success("अनलॉक हो गया!")
+                st.rerun()
+            else:
+                st.error("गलत पासवर्ड!")
+    else:
+        st.success("🔒 एडमिन मोड एक्टिव है")
+        if st.button("लॉगआउट एडमिन"):
+            st.session_state["admin_authenticated"] = False
+            st.rerun()
+
+# --- 🖥️ मुख्य स्क्रीन डिस्प्ले लॉजिक ---
 if st.session_state["admin_authenticated"]:
-    st.sidebar.title("⚙️ Control Panel")
     st.sidebar.write("---")
-    
-    if st.sidebar.button("↩️ Exit Admin Panel", type="primary", use_container_width=True):
-        st.session_state["admin_authenticated"] = False
-        st.query_params.clear()
-        st.rerun()
-    st.sidebar.write("---")
-
     sub_menu = st.sidebar.radio(
-        "📋 एडमिन सेटिंग्स (Master Data)", 
-        ["i. 🏢 Add Shipper Name & Setup", "iii. 🌍 Global Masters & Common Dictionaries"]
+        "📋 एडमिन सेटिंग्स (Master Data)",
+        [
+            "i. 🏢 Add Shipper Name & Setup",
+            "iii. 🌍 Global Masters & Common Dictionaries"
+        ]
     )
-
-# ==========================================
-# MAIN PAGE ROUTING DISPLAY
-# ==========================================
-if st.session_state["admin_authenticated"]:
+    
     st.title("🚢 CK Export Processor - Admin Mode")
     st.write("---")
     
     from shipper_data import render_shipper_data
     from global_masters import render_global_masters
     
-    if sub_menu == "i. 🏢 Add Shipper Name & Setup": 
+    if sub_menu == "i. 🏢 Add Shipper Name & Setup":
         render_shipper_data()
-    elif sub_menu == "iii. 🌍 Global Masters & Common Dictionaries": 
+    elif sub_menu == "iii. 🌍 Global Masters & Common Dictionaries":
         render_global_masters()
 else:
     from processor import render_processor
-    col_l, col_c, col_r = st.columns([1, 6, 1])
-    with col_c:
+    
+    col_left, col_center, col_right = st.columns([1, 4, 1])
+    
+    with col_center:
         st.title("🚢 CK Export Invoice Processor Pro")
+        st.caption("💡 साइडबार खोलने या एडमिन पैनल में जाने के लिए ऊपर बाएं कोने में दिए गए छोटे तीर (>) पर क्लिक करें।")
         st.write("---")
+        
         render_processor()
