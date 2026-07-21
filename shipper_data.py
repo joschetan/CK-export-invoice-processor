@@ -4,25 +4,25 @@ import json
 import base64
 import pdfplumber
 import re
+from io import BytesIO  # 👈 यहाँ BytesIO इम्पोर्ट किया
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-# 🎯 लाइव टेस्ट का जादुई पॉपअप (Dialog Box)
+# 🎯 लाइव टेस्ट का जादुई पॉपअप (Dialog Box - Fixed)
 @st.dialog("⚡ Field Extraction Test Result")
 def test_field_dialog(field_name, rule_data, test_pdf_bytes):
     st.markdown(f"### 🔍 Testing Field: **{field_name}**")
     st.caption("नीचे दिए गए रूल्स के आधार पर सैंपल पीडीएफ से लाइव डेटा निकाला जा रहा है:")
     
-    # रूल्स की समरी दिखाना
     st.info(f"📌 **Keyword:** `{rule_data.get('keyword', 'N/A')}` | **Position:** `{rule_data.get('position', 'N/A')}` | **Match Mode:** `{rule_data.get('match_mode', 'N/A')}` | **Stop Kw:** `{rule_data.get('stop_kw', 'N/A')}` | **Filter:** `{rule_data.get('filter', 'N/A')}`")
     
-    # 📑 सैंपल पीडीएफ को पार्स करना
     extracted_val = ""
     pdf_text = ""
     pdf_lines = []
     
     try:
-        with pdfplumber.open(test_pdf_bytes) as pdf:
+        # ⚡ फिक्स: BytesIO(test_pdf_bytes) लगाकर भेजा
+        with pdfplumber.open(BytesIO(test_pdf_bytes)) as pdf:
             for page in pdf.pages:
                 t = page.extract_text()
                 if t:
@@ -50,7 +50,6 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
         else:
             raw_found = pdf_text
             
-        # 🧪 फ़िल्टर और स्टॉप कीवर्ड का टेस्ट
         if raw_found:
             # Stop Keyword Check
             if stop_kw and stop_kw.lower() in raw_found.lower():
@@ -164,7 +163,7 @@ def render_shipper_data():
                     
             st.write("---")
             
-            # 🧪 2. 🔥 लाइव टेस्टिंग के लिए सैंपल PDF अपलोडर (New Addition)
+            # 🧪 2. लाइव टेस्टिंग के लिए सैंपल PDF अपलोडर
             st.subheader("🧪 2. Upload Sample PDF Invoice for Live Testing")
             sample_pdf = st.file_uploader("यहाँ कोई भी 1 सैंपल इनवॉइस PDF डालें (जिससे लाइव टेस्ट करना हो):", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             if sample_pdf:
@@ -239,11 +238,9 @@ def render_shipper_data():
                     else:
                         cust_lg = sel_flt
                         
-                # 🎯 Action Column: टेस्ट बटन + डिलीट बटन
                 with c8:
                     act_col1, act_col2 = st.columns([1, 1])
                     with act_col1:
-                        # ⚡ LIVE TEST BUTTON
                         if st.button("⚡", key=f"tst_{field}", help="इस रो को लाइव पीडीएफ से टेस्ट करें"):
                             if test_pdf_data:
                                 current_rule_data = {
