@@ -1,6 +1,6 @@
 import streamlit as st
 
-# 📌 1. सबसे ऊपर बिना किसी फ़ालतू JS/CSS के साफ़ कॉन्फ़िगरेशन
+# 📌 1. साइडबार को डिफ़ॉल्ट रूप से पूरी तरह बंद (Collapsed) रखना
 st.set_page_config(
     page_title="CK Export Invoice Processor Pro", 
     page_icon="🚢",
@@ -16,11 +16,28 @@ import base64
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
+# 🎯 URL Parameter Check for Admin Access (e.g. website.com/?admin=true)
+query_params = st.query_params
+if "admin" in query_params and query_params["admin"] == "true":
+    st.session_state["admin_authenticated"] = True
+
+if "admin_authenticated" not in st.session_state: st.session_state["admin_authenticated"] = False
+if "processed_file_ready" not in st.session_state: st.session_state["processed_file_ready"] = None
+
+# 🎯 जब तक एडमिन मोड ऑन न हो, साइडबार को 100% हाइड (Invisible) रखना
+if not st.session_state["admin_authenticated"]:
+    st.markdown("""
+        <style>
+            [data-testid="stSidebar"] { display: none !important; }
+            [data-testid="stSidebarCollapseButton"] { display: none !important; }
+            [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
 def load_data_from_gsheet():
     shipper_db = {}
     master_rules_template = {}
     
-    # 1️⃣ ग्लोबल मास्टर लोड करना
     try:
         master_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Global_Masters"
         df_m = pd.read_csv(master_url)
@@ -41,7 +58,6 @@ def load_data_from_gsheet():
     except Exception:
         pass
 
-    # 2️⃣ शिपर्स के रूल्स लोड करना
     try:
         rules_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Rules"
         df_rules = pd.read_csv(rules_url)
@@ -68,7 +84,6 @@ def load_data_from_gsheet():
     except Exception:
         pass
 
-    # 3️⃣ टेम्पलेट फाइल्स लोड करना
     try:
         files_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Files"
         df_files = pd.read_csv(files_url)
@@ -94,85 +109,23 @@ if "shipper_database" not in st.session_state or "master_rules_template" not in 
     st.session_state["master_types"] = ["Full Job Excel Format File"]
     st.session_state["db_loaded"] = True
 
-if "admin_authenticated" not in st.session_state: st.session_state["admin_authenticated"] = False
-if "processed_file_ready" not in st.session_state: st.session_state["processed_file_ready"] = None
-
 # ==========================================
 # ⚙️ SIDEBAR CONTROL PANEL CONFIGURATION
 # ==========================================
-st.sidebar.title("⚙️ Control Panel")
-st.sidebar.write("---")
-
 if st.session_state["admin_authenticated"]:
-    if st.sidebar.button("↩️ Back to Main Invoice Processor", type="primary", use_container_width=True):
+    st.sidebar.title("⚙️ Control Panel")
+    st.sidebar.write("---")
+    
+    if st.sidebar.button("↩️ Exit Admin Panel", type="primary", use_container_width=True):
         st.session_state["admin_authenticated"] = False
+        st.query_params.clear()
         st.rerun()
     st.sidebar.write("---")
 
-if st.session_state["admin_authenticated"]:
     sub_menu = st.sidebar.radio(
         "📋 एडमिन सेटिंग्स (Master Data)", 
         ["i. 🏢 Add Shipper Name & Setup", "iii. 🌍 Global Masters & Common Dictionaries"]
     )
-    st.sidebar.write("---")
-
-with st.sidebar.expander("🛠️ Admin Settings Access"):
-    if not st.session_state["admin_authenticated"]:
-        pwd = st.text_input("एडमिन पासवर्ड डालें:", type="password", key="admin_pwd")
-        if st.button("लॉगिन करें"):
-            if pwd == "admin":
-                st.session_state["admin_authenticated"] = True
-                st.rerun()
-            else: st.error("गलत पासवर्ड!")
-    else:
-        st.success("🔒 Admin Mode Active")
-        if st.button("Log Out Admin"):
-            st.session_state["admin_authenticated"] = False
-            st.rerun()
-
-if st.session_state["admin_authenticated"]:
-    st.sidebar.write("---")
-    st.sidebar.subheader("📦 System Backup & Restore")
-    
-    export_db = {}
-    for s_name, s_data in st.session_state["shipper_database"].items():
-        export_db[s_name] = {"mapping_rules": s_data.get("mapping_rules", {}), "uploaded_files": {}}
-        if "Full Job Excel Format File" in s_data.get("uploaded_files", {}):
-            export_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = base64.b64encode(s_data["uploaded_files"]["Full Job Excel Format File"]).decode("utf-8")
-            
-    json_str = json.dumps(export_db, indent=4)
-    st.sidebar.download_button(label="📥 Download Full System Backup", data=json_str, file_name="CK_System_Permanent_Backup.json", mime="application/json", use_container_width=True)
-    
-    uploaded_backup = st.sidebar.file_uploader("📂 Restore System from Backup", type=["json"])
-    if uploaded_backup:
-        if st.sidebar.button("⚡ Confirm Restore Now", type="primary", use_container_width=True):
-            try:
-                backup_data = json.load(uploaded_backup)
-                imported_db = {}
-                rules_payload = []
-                for s_name, s_data in backup_data.items():
-                    imported_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": s_data.get("mapping_rules", {})}
-                    if "Full Job Excel Format File" in s_data.get("uploaded_files", {}):
-                        b64_str = s_data["uploaded_files"]["Full Job Excel Format File"]
-                        imported_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = base64.b64decode(b64_str)
-                        requests.post(WEB_APP_URL, data=json.dumps({"action": "save_file", "shipper": s_name, "file_base64": b64_str}))
-                    for f_name, r_info in s_data.get("mapping_rules", {}).items():
-                        rules_payload.append({
-                            "shipper": s_name, 
-                            "field": f_name, 
-                            "keyword": r_info.get("keyword", ""), 
-                            "position": r_info.get("position", "Right (आगे)"), 
-                            "cell": r_info.get("cell", ""), 
-                            "match_mode": r_info.get("match_mode", "Exact Word"),
-                            "stop_kw": r_info.get("stop_kw", ""),
-                            "filter": r_info.get("filter", "None"),
-                            "logic": r_info.get("logic", "None")
-                        })
-                st.session_state["shipper_database"] = imported_db
-                requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}))
-                st.sidebar.success("🎉 रीस्टोर सफल!")
-                st.rerun()
-            except Exception as e: st.sidebar.error(f"फेल: {str(e)}")
 
 # ==========================================
 # MAIN PAGE ROUTING DISPLAY
@@ -190,7 +143,7 @@ if st.session_state["admin_authenticated"]:
         render_global_masters()
 else:
     from processor import render_processor
-    col_l, col_c, col_r = st.columns([1, 4, 1])
+    col_l, col_c, col_r = st.columns([1, 6, 1])
     with col_c:
         st.title("🚢 CK Export Invoice Processor Pro")
         st.write("---")
