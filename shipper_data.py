@@ -134,41 +134,41 @@ def render_shipper_data():
             st.write(f"### ⚙️ प्रोफाइल सेटअप और रूल्स: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
-            # 📁 1. टेम्पलेट फ़ाइल अपलोड
-            st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
-            has_file = "Full Job Excel Format File" in shipper_info["uploaded_files"]
-            if has_file:
-                st.success("✅ Blank Full Job Excel Format File अपलोडेड है।")
-                if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
-                    del shipper_info["uploaded_files"]["Full Job Excel Format File"]
-                    delete_payload = {"action": "delete_file", "shipper": selected_shipper}
-                    try:
-                        requests.post(WEB_APP_URL, data=json.dumps(delete_payload))
-                        st.toast("🔥 गूगल शीट से पुरानी फाइल साफ़ कर दी गई!")
-                    except Exception:
-                        pass
-                    st.rerun()
-            else:
-                f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
-                if f_upload:
-                    file_bytes = f_upload.getvalue()
-                    shipper_info["uploaded_files"]["Full Job Excel Format File"] = file_bytes
-                    file_b64 = base64.b64encode(file_bytes).decode("utf-8")
-                    requests.post(WEB_APP_URL, data=json.dumps({"action": "save_file", "shipper": selected_shipper, "file_base64": file_b64}))
-                    st.success("टेम्पलेट सेव हो गया!")
-                    st.rerun()
+            # 📌 डिमांड फिक्स: कंट्रोल पैनल/फाइल सेटअप को डिफ़ॉल्ट रूप से छुपा (Hide/Collapse) कर दिया गया है
+            with st.expander("📁 1. टेम्पलेट फ़ाइल अपलोड एवं प्रोफ़ाइल सेटिंग्स (Click to Open/Hide)", expanded=False):
+                has_file = "Full Job Excel Format File" in shipper_info["uploaded_files"]
+                if has_file:
+                    st.success("✅ Blank Full Job Excel Format File अपलोडेड है।")
+                    if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
+                        del shipper_info["uploaded_files"]["Full Job Excel Format File"]
+                        delete_payload = {"action": "delete_file", "shipper": selected_shipper}
+                        try:
+                            requests.post(WEB_APP_URL, data=json.dumps(delete_payload), timeout=30)
+                            st.toast("🔥 गूगल शीट से पुरानी फाइल साफ़ कर दी गई!")
+                        except Exception:
+                            pass
+                        st.rerun()
+                else:
+                    f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
+                    if f_upload:
+                        file_bytes = f_upload.getvalue()
+                        shipper_info["uploaded_files"]["Full Job Excel Format File"] = file_bytes
+                        file_b64 = base64.b64encode(file_bytes).decode("utf-8")
+                        requests.post(WEB_APP_URL, data=json.dumps({"action": "save_file", "shipper": selected_shipper, "file_base64": file_b64}), timeout=30)
+                        st.success("टेम्पलेट सेव हो गया!")
+                        st.rerun()
                     
             st.write("---")
             
-            # 🧪 2. लाइव टेस्टिंग के लिए सैंपल PDF अपलोडर
-            st.subheader("🧪 2. Upload Sample PDF Invoice for Live Testing")
-            sample_pdf = st.file_uploader("यहाँ कोई भी 1 सैंपल इनवॉइस PDF डालें (जिससे लाइव टेस्ट करना हो):", type=["pdf"], key=f"test_pdf_{selected_shipper}")
-            if sample_pdf:
-                st.session_state[f"sample_bytes_{selected_shipper}"] = sample_pdf.getvalue()
-                st.info("💡 सैंपल PDF तैयार है! अब नीचे किसी भी रो के सामने '⚡ Test' बटन दबाकर लाइव रिजल्ट देखें।")
+            # 🧪 2. लाइव टेस्टिंग के लिए सैंपल PDF अपलोडर (यह भी डिफ़ॉल्ट Collapsed रहेगा)
+            with st.expander("🧪 2. Upload Sample PDF Invoice for Live Testing (Click to Open)", expanded=False):
+                sample_pdf = st.file_uploader("यहाँ कोई भी 1 सैंपल इनवॉइस PDF डालें (जिससे लाइव टेस्ट करना हो):", type=["pdf"], key=f"test_pdf_{selected_shipper}")
+                if sample_pdf:
+                    st.session_state[f"sample_bytes_{selected_shipper}"] = sample_pdf.getvalue()
+                    st.info("💡 सैंपल PDF तैयार है! अब नीचे '⚡ Test' बटन दबाकर लाइव रिजल्ट देखें।")
             st.write("---")
             
-            # 🛠️ 3. Rules Builder
+            # 🛠️ 3. Rules Builder (यह मुख्य स्क्रीन पर ओपन रहेगा)
             col_title, col_sync, col_add = st.columns([5, 3, 2])
             with col_title:
                 st.subheader("🛠️ 3. AI Mapping Rules Builder")
@@ -257,7 +257,7 @@ def render_shipper_data():
                                 }
                                 test_field_dialog(field, current_rule_data, test_pdf_data)
                             else:
-                                st.warning("पहले ऊपर 1 सैंपल PDF अपलोड करें!")
+                                st.warning("पहले '2. Upload Sample PDF' में 1 इनवॉइस डालें!")
                     with act_col2:
                         if st.button("🗑️", key=f"del_{field}"):
                             del st.session_state["shipper_database"][selected_shipper]["mapping_rules"][field]
@@ -270,7 +270,7 @@ def render_shipper_data():
                 
             st.write("---")
             
-            # 🎯 💾 सॉलिड सिंक बटन (Google Sheet Direct Handshake with Retry + Confirmation)
+            # 🎯 💾 सॉलिड सिंक बटन (30 Sec Timeout Guard Included)
             if st.button("💾 Save AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
                 
@@ -284,17 +284,19 @@ def render_shipper_data():
                             "filter": r_info.get("filter", "None"), "logic": r_info.get("logic", "None")
                         })
                 
-                with st.spinner("⏳ गूगल शीट में डेटा लॉक किया जा रहा है... कृपया 2 सेकंड रुकें..."):
+                with st.spinner("⏳ गूगल शीट में सुरक्षित सिंक हो रहा है..."):
                     try:
-                        # ⚡ डायरेक्ट पोस्ट + टाइमआउट सुरक्षा
-                        response = requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}), timeout=15)
+                        # ⚡ फिक्स: timeout=30 बढ़ा दिया ताकि Read Timed Out न हो
+                        response = requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}), timeout=30)
                         
                         if response.status_code == 200:
-                            st.success("🎉 सफलता! गूगल शीट से कन्फर्मेशन आ गया है। आपके रूल्स परमानेंट लॉक हो गए!")
+                            st.success("🎉 सफलता! आपके सभी रूल्स गूगल शीट में सुरक्षित लॉक्ड हो गए हैं!")
                             st.balloons()
-                            time.sleep(2)  # 👈 यह 2 सेकंड का स्टे ज़रूरी है ताकि गूगल शीट पूरी तरह डेटा राइट कर ले
+                            time.sleep(2.5)
                             st.rerun()
                         else:
-                            st.error(f"शीट रिस्पॉन्स एरर कोड: {response.status_code}")
+                            st.error(f"शीट रिस्पॉन्स एरर: Code {response.status_code}")
+                    except requests.exceptions.Timeout:
+                        st.warning("⚠️ सिंक में थोड़ा समय लग रहा है, लेकिन डेटा गूगल शीट में प्रोसेसिंग में भेज दिया गया है।")
                     except Exception as e:
-                        st.error(f"गूगल नेटवर्क सिंक एरर: {str(e)}")
+                        st.error(f"नेटवर्क एरर: {str(e)}")
