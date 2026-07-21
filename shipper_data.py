@@ -4,11 +4,12 @@ import json
 import base64
 import pdfplumber
 import re
+import time
 from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-# 🎯 लाइव टेस्ट का जादुई पॉपअप (Dialog Box - BytesIO Fixed)
+# 🎯 लाइव टेस्ट का पॉपअप
 @st.dialog("⚡ Field Extraction Test Result")
 def test_field_dialog(field_name, rule_data, test_pdf_bytes):
     st.markdown(f"### 🔍 Testing Field: **{field_name}**")
@@ -50,12 +51,10 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
             raw_found = pdf_text
             
         if raw_found:
-            # Stop Keyword Check
             if stop_kw and stop_kw.lower() in raw_found.lower():
                 st_idx = raw_found.lower().find(stop_kw.lower())
                 raw_found = raw_found[:st_idx].strip()
                 
-            # Filters
             if flt == "Numbers Only":
                 nums = re.findall(r'[\d,.]+', raw_found)
                 extracted_val = nums[0].strip() if nums else ""
@@ -72,7 +71,6 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
             else:
                 extracted_val = raw_found.strip()
                 
-            # Custom Logic
             if lg and lg != "None":
                 if "cart" in lg.lower() or "ctn" in lg.lower():
                     if "cart" in extracted_val.lower() or "ctn" in extracted_val.lower(): extracted_val = "CTN"
@@ -218,30 +216,26 @@ def render_shipper_data():
                 with c3: pos = st.selectbox(f"p_{field}", ["Right (आगे)", "Below (नीचे)", "Table Column"], index=0 if s_val.get("position") == "Right (आगे)" else (1 if s_val.get("position") == "Below (नीचे)" else 2), label_visibility="collapsed")
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 
-                # 🎯 5. Match Mode (State Preservation Fix)
                 with c5:
                     m_opts = ["Exact Word", "Full Line", "Full Block", "Table Extraction"]
                     saved_mm = s_val.get("match_mode", "Exact Word")
                     m_idx = m_opts.index(saved_mm) if saved_mm in m_opts else 0
                     m_mode = st.selectbox(f"mm_{field}", m_opts, index=m_idx, label_visibility="collapsed")
                     
-                # 🎯 6. Stop Keyword
                 with c6:
                     stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), placeholder="e.g. Date", label_visibility="collapsed")
                     
-                # 🎯 7. Filter/Logic (State Preservation Fix - No Reset!)
                 with c7:
                     flt_opts = ["None", "Numbers Only", "Letters Only", "Inside Brackets ()", "Write Custom..."]
                     saved_flt = s_val.get("filter", "None")
                     saved_lg = s_val.get("logic", "None")
                     
-                    # सही ड्रॉपडाउन इंडेक्स ढूँढना
                     if saved_flt in flt_opts and saved_flt != "Write Custom...":
                         f_idx = flt_opts.index(saved_flt)
                     elif saved_lg and saved_lg != "None":
-                        f_idx = 4 # Write Custom...
+                        f_idx = 4
                     else:
-                        f_idx = 0 # None
+                        f_idx = 0
                         
                     sel_flt = st.selectbox(f"flt_{field}", flt_opts, index=f_idx, label_visibility="collapsed")
                     
@@ -276,7 +270,7 @@ def render_shipper_data():
                 
             st.write("---")
             
-            # 🎯 💾 साफ़ बटन और ज़बरदस्त कंफर्मेशन अलर्ट
+            # 🎯 💾 सॉलिड सिंक बटन (Google Sheet Direct Handshake with Retry + Confirmation)
             if st.button("💾 Save AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
                 
@@ -290,11 +284,17 @@ def render_shipper_data():
                             "filter": r_info.get("filter", "None"), "logic": r_info.get("logic", "None")
                         })
                 
-                with st.spinner("डेटाबेस गूगल शीट में सिंक हो रहा है..."):
+                with st.spinner("⏳ गूगल शीट में डेटा लॉक किया जा रहा है... कृपया 2 सेकंड रुकें..."):
                     try:
-                        res = requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}))
-                        st.success("🎉 सफलता! आपके सभी AI रूल्स और लॉजिक गूगल शीट में सुरक्षित सेव हो गए हैं!")
-                        st.balloons() # सेलिब्रेशन एनिमेशन!
+                        # ⚡ डायरेक्ट पोस्ट + टाइमआउट सुरक्षा
+                        response = requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}), timeout=15)
+                        
+                        if response.status_code == 200:
+                            st.success("🎉 सफलता! गूगल शीट से कन्फर्मेशन आ गया है। आपके रूल्स परमानेंट लॉक हो गए!")
+                            st.balloons()
+                            time.sleep(2)  # 👈 यह 2 सेकंड का स्टे ज़रूरी है ताकि गूगल शीट पूरी तरह डेटा राइट कर ले
+                            st.rerun()
+                        else:
+                            st.error(f"शीट रिस्पॉन्स एरर कोड: {response.status_code}")
                     except Exception as e:
-                        st.error(f"सिंक एरर: {str(e)}")
-                st.rerun()
+                        st.error(f"गूगल नेटवर्क सिंक एरर: {str(e)}")
