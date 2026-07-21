@@ -1,12 +1,25 @@
 import streamlit as st
 
-# 📌 1. यह कमांड ऐप में सबसे पहली लाइन पर होना चाहिए
+# 📌 1. शुरुआती कॉन्फ़िगरेशन
 st.set_page_config(
     page_title="CK Export Invoice Processor Pro", 
     page_icon="🚢",
     layout="wide", 
-    initial_sidebar_state="collapsed" # 👈 साइडबार डिफ़ॉल्ट बंद
+    initial_sidebar_state="collapsed"
 )
+
+# 📌 2. 🔥 CSS Injection Fix (यह साइडबार को ब्राउज़र लेवल पर डिफ़ॉल्ट बंद/छिपा देगा)
+st.markdown("""
+    <style>
+        /* पहली बार लोड होने पर साइडबार को ज़बरदस्ती बंद रखना */
+        [data-testid="stSidebar"][aria-expanded="true"] {
+            margin-left: -336px;
+        }
+        [data-testid="stSidebar"] {
+            transition: margin-left 0.3s ease;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 import pandas as pd
 import requests
