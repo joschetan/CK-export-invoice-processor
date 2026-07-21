@@ -8,13 +8,11 @@ def apply_advanced_filters(raw_text, mode, stop_kw, flt, logic):
     if not raw_text: return ""
     text = raw_text.strip()
     
-    # 1. Stop Keyword Delimiter Execution (e.g. Stop at 'Date')
     if stop_kw and stop_kw.strip():
         st_idx = text.lower().find(stop_kw.lower())
         if st_idx != -1:
             text = text[:st_idx].strip()
             
-    # 2. Cleanup Filters
     if flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
         return nums[0].strip() if nums else ""
@@ -25,9 +23,7 @@ def apply_advanced_filters(raw_text, mode, stop_kw, flt, logic):
         match = re.search(r'\(([^)]+)\)', text)
         return match.group(1).strip() if match else text
         
-    # 3. Match Modes
     if mode == "Exact Word":
-        # अगर कोलोन है तो उसके बाद का पहला शब्द पकड़ो
         if ":" in text: text = text.split(":", 1)[1].strip()
         parts = text.split()
         return parts[0].strip() if parts else ""
@@ -35,7 +31,6 @@ def apply_advanced_filters(raw_text, mode, stop_kw, flt, logic):
         if ":" in text: text = text.split(":", 1)[1].strip()
         return text.split("\n")[0].strip()
         
-    # 4. Custom Logic Mapping (e.g., Cart means CTN)
     if logic and logic.strip() and logic != "None":
         lg_lower = logic.lower()
         if "cart" in lg_lower or "ctn" in lg_lower:
@@ -46,8 +41,9 @@ def apply_advanced_filters(raw_text, mode, stop_kw, flt, logic):
     return text.strip()
 
 def render_processor():
-    st.header("📤 Invoice Processing Zone (8-Column Engine)")
-    st.caption("8-कॉलम रूल्स के आधार पर 100% सटीक एक्सट्रैक्शन।")
+    # 🎯 यहाँ टेक्स्ट बदल दिया गया है (साफ़ और सिंपल)
+    st.header("📤 Invoice Processing Zone")
+    st.caption("रूल्स के आधार पर 100% सटीक डेटा एक्सट्रैक्शन।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -61,7 +57,7 @@ def render_processor():
                 invoice_file = st.file_uploader(f"'{selected_shipper}' का PDF Invoice अपलोड करें", type=["pdf"])
                 
                 if invoice_file and st.button("🚀 Process & Generate Excel", type="primary"):
-                    with st.spinner("8-कॉलम रूल्स के अनुसार डेटा स्कैन हो रहा है..."):
+                    with st.spinner("रूल्स के अनुसार डेटा स्कैन हो रहा है..."):
                         rules = shipper_info.get("mapping_rules", {})
                         
                         original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
@@ -80,7 +76,6 @@ def render_processor():
                         
                         invoice_number = "INV"
                         
-                        # 🎯 1. 8-कॉलम सिंगल सेल रूल्स निष्कर्षण
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             pos = r_info.get("position", "Right (आगे)")
@@ -116,7 +111,6 @@ def render_processor():
                                 if "inv. no" in field.lower() or "invoice no" in field.lower():
                                     if found_val: invoice_number = found_val
 
-                        # 🎯 2. टेबल कॉलम्स निष्कर्षण (Items & Container Grid)
                         parsed_item_rows = []
                         parsed_container_rows = []
                         
@@ -129,7 +123,6 @@ def render_processor():
                                 parts = [p.strip() for p in line_str.split() if p.strip()]
                                 parsed_container_rows.append(parts)
 
-                        # आइटम ग्रिड राइट करना (Row 2)
                         if parsed_item_rows:
                             for idx, item in enumerate(parsed_item_rows):
                                 curr_row = 2 + idx
@@ -144,7 +137,6 @@ def render_processor():
                                         elif "goods value" in field.lower(): val = item[-2] if len(item) > 4 else ""
                                         ws[f"{col}{curr_row}"] = val
 
-                        # कंटेनर ग्रिड राइट करना (Row 20)
                         if parsed_container_rows:
                             for idx, con in enumerate(parsed_container_rows):
                                 curr_row = 20 + idx
@@ -161,7 +153,7 @@ def render_processor():
                         final_filename = f"{clean_inv}_{short_shipper}.xlsx"
                         
                         st.session_state["processed_file_ready"] = {"filename": final_filename, "data": output.getvalue()}
-                        st.success(f"🎉 8-कॉलम इंजन से फ़ाइल '{final_filename}' सफलतापुर्वक तैयार है!")
+                        st.success(f"🎉 फ़ाइल '{final_filename}' सफलतापुर्वक तैयार है!")
                 
                 if st.session_state.get("processed_file_ready", None):
                     st.download_button(
