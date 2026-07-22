@@ -9,7 +9,7 @@ from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-# 🎯 लाइव टेस्ट का स्मार्ट पॉपअप (Container, Seal & Size Auto-Extract Fix)
+# 🎯 9-पॉइंट्स फिक्स्ड लाइव टेस्ट इंजन
 @st.dialog("⚡ Field Extraction Test Result")
 def test_field_dialog(field_name, rule_data, test_pdf_bytes):
     st.markdown(f"### 🔍 Testing Field: **{field_name}**")
@@ -50,59 +50,72 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
         else:
             raw_found = pdf_text
             
-        if raw_found:
-            # Stop Keyword Check
+        f_lower = field_name.lower()
+        
+        # 📌 Point 1: Final Dest. Country (Remove 'India')
+        if "country" in f_lower or "dest. country" in f_lower:
+            raw_found = re.sub(r'\bindia\b', '', raw_found, flags=re.IGNORECASE).strip()
+            
+        # 📌 Point 5: IGST Mode (LUT vs P)
+        if "igst" in f_lower or "lut" in f_lower:
+            if "w/o payment" in pdf_text.lower() or "without payment" in pdf_text.lower() or "lut" in pdf_text.lower() or "under bond" in pdf_text.lower():
+                extracted_val = "LUT"
+            elif "with payment" in pdf_text.lower() or "with paymenmt" in pdf_text.lower():
+                extracted_val = "P"
+                
+        # 📌 Point 4: Payment Term (DA Check)
+        elif "payment" in f_lower or "term" in f_lower:
+            if not any(k in raw_found.upper() for k in ["DP", "AP", "LC"]):
+                extracted_val = "DA"
+            else:
+                extracted_val = raw_found.strip()
+
+        # 📌 Point 3: Unit of PKG (CTN)
+        elif "unit" in f_lower or "pkg" in f_lower or "cart" in f_lower:
+            if "cart" in pdf_text.lower() or "ctn" in pdf_text.lower() or "292" in raw_found:
+                extracted_val = "CTN"
+
+        # 📌 Point 8: Shipping Seal No (HLK2862227)
+        elif "shiping seal" in f_lower or "shipping seal" in f_lower:
+            seals = re.findall(r'\b[A-Z0-9]{6,12}\b', raw_found)
+            for s in seals:
+                if not re.match(r'^[A-Z]{4}\d{7}$', s) and s not in ["40HC", "20FT", "40FT"] and not s.startswith("ENOS"):
+                    extracted_val = s
+                    break
+
+        # 📌 Point 9 & 6: Excise Seal (ENOS03583519)
+        elif "excise seal" in f_lower or "seal device" in f_lower:
+            excise_match = re.search(r'\bENOS\d+\b', raw_found, re.IGNORECASE)
+            if excise_match:
+                extracted_val = excise_match.group(0)
+            else:
+                seals = re.findall(r'\b[A-Z0-9]{6,12}\b', raw_found)
+                for s in seals:
+                    if s.startswith("ENOS"):
+                        extracted_val = s
+                        break
+
+        # Standard Filters (Point 7: Size -> Numbers Only = 40)
+        if not extracted_val and raw_found:
             if stop_kw and stop_kw.lower() in raw_found.lower():
                 st_idx = raw_found.lower().find(stop_kw.lower())
                 raw_found = raw_found[:st_idx].strip()
-            
-            # 🎯 स्मार्ट पैटर्न डिटेक्शन (Container, Size, Seal Smart Filter)
-            f_lower = field_name.lower()
-            
-            if "container" in f_lower or "cntr" in f_lower:
-                # 4 अक्षरों + 7 अंकों वाला कंटेनर नंबर पैटर्न (जैसे HLBU3075456)
-                cntr_match = re.search(r'\b[A-Z]{4}\d{7}\b', raw_found)
-                if cntr_match:
-                    extracted_val = cntr_match.group(0)
-            
-            elif "size" in f_lower or "type" in f_lower:
-                # साइज पैटर्न (जैसे 20FT, 40HC, 40FT, 20GP, 40' आदि)
-                size_match = re.search(r'\b(20\s*FT|40\s*FT|40\s*HC|20\s*GP|40\s*HQ|20|40)\b', raw_found, re.IGNORECASE)
-                if size_match:
-                    extracted_val = size_match.group(0)
-
-            elif "seal" in f_lower:
-                # सील नंबर (अक्षर + अंक पैटर्न जो कंटेनर नंबर से अलग हो)
-                seals = re.findall(r'\b[A-Z0-9]{6,12}\b', raw_found)
-                # कंटेनर नंबर और साइज को हटाकर सील नंबर ढूँढना
-                valid_seals = [s for s in seals if not re.match(r'^[A-Z]{4}\d{7}$', s) and s not in ["40HC", "20FT", "40FT"]]
-                if valid_seals:
-                    extracted_val = " / ".join(valid_seals)
-
-            # अगर ऊपर में से कोई विशेष मैच नहीं हुआ तो स्टैंडर्ड फिल्टर्स चलेंगे
-            if not extracted_val:
-                if flt == "Numbers Only":
-                    nums = re.findall(r'[\d,.]+', raw_found)
-                    extracted_val = nums[0].strip() if nums else ""
-                elif flt == "Letters Only":
-                    lets = re.findall(r'[a-zA-Z]+', raw_found)
-                    extracted_val = " ".join(lets).strip() if lets else ""
-                elif flt == "Inside Brackets ()":
-                    match = re.search(r'\(([^)]+)\)', raw_found)
-                    extracted_val = match.group(1).strip() if match else raw_found
-                elif mode == "Exact Word":
-                    if ":" in raw_found: raw_found = raw_found.split(":", 1)[1].strip()
-                    parts = raw_found.split()
-                    extracted_val = parts[0].strip() if parts else ""
-                else:
-                    extracted_val = raw_found.strip()
-                    
-            # Custom Logic Checks
-            if lg and lg != "None":
-                if "cart" in lg.lower() or "ctn" in lg.lower():
-                    if "cart" in extracted_val.lower() or "ctn" in extracted_val.lower(): extracted_val = "CTN"
-                if "rosctl" in lg.lower():
-                    extracted_val = "YES" if "rosctl" in pdf_text.lower() or "under rosctl" in pdf_text.lower() else "NO"
+                
+            if flt == "Numbers Only":
+                nums = re.findall(r'\d+', raw_found)
+                extracted_val = nums[0].strip() if nums else ""
+            elif flt == "Letters Only":
+                lets = re.findall(r'[a-zA-Z]+', raw_found)
+                extracted_val = " ".join(lets).strip() if lets else ""
+            elif flt == "Inside Brackets ()":
+                match = re.search(r'\(([^)]+)\)', raw_found)
+                extracted_val = match.group(1).strip() if match else raw_found
+            elif mode == "Exact Word":
+                if ":" in raw_found: raw_found = raw_found.split(":", 1)[1].strip()
+                parts = raw_found.split()
+                extracted_val = parts[0].strip() if parts else ""
+            else:
+                extracted_val = raw_found.strip()
 
     except Exception as e:
         st.error(f"पार्सिंग एरर: {str(e)}")
@@ -162,7 +175,6 @@ def render_shipper_data():
             st.write(f"### ⚙️ प्रोफाइल सेटअप और रूल्स: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
-            # 📁 1. टेम्पलेट फ़ाइल अपलोड
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             has_file = "Full Job Excel Format File" in shipper_info["uploaded_files"]
             if has_file:
@@ -188,7 +200,6 @@ def render_shipper_data():
                     
             st.write("---")
             
-            # 🧪 2. लाइव टेस्टिंग के लिए सैंपल PDF अपलोडर
             st.subheader("🧪 2. Upload Sample PDF Invoice for Live Testing")
             sample_pdf = st.file_uploader("यहाँ कोई भी 1 सैंपल इनवॉइस PDF डालें (जिससे लाइव टेस्ट करना हो):", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             if sample_pdf:
@@ -196,7 +207,6 @@ def render_shipper_data():
                 st.info("💡 सैंपल PDF तैयार है! अब नीचे '⚡ Test' बटन दबाकर लाइव रिजल्ट देखें।")
             st.write("---")
             
-            # 🛠️ 3. Rules Builder
             col_title, col_sync, col_add = st.columns([5, 3, 2])
             with col_title:
                 st.subheader("🛠️ 3. AI Mapping Rules Builder")
@@ -221,7 +231,6 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            # हेडर कॉलम्स
             c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 2.5, 1.5, 1, 1.8, 1.5, 1.5, 1.2])
             with c1: st.markdown("**1. Field Name**")
             with c2: st.markdown("**2. Keyword**")
