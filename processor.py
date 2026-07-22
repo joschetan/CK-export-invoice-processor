@@ -13,7 +13,7 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if text.startswith(":"): text = text[1:].strip()
     
     if mode == "Word Position" or mode.startswith("Word "):
-        w_num = int(mode.split()[1]) if mode.startswith("Word ") and mode.split()[1].isdigit() else 1
+        w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
@@ -27,7 +27,10 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     elif mode == "Full Line":
         text = text.split("\n")[0].strip()
 
-    if flt == "Container Number (ISO Format)":
+    if flt == "Clean Date (DD/MM/YYYY)":
+        d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
+        return d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
+    elif flt == "Container Number (ISO Format)":
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
         return cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
     elif flt == "Numbers Only":
@@ -137,7 +140,6 @@ def render_processor():
                             found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
                             inv_data_dict[field.lower()] = found_val
                             
-                            # Write to Single Invoice Header Cell if Cell name is given (e.g. E1, E2)
                             if target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
                                 if inv_sr_number == 1:
                                     ws[target_cell] = found_val
@@ -146,39 +148,34 @@ def render_processor():
                                 if found_val:
                                     current_inv_number = found_val
                                     if inv_sr_number == 1: first_inv_no = found_val
+                            
+                            # 🎯 Invoice Date strict extraction fix
                             if "date" in field.lower() or "dt" in field.lower():
-                                if found_val: current_inv_date = found_val
+                                d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', found_val)
+                                if d_match:
+                                    current_inv_date = d_match.group(0).replace(".", "/").replace("-", "/")
+                                elif found_val and not found_val.lower().startswith("inv"):
+                                    current_inv_date = found_val
 
-                        # 🎯 MULTI-INVOICE SUMMARY TABLE MAPPING (AH to AT Columns)
-                        summary_row = 1 + inv_sr_number  # Row 2 for Inv #1, Row 3 for Inv #2...
+                        # MULTI-INVOICE SUMMARY TABLE MAPPING (AH to AT Columns)
+                        summary_row = 1 + inv_sr_number
                         
-                        ws[f"AH{summary_row}"] = inv_sr_number                             # Inv. Sr. No.
-                        ws[f"AI{summary_row}"] = current_inv_number                        # Inv. No.
-                        ws[f"AJ{summary_row}"] = current_inv_date                          # Inv. Dt.
+                        ws[f"AH{summary_row}"] = inv_sr_number
+                        ws[f"AI{summary_row}"] = current_inv_number
+                        ws[f"AJ{summary_row}"] = current_inv_date
                         
-                        # Flexible Matching Logic for AK to AT Columns
                         for f_key, f_val in inv_data_dict.items():
                             fk = f_key.lower()
-                            if "terms" in fk or "cif" in fk or "fob" in fk or "incoterm" in fk: 
-                                ws[f"AK{summary_row}"] = f_val                             # Terms -> AK
-                            elif "currency" in fk or "curr" in fk: 
-                                ws[f"AL{summary_row}"] = f_val                             # Currency -> AL
-                            elif "freight" in fk: 
-                                ws[f"AM{summary_row}"] = f_val                             # Freight -> AM
-                            elif "insurance" in fk: 
-                                ws[f"AN{summary_row}"] = f_val                             # Insurance -> AN
-                            elif "commission" in fk: 
-                                ws[f"AO{summary_row}"] = f_val                             # Commission -> AO
-                            elif "discount" in fk: 
-                                ws[f"AP{summary_row}"] = f_val                             # Discount -> AP
-                            elif "packaging" in fk or "misc" in fk: 
-                                ws[f"AQ{summary_row}"] = f_val                             # Packaging -> AQ
-                            elif "deduction" in fk or "other" in fk: 
-                                ws[f"AR{summary_row}"] = f_val                             # Other Deduction -> AR
-                            elif "contract" in fk or "exp" in fk: 
-                                ws[f"AS{summary_row}"] = f_val                             # Exp Contract -> AS
-                            elif "lut" in fk: 
-                                ws[f"AT{summary_row}"] = f_val                             # LUT NO -> AT
+                            if "terms" in fk or "cif" in fk or "fob" in fk or "incoterm" in fk: ws[f"AK{summary_row}"] = f_val
+                            elif "currency" in fk or "curr" in fk: ws[f"AL{summary_row}"] = f_val
+                            elif "freight" in fk: ws[f"AM{summary_row}"] = f_val
+                            elif "insurance" in fk: ws[f"AN{summary_row}"] = f_val
+                            elif "commission" in fk: ws[f"AO{summary_row}"] = f_val
+                            elif "discount" in fk: ws[f"AP{summary_row}"] = f_val
+                            elif "packaging" in fk or "misc" in fk: ws[f"AQ{summary_row}"] = f_val
+                            elif "deduction" in fk or "other" in fk: ws[f"AR{summary_row}"] = f_val
+                            elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
+                            elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
 
                         # Process Dynamic Item Rows
                         parsed_items = extract_item_table_rows(pdf_lines)
