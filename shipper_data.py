@@ -42,6 +42,9 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                     if pos == "Right (आगे)":
                         start_idx = line.lower().find(kw.lower()) + len(kw)
                         raw_found = line[start_idx:].strip()
+                        # 🎯 Fix for Colon attached words like ":NORFOLK" -> "NORFOLK"
+                        if raw_found.startswith(":"):
+                            raw_found = raw_found[1:].strip()
                     elif pos == "Below (नीचे)" or pos == "Table Column":
                         if idx + 1 < len(pdf_lines):
                             raw_found = pdf_lines[idx + 1].strip()
@@ -50,13 +53,12 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
             raw_found = pdf_text
             
         if raw_found:
-            # 🎯 1. Match Mode Logic Execution
             if mode == "After Word" and stop_kw:
                 if stop_kw.lower() in raw_found.lower():
                     start_idx = raw_found.lower().find(stop_kw.lower()) + len(stop_kw)
                     raw_found = raw_found[start_idx:].strip()
+                    if raw_found.startswith(":"): raw_found = raw_found[1:].strip()
             elif mode == "Between Words":
-                # kw और stop_kw के बीच का डेटा
                 if kw and stop_kw and kw.lower() in raw_found.lower() and stop_kw.lower() in raw_found.lower():
                     s_idx = raw_found.lower().find(kw.lower()) + len(kw)
                     e_idx = raw_found.lower().find(stop_kw.lower(), s_idx)
@@ -66,19 +68,17 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                 parts = raw_found.split(maxsplit=1)
                 raw_found = parts[1].strip() if len(parts) > 1 else raw_found
             elif mode == "Exact Word":
-                if ":" in raw_found: raw_found = raw_found.split(":", 1)[1].strip()
+                if raw_found.startswith(":"): raw_found = raw_found[1:].strip()
                 parts = raw_found.split()
                 raw_found = parts[0].strip() if parts else ""
             elif mode == "Full Line":
-                if ":" in raw_found: raw_found = raw_found.split(":", 1)[1].strip()
+                if raw_found.startswith(":"): raw_found = raw_found[1:].strip()
                 raw_found = raw_found.split("\n")[0].strip()
 
-            # 🎯 2. Standard Stop Keyword Check (अगर Between/After न हो)
             if mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in raw_found.lower():
                 st_idx = raw_found.lower().find(stop_kw.lower())
                 raw_found = raw_found[:st_idx].strip()
 
-            # 🎯 3. Apply Filters
             if flt == "Numbers Only":
                 nums = re.findall(r'[\d,.]+', raw_found)
                 extracted_val = nums[0].strip() if nums else ""
@@ -91,7 +91,6 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
             else:
                 extracted_val = raw_found.strip()
 
-            # Custom Logic Checks
             if lg and lg.strip() and lg != "None":
                 if "cart" in lg.lower() or "ctn" in lg.lower():
                     if "cart" in extracted_val.lower() or "ctn" in extracted_val.lower(): extracted_val = "CTN"
@@ -233,7 +232,6 @@ def render_shipper_data():
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 
                 with c5:
-                    # 🎯 नए मैच मोड्स यहाँ अपडेट कर दिए गए हैं
                     m_opts = ["Exact Word", "Full Line", "Full Block", "After Word", "Between Words", "Skip 1st Word", "Table Extraction"]
                     saved_mm = s_val.get("match_mode", "Exact Word")
                     m_idx = m_opts.index(saved_mm) if saved_mm in m_opts else 0
