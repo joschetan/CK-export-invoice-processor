@@ -10,7 +10,7 @@ from io import BytesIO
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
 def get_val_case_insensitive(d, *keys, default=""):
-    """किसी भी केस (Small/Capital) के हेडर से सही वैल्यू निकालने का सुरक्षित फ़ंक्शन"""
+    """किसी भी केस (Small/Capital) के हेडर से सही वैल्यू निकालने का फ़ंक्शन"""
     if not isinstance(d, dict):
         return default
     d_lower = {str(k).lower(): v for k, v in d.items()}
@@ -33,23 +33,28 @@ def ensure_default_shipper():
             "mapping_rules": initial_rules
         }
 
-def fetch_data_from_google_sheet():
-    """गूगल शीट से 100% सटीक डेटा लोड करने का केस-इन्सेन्सिटिव फ़ंक्शन"""
+def fetch_data_from_google_sheet(show_toast=False):
+    """गूगल शीट से सभी शिपर और उनके रूल्स ऑटोमैटिक लोड करने का फ़ंक्शन"""
     ensure_default_shipper()
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
         if response.status_code == 200:
             data = response.json()
-            rules_list = data.get("rules", []) if isinstance(data, dict) else data
             
-            if isinstance(rules_list, list):
+            # JSON रिस्पॉन्स से लिस्ट निकालना
+            rules_list = []
+            if isinstance(data, dict):
+                rules_list = data.get("rules", data.get("data", []))
+            elif isinstance(data, list):
+                rules_list = data
+                
+            if isinstance(rules_list, list) and len(rules_list) > 0:
                 for row in rules_list:
                     if isinstance(row, dict):
                         s_name = get_val_case_insensitive(row, "ShipperName", "shipper", "shippername")
                         f_name = get_val_case_insensitive(row, "FieldName", "field", "fieldname")
                         
                         if s_name and f_name:
-                            # WELSPUN स्मार्ट मैपिंग
                             target_key = s_name
                             if "welspun" in s_name.lower():
                                 target_key = "WELSPUN GLOBAL BRANDS LIMITED"
@@ -70,8 +75,15 @@ def fetch_data_from_google_sheet():
                                 "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
                                 "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                             }
-    except Exception:
-        pass
+                if show_toast:
+                    st.toast(f"✅ गूगल शीट से {len(rules_list)} रूल्स सफलतापूर्वक लोड हो गए!")
+            elif show_toast:
+                st.warning("⚠️ गूगल शीट से कोई रूल्स डेटा प्राप्त नहीं हुआ।")
+        elif show_toast:
+            st.error(f"शीट कनेक्ट एरर: HTTP status {response.status_code}")
+    except Exception as e:
+        if show_toast:
+            st.error(f"फ़ैच एरर: {str(e)}")
 
 @st.dialog("⚡ Field Extraction Test Result")
 def test_field_dialog(field_name, rule_data, test_pdf_bytes):
@@ -212,7 +224,9 @@ def add_custom_field_dialog(selected_shipper):
             st.rerun()
 
 def render_shipper_data():
-    fetch_data_from_google_sheet()
+    if "sheet_data_loaded" not in st.session_state:
+        fetch_data_from_google_sheet(show_toast=False)
+        st.session_state["sheet_data_loaded"] = True
     
     st.header("🏢 Add Shipper Name & Live-Test AI Mapping Builder")
     st.caption("सटीक डेटा एक्सट्रैक्शन और रो-बाय-रो लाइव टेस्ट इंजन।")
@@ -286,8 +300,7 @@ def render_shipper_data():
             with col_sync:
                 if st.button("🔄 Reload Saved Rules from Sheet", type="secondary", use_container_width=True):
                     st.session_state["shipper_database"] = {}
-                    fetch_data_from_google_sheet()
-                    st.success("🎉 गूगल शीट से रूल्स लोड हो गए!")
+                    fetch_data_from_google_sheet(show_toast=True)
                     st.rerun()
             with col_add:
                 if st.button("➕ Add Field", type="secondary", use_container_width=True):
