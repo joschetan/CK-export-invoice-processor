@@ -12,9 +12,13 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if text.startswith(":"):
         text = text[1:].strip()
     
-    # 🎯 1. Match Mode Logic (Word Positions Added)
-    if mode.startswith("Word ") and mode.split()[1].isdigit():
-        w_num = int(mode.split()[1])
+    # 🎯 1. Match Mode Logic
+    if mode == "Word Position" or mode.startswith("Word "):
+        w_num = 1
+        if mode.startswith("Word ") and mode.split()[1].isdigit():
+            w_num = int(mode.split()[1])
+        elif stop_kw and stop_kw.strip().isdigit():
+            w_num = int(stop_kw.strip())
         parts = text.split()
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
@@ -40,7 +44,7 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
         text = text.split("\n")[0].strip()
 
     # 🎯 2. Stop Keyword Check
-    if not mode.startswith("Word ") and mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
+    if mode != "Word Position" and not mode.startswith("Word ") and mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
         st_idx = text.lower().find(stop_kw.lower())
         text = text[:st_idx].strip()
         
