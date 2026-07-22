@@ -79,7 +79,7 @@ def render_processor():
             st.write("---")
             
             if uploaded_pdf_files and st.button("🚀 Process & Generate Excel", type="primary", use_container_width=True):
-                with st.spinner(f"कुल {len(uploaded_pdf_files)} इनवॉइस स्कैन हो रहे हैं..."):
+                with st.spinner(f"कुल {len(uploaded_pdf_files)} इनवॉइस प्रोसेस हो रहे हैं..."):
                     rules = shipper_info.get("mapping_rules", {})
                     item_table_rules = shipper_info.get("item_table_rules", {})
                     
@@ -107,6 +107,7 @@ def render_processor():
                         
                         current_inv_number = f"INV_{inv_sr_number}"
                         current_inv_date = ""
+                        inv_data_dict = {}
                         
                         # Process Header Rules
                         for field, r_info in rules.items():
@@ -117,34 +118,67 @@ def render_processor():
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
                             
-                            if pos != "Table Column" and target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
-                                raw_text = ""
-                                if kw:
-                                    for line_i, line in enumerate(pdf_lines):
-                                        if kw.lower() in line.lower():
-                                            if pos == "Right (आगे)":
-                                                start_idx = line.lower().find(kw.lower()) + len(kw)
-                                                raw_text = line[start_idx:].strip()
-                                                if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
+                            raw_text = ""
+                            if kw:
+                                for line_i, line in enumerate(pdf_lines):
+                                    if kw.lower() in line.lower():
+                                        if pos == "Right (आगे)":
+                                            start_idx = line.lower().find(kw.lower()) + len(kw)
+                                            raw_text = line[start_idx:].strip()
+                                            if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
+                                            if raw_text: break
+                                        elif pos == "Below (नीचे)":
+                                            if line_i + 1 < len(pdf_lines):
+                                                raw_text = pdf_lines[line_i + 1].strip()
                                                 if raw_text: break
-                                            elif pos == "Below (नीचे)":
-                                                if line_i + 1 < len(pdf_lines):
-                                                    raw_text = pdf_lines[line_i + 1].strip()
-                                                    if raw_text: break
-                                else:
-                                    raw_text = pdf_text
-                                    
-                                found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
+                            else:
+                                raw_text = pdf_text
                                 
+                            found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
+                            inv_data_dict[field.lower()] = found_val
+                            
+                            # Write to Single Invoice Header Cell if Cell name is given (e.g. E1, E2)
+                            if target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
                                 if inv_sr_number == 1:
                                     ws[target_cell] = found_val
-                                
-                                if "inv. no" in field.lower() or "invoice no" in field.lower():
-                                    if found_val:
-                                        current_inv_number = found_val
-                                        if inv_sr_number == 1: first_inv_no = found_val
-                                if "date" in field.lower():
-                                    if found_val: current_inv_date = found_val
+                            
+                            if "inv. no" in field.lower() or "invoice no" in field.lower():
+                                if found_val:
+                                    current_inv_number = found_val
+                                    if inv_sr_number == 1: first_inv_no = found_val
+                            if "date" in field.lower() or "dt" in field.lower():
+                                if found_val: current_inv_date = found_val
+
+                        # 🎯 MULTI-INVOICE SUMMARY TABLE MAPPING (AH to AT Columns)
+                        summary_row = 1 + inv_sr_number  # Row 2 for Inv #1, Row 3 for Inv #2...
+                        
+                        ws[f"AH{summary_row}"] = inv_sr_number                             # Inv. Sr. No.
+                        ws[f"AI{summary_row}"] = current_inv_number                        # Inv. No.
+                        ws[f"AJ{summary_row}"] = current_inv_date                          # Inv. Dt.
+                        
+                        # Flexible Matching Logic for AK to AT Columns
+                        for f_key, f_val in inv_data_dict.items():
+                            fk = f_key.lower()
+                            if "terms" in fk or "cif" in fk or "fob" in fk or "incoterm" in fk: 
+                                ws[f"AK{summary_row}"] = f_val                             # Terms -> AK
+                            elif "currency" in fk or "curr" in fk: 
+                                ws[f"AL{summary_row}"] = f_val                             # Currency -> AL
+                            elif "freight" in fk: 
+                                ws[f"AM{summary_row}"] = f_val                             # Freight -> AM
+                            elif "insurance" in fk: 
+                                ws[f"AN{summary_row}"] = f_val                             # Insurance -> AN
+                            elif "commission" in fk: 
+                                ws[f"AO{summary_row}"] = f_val                             # Commission -> AO
+                            elif "discount" in fk: 
+                                ws[f"AP{summary_row}"] = f_val                             # Discount -> AP
+                            elif "packaging" in fk or "misc" in fk: 
+                                ws[f"AQ{summary_row}"] = f_val                             # Packaging -> AQ
+                            elif "deduction" in fk or "other" in fk: 
+                                ws[f"AR{summary_row}"] = f_val                             # Other Deduction -> AR
+                            elif "contract" in fk or "exp" in fk: 
+                                ws[f"AS{summary_row}"] = f_val                             # Exp Contract -> AS
+                            elif "lut" in fk: 
+                                ws[f"AT{summary_row}"] = f_val                             # LUT NO -> AT
 
                         # Process Dynamic Item Rows
                         parsed_items = extract_item_table_rows(pdf_lines)
