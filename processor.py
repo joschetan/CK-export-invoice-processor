@@ -8,7 +8,7 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
     text = raw_text.strip()
     
-    # 🎯 कोलन ऑटो-स्ट्रिपिंग (जैसे ":NORFOLK" को "NORFOLK" बनाना)
+    # 🎯 कोलन ऑटो-स्ट्रिपिंग
     if text.startswith(":"):
         text = text[1:].strip()
     
@@ -41,8 +41,13 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
         text = text[:st_idx].strip()
         
     # 🎯 3. Smart Filters
-    if flt == "Container Size (20/40 Only)":
-        # पूरी लाइन में से केवल 20 या 40 निकालना (HC/FT/GP के साथ या अलग)
+    if flt == "Container Number (ISO Format)":
+        cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
+        if cntr_match:
+            return cntr_match.group(0).replace(" ", "")
+        cntr_match2 = re.search(r'\b[A-Za-z]{4}\d{6,8}\b', text)
+        return cntr_match2.group(0) if cntr_match2 else text.strip()
+    elif flt == "Container Size (20/40 Only)":
         size_match = re.search(r'\b(20|40)(?=\s*HC|\s*FT|\s*GP|\s*HQ|\b)', text, re.IGNORECASE)
         if size_match:
             return size_match.group(1)
