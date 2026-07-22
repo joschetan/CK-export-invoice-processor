@@ -9,16 +9,26 @@ from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-def fetch_data_from_google_sheet():
-    """गूगल शीट से सभी शिपर और उनके रूल्स ऑटोमैटिक लोड करने का फ़ंक्शन"""
+def ensure_default_shipper():
+    """यह पक्का करता है कि कम से कम WELSPUN शिपर हमेशा मौजूद रहे"""
     if "shipper_database" not in st.session_state:
         st.session_state["shipper_database"] = {}
         
+    if "WELSPUN GLOBAL BRANDS LIMITED" not in st.session_state["shipper_database"]:
+        initial_rules = dict(st.session_state.get("master_rules_template", {}))
+        st.session_state["shipper_database"]["WELSPUN GLOBAL BRANDS LIMITED"] = {
+            "allowed_uploads": ["Full Job Excel Format File"], 
+            "uploaded_files": {},
+            "mapping_rules": initial_rules
+        }
+
+def fetch_data_from_google_sheet():
+    """गूगल शीट से सभी शिपर और उनके रूल्स ऑटोमैटिक लोड करने का फ़ंक्शन"""
+    ensure_default_shipper()
     try:
-        response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
+        response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=10)
         if response.status_code == 200:
             data = response.json()
-            # अगर शीट से रूल्स मिले
             rules_list = data.get("rules", [])
             for row in rules_list:
                 s_name = row.get("shipper", "").strip()
@@ -181,7 +191,6 @@ def add_custom_field_dialog(selected_shipper):
             st.rerun()
 
 def render_shipper_data():
-    # 🎯 ऑटोमैटिक गूगल शीट से डेटा लोड करें
     fetch_data_from_google_sheet()
     
     st.header("🏢 Add Shipper Name & Live-Test AI Mapping Builder")
