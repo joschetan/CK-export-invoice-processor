@@ -55,8 +55,12 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
             raw_found = pdf_text
             
         if raw_found:
-            # 🎯 1. Match Mode Logic
-            if mode == "After Word" and stop_kw:
+            # 🎯 1. Match Mode Logic (Word Positions Added)
+            if mode.startswith("Word ") and mode.split()[1].isdigit():
+                w_num = int(mode.split()[1])
+                parts = raw_found.split()
+                raw_found = parts[w_num - 1].strip() if len(parts) >= w_num else ""
+            elif mode == "After Word" and stop_kw:
                 if stop_kw.lower() in raw_found.lower():
                     start_idx = raw_found.lower().find(stop_kw.lower()) + len(stop_kw)
                     raw_found = raw_found[start_idx:].strip()
@@ -79,18 +83,16 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                 raw_found = raw_found.split("\n")[0].strip()
 
             # 🎯 2. Stop Keyword Check
-            if mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in raw_found.lower():
+            if not mode.startswith("Word ") and mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in raw_found.lower():
                 st_idx = raw_found.lower().find(stop_kw.lower())
                 raw_found = raw_found[:st_idx].strip()
 
             # 🎯 3. Smart Filters
             if flt == "Container Number (ISO Format)":
-                # 4 Letters + 7 Digits matching (Standard Container No.)
                 cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', raw_found)
                 if cntr_match:
                     extracted_val = cntr_match.group(0).replace(" ", "")
                 else:
-                    # Fallback for 4 letters + 6 to 8 digits
                     cntr_match2 = re.search(r'\b[A-Za-z]{4}\d{6,8}\b', raw_found)
                     extracted_val = cntr_match2.group(0) if cntr_match2 else raw_found.strip()
             elif flt == "Container Size (20/40 Only)":
@@ -253,7 +255,8 @@ def render_shipper_data():
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 
                 with c5:
-                    m_opts = ["Exact Word", "Full Line", "Full Block", "After Word", "Between Words", "Skip 1st Word", "Table Extraction"]
+                    # 🎯 Match Mode में Word 1, Word 2 ... Word 6 जोड़ दिए गए हैं
+                    m_opts = ["Exact Word", "Word 1", "Word 2", "Word 3", "Word 4", "Word 5", "Word 6", "Full Line", "Full Block", "After Word", "Between Words", "Skip 1st Word", "Table Extraction"]
                     saved_mm = s_val.get("match_mode", "Exact Word")
                     m_idx = m_opts.index(saved_mm) if saved_mm in m_opts else 0
                     m_mode = st.selectbox(f"mm_{field}", m_opts, index=m_idx, label_visibility="collapsed")
@@ -262,7 +265,6 @@ def render_shipper_data():
                     stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), placeholder="e.g. Date / End Word", label_visibility="collapsed")
                     
                 with c7:
-                    # 🎯 'Container Number (ISO Format)' नया फ़िल्टर ऐड कर दिया गया है
                     flt_opts = ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)", "Inside Brackets ()", "Write Custom..."]
                     saved_flt = s_val.get("filter", "None")
                     saved_lg = s_val.get("logic", "None")
