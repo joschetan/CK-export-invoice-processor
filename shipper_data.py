@@ -32,12 +32,16 @@ def ensure_default_shipper():
             "mapping_rules": initial_rules,
             "item_table_rules": {
                 "RITC / HS Code": {"col": "L", "type": "PDF Row Item", "rule": "HS Code"},
-                "Description of Goods": {"col": "N", "type": "PDF Row Item", "rule": "Description"},
-                "Quantity": {"col": "O", "type": "PDF Row Item", "rule": "Qty Number"},
-                "Unit (UNIT)": {"col": "P", "type": "Smart Detection", "rule": "SET"},
-                "Rate in": {"col": "Q", "type": "PDF Row Item", "rule": "Rate"},
-                "Amount": {"col": "R", "type": "PDF Row Item", "rule": "Amount USD"},
+                "Description of Goods": {"col": "M", "type": "PDF Row Item", "rule": "Description"},
+                "Quantity": {"col": "N", "type": "PDF Row Item", "rule": "Qty Number"},
+                "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "SET"},
+                "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
+                "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
                 "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
+                "IGST Status": {"col": "U", "type": "Excel Cell Reference", "rule": "B19"},
+                "Taxable Value (INR)": {"col": "V", "type": "PDF Row Item", "rule": "Taxable Amt"},
+                "IGST Rate (%)": {"col": "W", "type": "PDF Row Item", "rule": "IGST %"},
+                "IGST Amount (INR)": {"col": "X", "type": "PDF Row Item", "rule": "IGST Amt"},
                 "Nt.Wt(KGS)": {"col": "AB", "type": "PDF Row Item", "rule": "Net Weight"}
             }
         }
@@ -60,6 +64,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                     if isinstance(row, dict):
                         s_name = get_val_case_insensitive(row, "ShipperName", "shipper", "shippername")
                         f_name = get_val_case_insensitive(row, "FieldName", "field", "fieldname")
+                        rule_kind = get_val_case_insensitive(row, "RuleKind", "kind", default="header").lower()
                         
                         if s_name and f_name:
                             target_key = s_name
@@ -74,16 +79,23 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "item_table_rules": {}
                                 }
                             
-                            st.session_state["shipper_database"][target_key]["mapping_rules"][f_name] = {
-                                "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
-                                "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
-                                "cell": get_val_case_insensitive(row, "Cell", "cell"),
-                                "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
-                                "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
-                                "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
-                                "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
-                            }
-                if show_toast: st.toast(f"✅ गूगल SHEET से रूल्स लोड हो गए!")
+                            if "item" in rule_kind:
+                                st.session_state["shipper_database"][target_key]["item_table_rules"][f_name] = {
+                                    "col": get_val_case_insensitive(row, "Cell", "cell", "col"),
+                                    "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
+                                    "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
+                                }
+                            else:
+                                st.session_state["shipper_database"][target_key]["mapping_rules"][f_name] = {
+                                    "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
+                                    "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
+                                    "cell": get_val_case_insensitive(row, "Cell", "cell"),
+                                    "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
+                                    "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
+                                    "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
+                                    "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
+                                }
+                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -124,11 +136,9 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
 
     return text.strip()
 
-# 🎯 POPUP DIALOG FOR LIVE TEST RESULTS
 @st.dialog("🧪 Live Extraction Field Test Result")
 def show_field_test_dialog(field_name, rule_data, result_val):
     st.write(f"### 🔍 Field: **`{field_name}`**")
-    
     st.markdown("#### 📋 Applied Rule Parameters:")
     col_a, col_b = st.columns(2)
     with col_a:
@@ -142,10 +152,8 @@ def show_field_test_dialog(field_name, rule_data, result_val):
         
     st.write("---")
     st.markdown("#### 🎯 Extracted Result from Uploaded PDF:")
-    
     if "❌" in result_val or not result_val.strip():
         st.error(f"❌ **Not Found!** Value: `{result_val}`")
-        st.caption("💡 टिप्स: PDF में कीवर्ड स्पेलिंग चेक करें या Position/Match Mode बदल कर देखें।")
     else:
         st.success(f"🎉 **SUCCESS! Extracted Value:**")
         st.code(result_val, language="text")
@@ -328,7 +336,6 @@ def render_shipper_data():
                                 "keyword": ky, "position": pos, "cell": cl,
                                 "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt
                             }
-                            # Trigger Popup Dialog!
                             show_field_test_dialog(edited_name, rule_summary, res_val if res_val else "❌ (Not Found)")
                 
                 updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": "None"}
@@ -379,21 +386,33 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
+            # 🎯 FIXED SAVE BUTTON - SAVES BOTH HEADER + ITEM RULES TO GOOGLE SHEET
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 for s_name, s_data in st.session_state["shipper_database"].items():
+                    # 1. Header Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
                             "Position": r_info.get("position", "Right (आगे)"), "Cell": r_info.get("cell", ""),
                             "MatchMode": r_info.get("match_mode", "Exact Word"), "StopKw": r_info.get("stop_kw", ""),
-                            "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None")
+                            "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None"),
+                            "RuleKind": "header"
+                        })
+                    # 2. Item Rules (Saved as well!)
+                    for i_field, i_info in s_data.get("item_table_rules", {}).items():
+                        rules_payload.append({
+                            "ShipperName": s_name, "FieldName": i_field, "Keyword": i_info.get("rule", ""),
+                            "Position": "Right (आगे)", "Cell": i_info.get("col", "K"),
+                            "MatchMode": i_info.get("type", "PDF Row Item"), "StopKw": "",
+                            "Filter": "None", "Logic": "None",
+                            "RuleKind": "item"
                         })
                 
                 with st.spinner("⏳ गूगल शीट में सिंक हो रहा है..."):
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}), timeout=30)
-                        st.success("🎉 आपके सभी रूल्स (Header + Items) गूगल शीट में सुरक्षित सेव हो गए हैं!")
+                        st.success("🎉 आपके सभी रूल्स (Header + Item Table) गूगल शीट में सुरक्षित सेव हो गए हैं!")
                         st.balloons()
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
