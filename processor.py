@@ -4,16 +4,38 @@ import pdfplumber
 import re
 from io import BytesIO
 
-def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic):
+def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
     text = raw_text.strip()
     
-    # 1. Stop Keyword Check
-    if stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
+    # 🎯 1. Match Mode Logic
+    if mode == "After Word" and stop_kw:
+        if stop_kw.lower() in text.lower():
+            start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
+            text = text[start_idx:].strip()
+    elif mode == "Between Words":
+        if kw and stop_kw and kw.lower() in text.lower() and stop_kw.lower() in text.lower():
+            s_idx = text.lower().find(kw.lower()) + len(kw)
+            e_idx = text.lower().find(stop_kw.lower(), s_idx)
+            if e_idx != -1:
+                text = text[s_idx:e_idx].strip()
+    elif mode == "Skip 1st Word":
+        parts = text.split(maxsplit=1)
+        text = parts[1].strip() if len(parts) > 1 else text
+    elif mode == "Exact Word":
+        if ":" in text: text = text.split(":", 1)[1].strip()
+        parts = text.split()
+        text = parts[0].strip() if parts else ""
+    elif mode == "Full Line":
+        if ":" in text: text = text.split(":", 1)[1].strip()
+        text = text.split("\n")[0].strip()
+
+    # 🎯 2. Stop Keyword Check
+    if mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
         st_idx = text.lower().find(stop_kw.lower())
         text = text[:st_idx].strip()
         
-    # 2. Filters Apply
+    # 🎯 3. Filters Apply
     if flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
         return nums[0].strip() if nums else ""
@@ -23,14 +45,6 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic):
     elif flt == "Inside Brackets ()":
         match = re.search(r'\(([^)]+)\)', text)
         return match.group(1).strip() if match else text
-        
-    if mode == "Exact Word":
-        if ":" in text: text = text.split(":", 1)[1].strip()
-        parts = text.split()
-        return parts[0].strip() if parts else ""
-    elif mode == "Full Line":
-        if ":" in text: text = text.split(":", 1)[1].strip()
-        return text.split("\n")[0].strip()
         
     if logic and logic.strip() and logic != "None":
         lg_lower = logic.lower()
@@ -74,7 +88,6 @@ def render_processor():
                         
                         invoice_number = "INV"
                         
-                        # 🎯 रूल्स के अनुसार डेटा एक्सट्रैक्शन और सटीक सेल मैपिंग
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             pos = r_info.get("position", "Right (आगे)")
@@ -99,13 +112,13 @@ def render_processor():
                                 else:
                                     raw_text = pdf_text
                                     
-                                found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, lg)
+                                found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, lg, kw)
                                 ws[target_cell] = found_val
                                 
                                 if "inv. no" in field.lower() or "invoice no" in field.lower():
                                     if found_val: invoice_number = found_val
 
-                        # 🎯 टेबल आइटम्स मैपिंग
+                        # टेबल आइटम्स मैपिंग
                         parsed_item_rows = []
                         for line in pdf_lines:
                             line_str = line.strip()
