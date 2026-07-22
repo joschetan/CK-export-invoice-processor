@@ -90,28 +90,30 @@ def render_processor():
             
             if "Full Job Excel Format File" in shipper_info.get("uploaded_files", {}):
                 
-                # 🎯 MULTI-INVOICE DYNAMIC UPLOADER UI
-                if "invoice_count" not in st.session_state:
-                    st.session_state["invoice_count"] = 1
+                # 🎯 DYNAMIC MULTI-INVOICE UI
+                if f"inv_count_{selected_shipper}" not in st.session_state:
+                    st.session_state[f"inv_count_{selected_shipper}"] = 1
                 
-                uploaded_pdf_files = []
+                inv_count = st.session_state[f"inv_count_{selected_shipper}"]
+                
                 st.subheader("📑 Upload Invoices (PDFs)")
                 
-                for i in range(st.session_state["invoice_count"]):
+                uploaded_pdf_files = []
+                for i in range(inv_count):
                     pdf_f = st.file_uploader(f"➡️ Invoice #{i+1} का PDF अपलोड करें", type=["pdf"], key=f"inv_pdf_{selected_shipper}_{i}")
                     if pdf_f:
-                        uploaded_pdf_files.append(pdf_f)
+                        uploaded_pdf_files.append((i+1, pdf_f))  # (Invoice Sr No, File)
                 
-                col_btn1, col_btn2 = st.columns([1, 4])
-                with col_btn1:
-                    if st.session_state["invoice_count"] < 10:
-                        if st.button("➕ Add Invoice", help="एक और इनवॉइस जोड़ने के लिए क्लिक करें"):
-                            st.session_state["invoice_count"] += 1
+                col_b1, col_b2, col_space = st.columns([2, 2, 6])
+                with col_b1:
+                    if inv_count < 10:
+                        if st.button("➕ Add Invoice", key=f"add_btn_{selected_shipper}", use_container_width=True):
+                            st.session_state[f"inv_count_{selected_shipper}"] += 1
                             st.rerun()
-                with col_btn2:
-                    if st.session_state["invoice_count"] > 1:
-                        if st.button("➖ Remove Last Invoice"):
-                            st.session_state["invoice_count"] -= 1
+                with col_b2:
+                    if inv_count > 1:
+                        if st.button("➖ Remove Last", key=f"rem_btn_{selected_shipper}", use_container_width=True):
+                            st.session_state[f"inv_count_{selected_shipper}"] -= 1
                             st.rerun()
                             
                 st.write("---")
@@ -128,9 +130,8 @@ def render_processor():
                         overall_item_sr = 1
                         excel_write_row = 2
                         
-                        # 🎯 MULTI-INVOICE LOOP
-                        for inv_idx, inv_file in enumerate(uploaded_pdf_files):
-                            inv_sr_number = inv_idx + 1  # 1, 2, 3...
+                        # 🎯 LOOP THROUGH ALL UPLOADS
+                        for inv_sr_number, inv_file in uploaded_pdf_files:
                             
                             pdf_text = ""
                             pdf_lines = []
@@ -144,7 +145,7 @@ def render_processor():
                             current_inv_number = f"INV_{inv_sr_number}"
                             current_inv_date = ""
                             
-                            # Header Fields Mapping (केवल पहली इनवॉइस के लिए C2/D2 में लिख सकते हैं या रिफ़र कर सकते हैं)
+                            # Header Mapping
                             for field, r_info in rules.items():
                                 kw = r_info.get("keyword", "").strip()
                                 pos = r_info.get("position", "Right (आगे)")
@@ -173,18 +174,18 @@ def render_processor():
                                         
                                     found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, lg, kw)
                                     
-                                    # केवल 1st इनवॉइस का हेडर C2/D2 में भरेगा
-                                    if inv_idx == 0:
+                                    # 1st Invoice का हेडर C2/D2 में भरेगा
+                                    if inv_sr_number == 1:
                                         ws[target_cell] = found_val
                                     
                                     if "inv. no" in field.lower() or "invoice no" in field.lower():
                                         if found_val:
                                             current_inv_number = found_val
-                                            if inv_idx == 0: first_inv_no = found_val
+                                            if inv_sr_number == 1: first_inv_no = found_val
                                     if "date" in field.lower():
                                         if found_val: current_inv_date = found_val
 
-                            # 🎯 ITEM TABLE MAPPING FOR THIS INVOICE
+                            # 🎯 ITEM TABLE MAPPING
                             parsed_items = extract_item_table_rows(pdf_lines)
                             ws, overall_item_sr, excel_write_row = map_items_to_excel(
                                 ws, parsed_items, 
@@ -213,3 +214,5 @@ def render_processor():
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
                     st.session_state["processed_file_ready"] = None
+            else:
+                st.warning("⚠️ कृपया पहले इस शिपर की 'Blank Full Job Excel Format File' अपलोड करें।")
