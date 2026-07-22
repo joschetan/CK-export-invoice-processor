@@ -45,14 +45,18 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                         # 🎯 Fix for Colon attached words like ":NORFOLK" -> "NORFOLK"
                         if raw_found.startswith(":"):
                             raw_found = raw_found[1:].strip()
+                        if raw_found:
+                            break
                     elif pos == "Below (नीचे)" or pos == "Table Column":
                         if idx + 1 < len(pdf_lines):
                             raw_found = pdf_lines[idx + 1].strip()
-                    break
+                            if raw_found:
+                                break
         else:
             raw_found = pdf_text
             
         if raw_found:
+            # 🎯 1. Match Mode Logic
             if mode == "After Word" and stop_kw:
                 if stop_kw.lower() in raw_found.lower():
                     start_idx = raw_found.lower().find(stop_kw.lower()) + len(stop_kw)
@@ -75,11 +79,21 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                 if raw_found.startswith(":"): raw_found = raw_found[1:].strip()
                 raw_found = raw_found.split("\n")[0].strip()
 
+            # 🎯 2. Stop Keyword Check
             if mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in raw_found.lower():
                 st_idx = raw_found.lower().find(stop_kw.lower())
                 raw_found = raw_found[:st_idx].strip()
 
-            if flt == "Numbers Only":
+            # 🎯 3. Smart Filters
+            if flt == "Container Size (20/40 Only)":
+                # पूरी लाइन में से केवल 20 या 40 निकालना (HC/FT/GP/HQ के साथ या अलग)
+                size_match = re.search(r'\b(20|40)(?=\s*HC|\s*FT|\s*GP|\s*HQ|\b)', raw_found, re.IGNORECASE)
+                if size_match:
+                    extracted_val = size_match.group(1)
+                else:
+                    size_match2 = re.search(r'\b(20|40)\b', raw_found)
+                    extracted_val = size_match2.group(1) if size_match2 else ""
+            elif flt == "Numbers Only":
                 nums = re.findall(r'[\d,.]+', raw_found)
                 extracted_val = nums[0].strip() if nums else ""
             elif flt == "Letters Only":
@@ -241,14 +255,15 @@ def render_shipper_data():
                     stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), placeholder="e.g. Date / End Word", label_visibility="collapsed")
                     
                 with c7:
-                    flt_opts = ["None", "Numbers Only", "Letters Only", "Inside Brackets ()", "Write Custom..."]
+                    # 🎯 ड्रॉपडाउन में Container Size (20/40 Only) फ़िल्टर ऐड कर दिया गया है
+                    flt_opts = ["None", "Numbers Only", "Letters Only", "Container Size (20/40 Only)", "Inside Brackets ()", "Write Custom..."]
                     saved_flt = s_val.get("filter", "None")
                     saved_lg = s_val.get("logic", "None")
                     
                     if saved_flt in flt_opts and saved_flt != "Write Custom...":
                         f_idx = flt_opts.index(saved_flt)
                     elif saved_lg and saved_lg != "None":
-                        f_idx = 4
+                        f_idx = 5
                     else:
                         f_idx = 0
                         
