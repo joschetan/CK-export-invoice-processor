@@ -18,25 +18,28 @@ def extract_item_table_rows(pdf_lines):
     return parsed_item_rows
 
 
-def map_items_to_excel(ws, parsed_item_rows, default_invoice_no="INV", default_invoice_date=""):
+def map_items_to_excel(ws, parsed_item_rows, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="INV", default_invoice_date=""):
     """
-    यह फ़ंक्शन एक्सट्रैक्ट किए गए डेटा को Excel शीट के F से Z कॉलम्स में रूल्स के अनुसार लिखता है।
+    यह फ़ंक्शन एक्सट्रैक्ट किए गए डेटा को Excel शीट के F से Z कॉलम्स में लिखता है।
+    - inv_sr_no: इनवॉइस का सीरियल नंबर (1, 2, 3...) जो Column G में जाएगा
+    - start_overall_sr: ओवरऑल आइटम सीरियल नंबर (Column F)
+    - start_excel_row: जिस रो से लिखना शुरू करना है
     """
     if not parsed_item_rows:
-        return ws
+        return ws, start_overall_sr, start_excel_row
         
-    start_excel_row = 2  # Row 2 से डेटा भरना शुरू करेंगे
-    
     # B19 सेल से IGST Status (LUT / P) उठाना
     b19_status = ws["B19"].value if ws["B19"].value else ""
+    
+    current_overall_sr = start_overall_sr
     
     for idx, item in enumerate(parsed_item_rows):
         curr_row = start_excel_row + idx
         
-        # 🎯 Rule 1 & 2: Serial Numbers and Invoice Refs
-        ws[f"F{curr_row}"] = idx + 1                                       # SR. NO. (1, 2, 3...)
-        ws[f"G{curr_row}"] = 1                                             # Inv.Sr. No. (1st Invoice ke liye Always 1)
-        ws[f"H{curr_row}"] = idx + 1                                       # Item. Sr. No. (1, 2, 3...)
+        # 🎯 Rule 1: Serial Numbers and Invoice Refs
+        ws[f"F{curr_row}"] = current_overall_sr                           # SR. NO. (Overall 1, 2, 3...)
+        ws[f"G{curr_row}"] = inv_sr_no                                     # Inv.Sr. No. (1 for Inv1, 2 for Inv2...)
+        ws[f"H{curr_row}"] = idx + 1                                       # Item. Sr. No. (Per Invoice 1, 2, 3...)
         
         # 🎯 Rule 2 & 3: Invoice No and Clean Date (DD/MM/YYYY)
         inv_no_val = ws["C2"].value if ws["C2"].value and str(ws["C2"].value).strip() != "" else default_invoice_no
@@ -60,14 +63,11 @@ def map_items_to_excel(ws, parsed_item_rows, default_invoice_no="INV", default_i
         qty_val = ""
         dbk_sr = ""
         
-        # DBK Sr. & Qty Identifiers
         for p in item:
             clean_p = p.replace(",", "").strip()
-            # DBK Sr (6-10 Digits / Alphanumeric)
             if re.match(r'^\d{6,10}[A-Za-z]?$', clean_p) and clean_p != hs_code:
                 dbk_sr = clean_p
                 
-        # Qty is usually after DBK in PDF table
         if len(item) >= 6:
             for p in item[3:]:
                 if re.match(r'^\d{1,3}(,\d{3})*(\.\d+)?$', p) and p != hs_code:
@@ -104,4 +104,7 @@ def map_items_to_excel(ws, parsed_item_rows, default_invoice_no="INV", default_i
         ws[f"Y{curr_row}"] = ""                                            # Blank
         ws[f"Z{curr_row}"] = ""                                            # Blank
         
-    return ws
+        current_overall_sr += 1
+
+    next_row = start_excel_row + len(parsed_item_rows)
+    return ws, current_overall_sr, next_row
