@@ -9,6 +9,39 @@ from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
+def fetch_data_from_google_sheet():
+    """गूगल शीट से सभी शिपर और उनके रूल्स ऑटोमैटिक लोड करने का फ़ंक्शन"""
+    if "shipper_database" not in st.session_state:
+        st.session_state["shipper_database"] = {}
+        
+    try:
+        response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            # अगर शीट से रूल्स मिले
+            rules_list = data.get("rules", [])
+            for row in rules_list:
+                s_name = row.get("shipper", "").strip()
+                f_name = row.get("field", "").strip()
+                if s_name and f_name:
+                    if s_name not in st.session_state["shipper_database"]:
+                        st.session_state["shipper_database"][s_name] = {
+                            "allowed_uploads": ["Full Job Excel Format File"],
+                            "uploaded_files": {},
+                            "mapping_rules": {}
+                        }
+                    st.session_state["shipper_database"][s_name]["mapping_rules"][f_name] = {
+                        "keyword": row.get("keyword", ""),
+                        "position": row.get("position", "Right (आगे)"),
+                        "cell": row.get("cell", ""),
+                        "match_mode": row.get("match_mode", "Exact Word"),
+                        "stop_kw": row.get("stop_kw", ""),
+                        "filter": row.get("filter", "None"),
+                        "logic": row.get("logic", "None")
+                    }
+    except Exception:
+        pass
+
 @st.dialog("⚡ Field Extraction Test Result")
 def test_field_dialog(field_name, rule_data, test_pdf_bytes):
     st.markdown(f"### 🔍 Testing Field: **{field_name}**")
@@ -148,30 +181,36 @@ def add_custom_field_dialog(selected_shipper):
             st.rerun()
 
 def render_shipper_data():
+    # 🎯 ऑटोमैटिक गूगल शीट से डेटा लोड करें
+    fetch_data_from_google_sheet()
+    
     st.header("🏢 Add Shipper Name & Live-Test AI Mapping Builder")
     st.caption("सटीक डेटा एक्सट्रैक्शन और रो-बाय-रो लाइव टेस्ट इंजन।")
     
-    new_shipper = st.text_input("नया शिपर / एक्सपोर्टर का नाम दर्ज करें:", placeholder="जैसे: WELSPUN GLOBAL BRANDS LIMITED")
-    if st.button("➕ Add Shipper Name"):
-        if new_shipper.strip() == "":
-            st.error("कृपया शिपर का नाम खाली न छोड़ें।")
-        elif new_shipper in st.session_state["shipper_database"]:
-            st.warning(f"⚠️ '{new_shipper}' नाम पहले से मौजूद है।")
-        else:
-            initial_rules = dict(st.session_state.get("master_rules_template", {}))
-            st.session_state["shipper_database"][new_shipper] = {
-                "allowed_uploads": ["Full Job Excel Format File"], 
-                "uploaded_files": {},
-                "mapping_rules": initial_rules
-            }
-            st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया!")
-            st.rerun()
+    c_ship_in, c_ship_btn = st.columns([4, 1])
+    with c_ship_in:
+        new_shipper = st.text_input("नया शिपर / एक्सपोर्टर का नाम दर्ज करें:", placeholder="जैसे: WELSPUN GLOBAL BRANDS LIMITED", label_visibility="collapsed")
+    with c_ship_btn:
+        if st.button("➕ Add Shipper", type="primary", use_container_width=True):
+            if new_shipper.strip() == "":
+                st.error("कृपया शिपर का नाम खाली न छोड़ें।")
+            elif new_shipper in st.session_state["shipper_database"]:
+                st.warning(f"⚠️ '{new_shipper}' नाम पहले से मौजूद है।")
+            else:
+                initial_rules = dict(st.session_state.get("master_rules_template", {}))
+                st.session_state["shipper_database"][new_shipper] = {
+                    "allowed_uploads": ["Full Job Excel Format File"], 
+                    "uploaded_files": {},
+                    "mapping_rules": initial_rules
+                }
+                st.success(f"🎉 शिपर '{new_shipper}' जुड़ गया!")
+                st.rerun()
 
     st.write("---")
     shippers_list = list(st.session_state["shipper_database"].keys())
     
     if shippers_list:
-        selected_shipper = st.selectbox("कॉन्फ़िगर करने के लिए शिपर चुनें:", shippers_list, index=None)
+        selected_shipper = st.selectbox("कॉन्फ़िगर करने के लिए शिपर चुनें:", shippers_list, index=0)
         
         if selected_shipper:
             st.write(f"### ⚙️ प्रोफाइल सेटअप और रूल्स: **{selected_shipper}**")
