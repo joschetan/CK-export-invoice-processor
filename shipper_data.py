@@ -9,8 +9,19 @@ from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
+def get_val_case_insensitive(d, *keys, default=""):
+    """किसी भी केस (Small/Capital) के हेडर से सही वैल्यू निकालने का सुरक्षित फ़ंक्शन"""
+    if not isinstance(d, dict):
+        return default
+    d_lower = {str(k).lower(): v for k, v in d.items()}
+    for k in keys:
+        if str(k).lower() in d_lower:
+            val = d_lower[str(k).lower()]
+            if val is not None:
+                return str(val).strip()
+    return default
+
 def ensure_default_shipper():
-    """यह पक्का करता है कि कम से कम WELSPUN शिपर हमेशा मौजूद रहे"""
     if "shipper_database" not in st.session_state:
         st.session_state["shipper_database"] = {}
         
@@ -23,7 +34,7 @@ def ensure_default_shipper():
         }
 
 def fetch_data_from_google_sheet():
-    """गूगल शीट से सभी शिपर और उनके रूल्स ऑटोमैटिक लोड करने का फ़ंक्शन"""
+    """गूगल शीट से 100% सटीक डेटा लोड करने का केस-इन्सेन्सिटिव फ़ंक्शन"""
     ensure_default_shipper()
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
@@ -34,25 +45,30 @@ def fetch_data_from_google_sheet():
             if isinstance(rules_list, list):
                 for row in rules_list:
                     if isinstance(row, dict):
-                        s_name = str(row.get("shipper", "")).strip()
-                        f_name = str(row.get("field", "")).strip()
+                        s_name = get_val_case_insensitive(row, "ShipperName", "shipper", "shippername")
+                        f_name = get_val_case_insensitive(row, "FieldName", "field", "fieldname")
                         
                         if s_name and f_name:
-                            if s_name not in st.session_state["shipper_database"]:
-                                st.session_state["shipper_database"][s_name] = {
+                            # WELSPUN स्मार्ट मैपिंग
+                            target_key = s_name
+                            if "welspun" in s_name.lower():
+                                target_key = "WELSPUN GLOBAL BRANDS LIMITED"
+                                
+                            if target_key not in st.session_state["shipper_database"]:
+                                st.session_state["shipper_database"][target_key] = {
                                     "allowed_uploads": ["Full Job Excel Format File"],
                                     "uploaded_files": {},
                                     "mapping_rules": {}
                                 }
                             
-                            st.session_state["shipper_database"][s_name]["mapping_rules"][f_name] = {
-                                "keyword": str(row.get("keyword", "")),
-                                "position": str(row.get("position", "Right (आगे)")),
-                                "cell": str(row.get("cell", "")),
-                                "match_mode": str(row.get("match_mode", "Exact Word")),
-                                "stop_kw": str(row.get("stop_kw", "")),
-                                "filter": str(row.get("filter", "None")),
-                                "logic": str(row.get("logic", "None"))
+                            st.session_state["shipper_database"][target_key]["mapping_rules"][f_name] = {
+                                "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
+                                "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
+                                "cell": get_val_case_insensitive(row, "Cell", "cell"),
+                                "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
+                                "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
+                                "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
+                                "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                             }
     except Exception:
         pass
@@ -364,10 +380,24 @@ def render_shipper_data():
                 for s_name, s_data in st.session_state["shipper_database"].items():
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
-                            "shipper": s_name, "field": f_name, "keyword": r_info.get("keyword", ""),
-                            "position": r_info.get("position", "Right (आगे)"), "cell": r_info.get("cell", ""),
-                            "match_mode": r_info.get("match_mode", "Exact Word"), "stop_kw": r_info.get("stop_kw", ""),
-                            "filter": r_info.get("filter", "None"), "logic": r_info.get("logic", "None")
+                            "ShipperName": s_name,
+                            "FieldName": f_name,
+                            "Keyword": r_info.get("keyword", ""),
+                            "Position": r_info.get("position", "Right (आगे)"),
+                            "Cell": r_info.get("cell", ""),
+                            "MatchMode": r_info.get("match_mode", "Exact Word"),
+                            "StopKw": r_info.get("stop_kw", ""),
+                            "Filter": r_info.get("filter", "None"),
+                            "Logic": r_info.get("logic", "None"),
+                            "shipper": s_name,
+                            "field": f_name,
+                            "keyword": r_info.get("keyword", ""),
+                            "position": r_info.get("position", "Right (आगे)"),
+                            "cell": r_info.get("cell", ""),
+                            "match_mode": r_info.get("match_mode", "Exact Word"),
+                            "stop_kw": r_info.get("stop_kw", ""),
+                            "filter": r_info.get("filter", "None"),
+                            "logic": r_info.get("logic", "None")
                         })
                 
                 with st.spinner("⏳ गूगल शीट में सुरक्षित सिंक हो रहा है..."):
