@@ -1,5 +1,4 @@
+streamlit
 pdfplumber
 openpyxl
-pandas
 requests
-streamlit
