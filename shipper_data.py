@@ -83,7 +83,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
                                 "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                             }
-                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स लोड हो गए!")
+                if show_toast: st.toast(f"✅ गूगल SHEET से रूल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -92,7 +92,6 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
     text = raw_text.strip()
     if text.startswith(":"): text = text[1:].strip()
     
-    # 🎯 Word Position Dynamic Logic (Uses number from Stop / Word No. box)
     if mode == "Word Position":
         w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
@@ -124,6 +123,32 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
         return d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
 
     return text.strip()
+
+# 🎯 POPUP DIALOG FOR LIVE TEST RESULTS
+@st.dialog("🧪 Live Extraction Field Test Result")
+def show_field_test_dialog(field_name, rule_data, result_val):
+    st.write(f"### 🔍 Field: **`{field_name}`**")
+    
+    st.markdown("#### 📋 Applied Rule Parameters:")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown(f"* **Keyword:** `{rule_data.get('keyword', 'N/A')}`")
+        st.markdown(f"* **Position:** `{rule_data.get('position', 'Right (आगे)')}`")
+        st.markdown(f"* **Target Cell:** `{rule_data.get('cell', 'Blank')}`")
+    with col_b:
+        st.markdown(f"* **Match Mode:** `{rule_data.get('match_mode', 'Exact Word')}`")
+        st.markdown(f"* **Stop / Word No.:** `{rule_data.get('stop_kw', 'N/A')}`")
+        st.markdown(f"* **Filter/Logic:** `{rule_data.get('filter', 'None')}`")
+        
+    st.write("---")
+    st.markdown("#### 🎯 Extracted Result from Uploaded PDF:")
+    
+    if "❌" in result_val or not result_val.strip():
+        st.error(f"❌ **Not Found!** Value: `{result_val}`")
+        st.caption("💡 टिप्स: PDF में कीवर्ड स्पेलिंग चेक करें या Position/Match Mode बदल कर देखें।")
+    else:
+        st.success(f"🎉 **SUCCESS! Extracted Value:**")
+        st.code(result_val, language="text")
 
 @st.dialog("➕ Add New Custom Header Field")
 def add_custom_header_field_dialog(selected_shipper):
@@ -194,7 +219,7 @@ def render_shipper_data():
             
             # --- SECTION 2: LIVE TEST PDF ENGINE ---
             st.subheader("🧪 2. Instant PDF Upload & Live Data Test Engine")
-            st.caption("यहाँ टेस्ट इनवॉइस PDF अपलोड करें, फिर रूल्स के सामने ⚡ Test बटन दबाकर देखें।")
+            st.caption("यहाँ टेस्ट इनवॉइस PDF अपलोड करें, फिर रूल्स के सामने ⚡ Test दबाकर पॉप-अप में लाइव डेटा देखें।")
             
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             
@@ -209,7 +234,7 @@ def render_shipper_data():
                             pdf_lines.extend(t.split("\n"))
                 st.session_state["cached_pdf_lines"] = pdf_lines
                 st.session_state["cached_pdf_text"] = pdf_text
-                st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)। अब नीचे ⚡ Test बटन दबाकर डेटा चेक करें!")
+                st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)। अब नीचे ⚡ Test बटन दबाएँ!")
 
             st.write("---")
             
@@ -229,7 +254,6 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            # Master Clean Options List
             pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below"]
             mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords"]
             filter_options = ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)", "Clean Date (DD/MM/YYYY)"]
@@ -299,14 +323,13 @@ def render_shipper_data():
                                 raw_t = curr_pdf_text
                                 
                             res_val = apply_rule_filter(raw_t, m_mode, stop_kw, final_flt)
-                            st.session_state[f"test_res_{field}"] = res_val if res_val else "❌ (Not Found)"
-                
-                if f"test_res_{field}" in st.session_state:
-                    res_val = st.session_state[f"test_res_{field}"]
-                    if "❌" in res_val:
-                        st.error(f"🔍 **{field}** Result: `{res_val}`")
-                    else:
-                        st.success(f"🎯 **{field}** Extracted Value: **`{res_val}`**")
+                            
+                            rule_summary = {
+                                "keyword": ky, "position": pos, "cell": cl,
+                                "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt
+                            }
+                            # Trigger Popup Dialog!
+                            show_field_test_dialog(edited_name, rule_summary, res_val if res_val else "❌ (Not Found)")
                 
                 updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": "None"}
                 
