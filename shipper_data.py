@@ -55,9 +55,13 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
             raw_found = pdf_text
             
         if raw_found:
-            # 🎯 1. Match Mode Logic (Word Positions Added)
-            if mode.startswith("Word ") and mode.split()[1].isdigit():
-                w_num = int(mode.split()[1])
+            # 🎯 1. Match Mode Logic
+            if mode == "Word Position" or mode.startswith("Word "):
+                w_num = 1
+                if mode.startswith("Word ") and mode.split()[1].isdigit():
+                    w_num = int(mode.split()[1])
+                elif stop_kw and stop_kw.strip().isdigit():
+                    w_num = int(stop_kw.strip())
                 parts = raw_found.split()
                 raw_found = parts[w_num - 1].strip() if len(parts) >= w_num else ""
             elif mode == "After Word" and stop_kw:
@@ -83,7 +87,7 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                 raw_found = raw_found.split("\n")[0].strip()
 
             # 🎯 2. Stop Keyword Check
-            if not mode.startswith("Word ") and mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in raw_found.lower():
+            if mode != "Word Position" and not mode.startswith("Word ") and mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in raw_found.lower():
                 st_idx = raw_found.lower().find(stop_kw.lower())
                 raw_found = raw_found[:st_idx].strip()
 
@@ -238,7 +242,7 @@ def render_shipper_data():
             with c3: st.markdown("**3. Position**")
             with c4: st.markdown("**4. Cell**")
             with c5: st.markdown("**5. Match Mode**")
-            with c6: st.markdown("**6. Stop Keyword**")
+            with c6: st.markdown("**6. Stop / Word No.**")
             with c7: st.markdown("**7. Filter/Logic**")
             with c8: st.markdown("**Action / Test**")
             st.write("---")
@@ -255,14 +259,16 @@ def render_shipper_data():
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 
                 with c5:
-                    # 🎯 Match Mode में Word 1, Word 2 ... Word 6 जोड़ दिए गए हैं
-                    m_opts = ["Exact Word", "Word 1", "Word 2", "Word 3", "Word 4", "Word 5", "Word 6", "Full Line", "Full Block", "After Word", "Between Words", "Skip 1st Word", "Table Extraction"]
+                    # 🎯 ड्रॉपडाउन एकदम क्लीन: Word Position
+                    m_opts = ["Exact Word", "Word Position", "Full Line", "Full Block", "After Word", "Between Words", "Skip 1st Word", "Table Extraction"]
                     saved_mm = s_val.get("match_mode", "Exact Word")
+                    if saved_mm.startswith("Word "): saved_mm = "Word Position"
                     m_idx = m_opts.index(saved_mm) if saved_mm in m_opts else 0
                     m_mode = st.selectbox(f"mm_{field}", m_opts, index=m_idx, label_visibility="collapsed")
                     
                 with c6:
-                    stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), placeholder="e.g. Date / End Word", label_visibility="collapsed")
+                    placeholder_txt = "Word No. (e.g. 1, 5)" if m_mode == "Word Position" else "e.g. Date / End Word"
+                    stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), placeholder=placeholder_txt, label_visibility="collapsed")
                     
                 with c7:
                     flt_opts = ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)", "Inside Brackets ()", "Write Custom..."]
