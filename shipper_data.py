@@ -185,76 +185,22 @@ def render_shipper_data():
             
             # --- SECTION 2: LIVE TEST PDF ENGINE ---
             st.subheader("🧪 2. Instant PDF Upload & Live Data Test Engine")
-            st.caption("यहाँ कोई भी नमूना PDF अपलोड करें और रूल्स बदलने के बाद नीचे 'Run Live Test' दबाकर परिणाम देखें।")
+            st.caption("यहाँ टेस्ट इनवॉइस PDF अपलोड करें, फिर रूल्स के सामने ⚡ Test बटन दबाकर देखें।")
             
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             
+            pdf_lines = []
+            pdf_text = ""
             if test_pdf:
-                pdf_lines = []
-                pdf_text = ""
                 with pdfplumber.open(test_pdf) as pdf:
                     for page in pdf.pages:
                         t = page.extract_text()
                         if t:
                             pdf_text += t + "\n"
                             pdf_lines.extend(t.split("\n"))
-                            
-                st.success(f"📄 PDF स्कैन हो गई ({len(pdf_lines)} पंक्तियाँ)।")
-                
-                col_t1, col_t2 = st.columns([7, 3])
-                with col_t2:
-                    run_test_btn = st.button("🔍 Run Live Extraction Test", type="primary", use_container_width=True)
-
-                if run_test_btn or "last_pdf_tested" in st.session_state:
-                    st.session_state["last_pdf_tested"] = True
-                    
-                    with st.expander("🔍 1. Scanned Header Fields Test Results (लाइव रिजल्ट)", expanded=True):
-                        extracted_header_preview = {}
-                        rules = shipper_info.get("mapping_rules", {})
-                        
-                        for field, r_info in rules.items():
-                            kw = r_info.get("keyword", "").strip()
-                            pos = r_info.get("position", "Right (आगे)")
-                            mode = r_info.get("match_mode", "Exact Word")
-                            stop_kw = r_info.get("stop_kw", "").strip()
-                            flt = r_info.get("filter", "None")
-                            
-                            raw_text = ""
-                            if kw:
-                                for line_i, line in enumerate(pdf_lines):
-                                    if kw.lower() in line.lower():
-                                        if pos == "Right (आगे)":
-                                            start_idx = line.lower().find(kw.lower()) + len(kw)
-                                            raw_text = line[start_idx:].strip()
-                                            if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
-                                            if raw_text: break
-                                        elif pos == "Below (नीचे)":
-                                            if line_i + 1 < len(pdf_lines):
-                                                raw_text = pdf_lines[line_i + 1].strip()
-                                                if raw_text: break
-                            else:
-                                raw_text = pdf_text
-                                
-                            found_val = apply_rule_filter(raw_text, mode, stop_kw, flt)
-                            extracted_header_preview[field] = found_val if found_val else "❌ (Not Found)"
-                            
-                        st.json(extracted_header_preview)
-
-                    with st.expander("📦 2. Scanned Item Table Rows Preview (लाइव रो एक्सट्रैक्शन)", expanded=True):
-                        item_rows = []
-                        for line in pdf_lines:
-                            line_str = line.strip()
-                            if re.match(r'^\d{8}\b', line_str):
-                                parts = [p.strip() for p in line_str.split() if p.strip()]
-                                if len(parts) >= 3:
-                                    item_rows.append(parts)
-                                    
-                        if item_rows:
-                            st.write(f"✅ **कुल {len(item_rows)} आइटम रो मिलीं!**")
-                            for idx, row_data in enumerate(item_rows):
-                                st.code(f"Row #{idx+1}: { '  |  '.join(row_data) }")
-                        else:
-                            st.warning("⚠️ इस PDF में RITC (8-digit code) वाली कोई आइटम पंक्ति नहीं मिली।")
+                st.session_state["cached_pdf_lines"] = pdf_lines
+                st.session_state["cached_pdf_text"] = pdf_text
+                st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)। अब नीचे ⚡ Test बटन दबाकर डेटा चेक करें!")
 
             st.write("---")
             
@@ -274,7 +220,7 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 2.5, 1.5, 1, 1.8, 1.5, 1.5, 0.8])
+            c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.5, 0.8, 1.2])
             with c1: st.markdown("**Field Name**")
             with c2: st.markdown("**Keyword**")
             with c3: st.markdown("**Position**")
@@ -283,11 +229,15 @@ def render_shipper_data():
             with c6: st.markdown("**Stop / Word No.**")
             with c7: st.markdown("**Filter/Logic**")
             with c8: st.markdown("**Del**")
+            with c9: st.markdown("**⚡ Live Test**")
             st.write("---")
             
+            curr_pdf_lines = st.session_state.get("cached_pdf_lines", [])
+            curr_pdf_text = st.session_state.get("cached_pdf_text", "")
+
             for field in list(current_rules.keys()):
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 2.5, 1.5, 1, 1.8, 1.5, 1.5, 0.8])
+                c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.5, 0.8, 1.2])
                 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
                 with c2: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
@@ -300,6 +250,37 @@ def render_shipper_data():
                     if st.button("🗑️", key=f"del_h_{field}"):
                         del st.session_state["shipper_database"][selected_shipper]["mapping_rules"][field]
                         st.rerun()
+                with c9:
+                    if st.button("⚡ Test", key=f"test_btn_{field}"):
+                        if not curr_pdf_lines:
+                            st.toast("⚠️ पहले Section 2 में PDF अपलोड करें!")
+                        else:
+                            raw_t = ""
+                            if ky:
+                                for line_i, line in enumerate(curr_pdf_lines):
+                                    if ky.lower() in line.lower():
+                                        if pos == "Right (आगे)":
+                                            start_idx = line.lower().find(ky.lower()) + len(ky)
+                                            raw_t = line[start_idx:].strip()
+                                            if raw_t.startswith(":"): raw_t = raw_t[1:].strip()
+                                            if raw_t: break
+                                        elif pos == "Below (नीचे)":
+                                            if line_i + 1 < len(curr_pdf_lines):
+                                                raw_t = curr_pdf_lines[line_i + 1].strip()
+                                                if raw_t: break
+                            else:
+                                raw_t = curr_pdf_text
+                                
+                            res_val = apply_rule_filter(raw_t, m_mode, stop_kw, final_flt)
+                            st.session_state[f"test_res_{field}"] = res_val if res_val else "❌ (Not Found)"
+                
+                # अगर टेस्ट रन किया गया है तो वैल्यू नीचे दिखाएं
+                if f"test_res_{field}" in st.session_state:
+                    res_val = st.session_state[f"test_res_{field}"]
+                    if "❌" in res_val:
+                        st.error(f"🔍 **{field}** Result: `{res_val}`")
+                    else:
+                        st.success(f"🎯 **{field}** Extracted Value: **`{res_val}`**")
                 
                 updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": "None"}
                 
