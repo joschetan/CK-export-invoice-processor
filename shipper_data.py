@@ -26,30 +26,36 @@ def fetch_data_from_google_sheet():
     """गूगल शीट से सभी शिपर और उनके रूल्स ऑटोमैटिक लोड करने का फ़ंक्शन"""
     ensure_default_shipper()
     try:
-        response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=10)
+        response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
         if response.status_code == 200:
             data = response.json()
-            rules_list = data.get("rules", [])
-            for row in rules_list:
-                s_name = row.get("shipper", "").strip()
-                f_name = row.get("field", "").strip()
-                if s_name and f_name:
-                    if s_name not in st.session_state["shipper_database"]:
-                        st.session_state["shipper_database"][s_name] = {
-                            "allowed_uploads": ["Full Job Excel Format File"],
-                            "uploaded_files": {},
-                            "mapping_rules": {}
-                        }
-                    st.session_state["shipper_database"][s_name]["mapping_rules"][f_name] = {
-                        "keyword": row.get("keyword", ""),
-                        "position": row.get("position", "Right (आगे)"),
-                        "cell": row.get("cell", ""),
-                        "match_mode": row.get("match_mode", "Exact Word"),
-                        "stop_kw": row.get("stop_kw", ""),
-                        "filter": row.get("filter", "None"),
-                        "logic": row.get("logic", "None")
-                    }
-    except Exception:
+            rules_list = data.get("rules", []) if isinstance(data, dict) else data
+            
+            if isinstance(rules_list, list):
+                for row in rules_list:
+                    if isinstance(row, dict):
+                        s_name = str(row.get("shipper", "")).strip()
+                        f_name = str(row.get("field", "")).strip()
+                        
+                        if s_name and f_name:
+                            if s_name not in st.session_state["shipper_database"]:
+                                st.session_state["shipper_database"][s_name] = {
+                                    "allowed_uploads": ["Full Job Excel Format File"],
+                                    "uploaded_files": {},
+                                    "mapping_rules": {}
+                                }
+                            
+                            # गूगल शीट की वैल्यूज़ सुरक्षित मैपिंग
+                            st.session_state["shipper_database"][s_name]["mapping_rules"][f_name] = {
+                                "keyword": str(row.get("keyword", "")),
+                                "position": str(row.get("position", "Right (आगे)")),
+                                "cell": str(row.get("cell", "")),
+                                "match_mode": str(row.get("match_mode", "Exact Word")),
+                                "stop_kw": str(row.get("stop_kw", "")),
+                                "filter": str(row.get("filter", "None")),
+                                "logic": str(row.get("logic", "None"))
+                            }
+    except Exception as e:
         pass
 
 @st.dialog("⚡ Field Extraction Test Result")
@@ -339,7 +345,7 @@ def render_shipper_data():
                                 }
                                 test_field_dialog(field, current_rule_data, test_pdf_data)
                             else:
-                                st.warning("पहले '2. Upload Sample PDF' में 1 इनवॉ产生 डालें!")
+                                st.warning("पहले '2. Upload Sample PDF' में 1 इनवॉइस डालें!")
                     with act_col2:
                         if st.button("🗑️", key=f"del_{field}"):
                             del st.session_state["shipper_database"][selected_shipper]["mapping_rules"][field]
