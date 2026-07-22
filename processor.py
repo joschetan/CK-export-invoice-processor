@@ -148,9 +148,10 @@ def render_processor():
                                 if "inv. no" in field.lower() or "invoice no" in field.lower():
                                     if found_val: invoice_number = found_val
 
-                        # 🎯 2. Item Table Mapping (Safe Module Calling)
+                        # 🎯 2. Item Table Mapping (Safe Module Calling with Date Support)
                         parsed_items = extract_item_table_rows(pdf_lines)
-                        ws = map_items_to_excel(ws, parsed_items, invoice_number)
+                        invoice_date_val = ws["D2"].value if ws["D2"].value else ""
+                        ws = map_items_to_excel(ws, parsed_items, invoice_number, invoice_date_val)
 
                         output = BytesIO()
                         wb.save(output)
