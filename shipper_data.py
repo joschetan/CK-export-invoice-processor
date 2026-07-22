@@ -9,7 +9,7 @@ from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-# 🎯 9-पॉइंट्स फिक्स्ड लाइव टेस्ट इंजन
+# 🎯 100% Rules-Based Pure Test Dialog
 @st.dialog("⚡ Field Extraction Test Result")
 def test_field_dialog(field_name, rule_data, test_pdf_bytes):
     st.markdown(f"### 🔍 Testing Field: **{field_name}**")
@@ -43,66 +43,25 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                     if pos == "Right (आगे)":
                         start_idx = line.lower().find(kw.lower()) + len(kw)
                         raw_found = line[start_idx:].strip()
-                    elif pos == "Below (नीचे)" or pos == "Table Column":
+                    elif pos == "Below (नीचे)":
+                        if idx + 1 < len(pdf_lines):
+                            raw_found = pdf_lines[idx + 1].strip()
+                    elif pos == "Table Column":
                         if idx + 1 < len(pdf_lines):
                             raw_found = pdf_lines[idx + 1].strip()
                     break
         else:
             raw_found = pdf_text
             
-        f_lower = field_name.lower()
-        
-        # 📌 Point 1: Final Dest. Country (Remove 'India')
-        if "country" in f_lower or "dest. country" in f_lower:
-            raw_found = re.sub(r'\bindia\b', '', raw_found, flags=re.IGNORECASE).strip()
-            
-        # 📌 Point 5: IGST Mode (LUT vs P)
-        if "igst" in f_lower or "lut" in f_lower:
-            if "w/o payment" in pdf_text.lower() or "without payment" in pdf_text.lower() or "lut" in pdf_text.lower() or "under bond" in pdf_text.lower():
-                extracted_val = "LUT"
-            elif "with payment" in pdf_text.lower() or "with paymenmt" in pdf_text.lower():
-                extracted_val = "P"
-                
-        # 📌 Point 4: Payment Term (DA Check)
-        elif "payment" in f_lower or "term" in f_lower:
-            if not any(k in raw_found.upper() for k in ["DP", "AP", "LC"]):
-                extracted_val = "DA"
-            else:
-                extracted_val = raw_found.strip()
-
-        # 📌 Point 3: Unit of PKG (CTN)
-        elif "unit" in f_lower or "pkg" in f_lower or "cart" in f_lower:
-            if "cart" in pdf_text.lower() or "ctn" in pdf_text.lower() or "292" in raw_found:
-                extracted_val = "CTN"
-
-        # 📌 Point 8: Shipping Seal No (HLK2862227)
-        elif "shiping seal" in f_lower or "shipping seal" in f_lower:
-            seals = re.findall(r'\b[A-Z0-9]{6,12}\b', raw_found)
-            for s in seals:
-                if not re.match(r'^[A-Z]{4}\d{7}$', s) and s not in ["40HC", "20FT", "40FT"] and not s.startswith("ENOS"):
-                    extracted_val = s
-                    break
-
-        # 📌 Point 9 & 6: Excise Seal (ENOS03583519)
-        elif "excise seal" in f_lower or "seal device" in f_lower:
-            excise_match = re.search(r'\bENOS\d+\b', raw_found, re.IGNORECASE)
-            if excise_match:
-                extracted_val = excise_match.group(0)
-            else:
-                seals = re.findall(r'\b[A-Z0-9]{6,12}\b', raw_found)
-                for s in seals:
-                    if s.startswith("ENOS"):
-                        extracted_val = s
-                        break
-
-        # Standard Filters (Point 7: Size -> Numbers Only = 40)
-        if not extracted_val and raw_found:
-            if stop_kw and stop_kw.lower() in raw_found.lower():
+        if raw_found:
+            # 1. Stop Keyword Rule Apply
+            if stop_kw and stop_kw.strip() and stop_kw.lower() in raw_found.lower():
                 st_idx = raw_found.lower().find(stop_kw.lower())
                 raw_found = raw_found[:st_idx].strip()
                 
+            # 2. Filters Apply (As configured in UI)
             if flt == "Numbers Only":
-                nums = re.findall(r'\d+', raw_found)
+                nums = re.findall(r'[\d,.]+', raw_found)
                 extracted_val = nums[0].strip() if nums else ""
             elif flt == "Letters Only":
                 lets = re.findall(r'[a-zA-Z]+', raw_found)
@@ -114,8 +73,19 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                 if ":" in raw_found: raw_found = raw_found.split(":", 1)[1].strip()
                 parts = raw_found.split()
                 extracted_val = parts[0].strip() if parts else ""
+            elif mode == "Full Line":
+                if ":" in raw_found: raw_found = raw_found.split(":", 1)[1].strip()
+                extracted_val = raw_found.split("\n")[0].strip()
             else:
                 extracted_val = raw_found.strip()
+                
+            # 3. Custom Logic Rules
+            if lg and lg.strip() and lg != "None":
+                if "cart" in lg.lower() or "ctn" in lg.lower():
+                    if "cart" in extracted_val.lower() or "ctn" in extracted_val.lower(): 
+                        extracted_val = "CTN"
+                elif "rosctl" in lg.lower():
+                    extracted_val = "YES" if "rosctl" in pdf_text.lower() or "under rosctl" in pdf_text.lower() else "NO"
 
     except Exception as e:
         st.error(f"पार्सिंग एरर: {str(e)}")
@@ -152,7 +122,7 @@ def render_shipper_data():
     new_shipper = st.text_input("नया शिपर / एक्सपोर्टर का नाम दर्ज करें:", placeholder="जैसे: WELSPUN GLOBAL BRANDS LIMITED")
     if st.button("➕ Add Shipper Name"):
         if new_shipper.strip() == "":
-            st.error("कृपया शिपर का नाम खाली न छोड़ें।")
+            st.error("कृपया शिपर का नाम खाली न छोड़ें。")
         elif new_shipper in st.session_state["shipper_database"]:
             st.warning(f"⚠️ '{new_shipper}' नाम पहले से मौजूद है।")
         else:
