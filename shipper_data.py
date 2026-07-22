@@ -5,6 +5,7 @@ import base64
 import pdfplumber
 import re
 import time
+import os
 from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
@@ -20,15 +21,40 @@ def get_val_case_insensitive(d, *keys, default=""):
                 return str(val).strip()
     return default
 
+def load_template_from_disk_or_sheet(shipper_name):
+    """प्रोजेक्ट फ़ोल्डर या कैश्ड स्टोरेज से टेम्पलेट Excel ऑटो-लोड करने का फ़ंक्शन"""
+    # 1. Check local templates directory
+    safe_folder_name = shipper_name.replace(" ", "_").upper()
+    template_path = os.path.join("templates", f"{safe_folder_name}.xlsx")
+    
+    if os.path.exists(template_path):
+        with open(template_path, "rb") as f:
+            return f.read()
+            
+    # 2. Check default fallback template
+    default_path = os.path.join("templates", "default_job_format.xlsx")
+    if os.path.exists(default_path):
+        with open(default_path, "rb") as f:
+            return f.read()
+            
+    return None
+
 def ensure_default_shipper():
     if "shipper_database" not in st.session_state:
         st.session_state["shipper_database"] = {}
         
-    if "WELSPUN GLOBAL BRANDS LIMITED" not in st.session_state["shipper_database"]:
+    s_name = "WELSPUN GLOBAL BRANDS LIMITED"
+    if s_name not in st.session_state["shipper_database"]:
         initial_rules = dict(st.session_state.get("master_rules_template", {}))
-        st.session_state["shipper_database"]["WELSPUN GLOBAL BRANDS LIMITED"] = {
+        
+        uploaded_files_dict = {}
+        disk_tpl = load_template_from_disk_or_sheet(s_name)
+        if disk_tpl:
+            uploaded_files_dict["Full Job Excel Format File"] = disk_tpl
+
+        st.session_state["shipper_database"][s_name] = {
             "allowed_uploads": ["Full Job Excel Format File"], 
-            "uploaded_files": {},
+            "uploaded_files": uploaded_files_dict,
             "mapping_rules": initial_rules,
             "item_table_rules": {
                 "RITC / HS Code": {"col": "L", "type": "PDF Row Item", "rule": "HS Code"},
@@ -72,9 +98,11 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 target_key = "WELSPUN GLOBAL BRANDS LIMITED"
                                 
                             if target_key not in st.session_state["shipper_database"]:
+                                disk_tpl = load_template_from_disk_or_sheet(target_key)
+                                u_dict = {"Full Job Excel Format File": disk_tpl} if disk_tpl else {}
                                 st.session_state["shipper_database"][target_key] = {
                                     "allowed_uploads": ["Full Job Excel Format File"],
-                                    "uploaded_files": {},
+                                    "uploaded_files": u_dict,
                                     "mapping_rules": {},
                                     "item_table_rules": {}
                                 }
@@ -210,9 +238,16 @@ def render_shipper_data():
             
             # --- SECTION 1: TEMPLATE UPLOAD ---
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
+            
+            # Check if template is available from disk if missing in session
+            if "Full Job Excel Format File" not in shipper_info.get("uploaded_files", {}):
+                disk_tpl = load_template_from_disk_or_sheet(selected_shipper)
+                if disk_tpl:
+                    shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = disk_tpl
+
             has_file = "Full Job Excel Format File" in shipper_info.get("uploaded_files", {})
             if has_file:
-                st.success("✅ Blank Full Job Excel Format File अपलोडेड है।")
+                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है।")
                 if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
                     del shipper_info["uploaded_files"]["Full Job Excel Format File"]
                     st.rerun()
@@ -386,11 +421,9 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            # 🎯 FIXED SAVE BUTTON - SAVES BOTH HEADER + ITEM RULES TO GOOGLE SHEET
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 for s_name, s_data in st.session_state["shipper_database"].items():
-                    # 1. Header Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
@@ -399,7 +432,6 @@ def render_shipper_data():
                             "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None"),
                             "RuleKind": "header"
                         })
-                    # 2. Item Rules (Saved as well!)
                     for i_field, i_info in s_data.get("item_table_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": i_field, "Keyword": i_info.get("rule", ""),
