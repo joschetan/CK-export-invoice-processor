@@ -92,8 +92,9 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
     text = raw_text.strip()
     if text.startswith(":"): text = text[1:].strip()
     
-    if mode == "Word Position" or mode.startswith("Word "):
-        w_num = int(mode.split()[1]) if mode.startswith("Word ") and mode.split()[1].isdigit() else 1
+    # 🎯 Word Position Dynamic Logic (Uses number from Stop / Word No. box)
+    if mode == "Word Position":
+        w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
@@ -101,6 +102,9 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
             text = text[start_idx:].strip()
             if text.startswith(":"): text = text[1:].strip()
+    elif mode == "Between Keywords" and stop_kw:
+        if stop_kw.lower() in text.lower():
+            text = text.lower().split(stop_kw.lower())[0].strip()
     elif mode == "Exact Word":
         parts = text.split()
         text = parts[0].strip() if parts else ""
@@ -113,6 +117,11 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
     elif flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
         return nums[0].strip() if nums else ""
+    elif flt == "Letters Only":
+        return re.sub(r'[^A-Za-z\s]', '', text).strip()
+    elif flt == "Clean Date (DD/MM/YYYY)":
+        d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
+        return d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
 
     return text.strip()
 
@@ -220,7 +229,12 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.5, 0.8, 1.2])
+            # Master Clean Options List
+            pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below"]
+            mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords"]
+            filter_options = ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)", "Clean Date (DD/MM/YYYY)"]
+            
+            c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.8, 0.8, 1.2])
             with c1: st.markdown("**Field Name**")
             with c2: st.markdown("**Keyword**")
             with c3: st.markdown("**Position**")
@@ -237,15 +251,24 @@ def render_shipper_data():
 
             for field in list(current_rules.keys()):
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.5, 0.8, 1.2])
+                c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.8, 0.8, 1.2])
                 
+                saved_pos = s_val.get("position", "Right (आगे)")
+                pos_idx = pos_options.index(saved_pos) if saved_pos in pos_options else 0
+                
+                saved_mode = s_val.get("match_mode", "Exact Word")
+                mode_idx = mode_options.index(saved_mode) if saved_mode in mode_options else 0
+                
+                saved_flt = s_val.get("filter", "None")
+                flt_idx = filter_options.index(saved_flt) if saved_flt in filter_options else 0
+
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
                 with c2: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
-                with c3: pos = st.selectbox(f"p_{field}", ["Right (आगे)", "Below (नीचे)"], index=0 if s_val.get("position") == "Right (आगे)" else 1, label_visibility="collapsed")
+                with c3: pos = st.selectbox(f"p_{field}", pos_options, index=pos_idx, label_visibility="collapsed")
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
-                with c5: m_mode = st.selectbox(f"mm_{field}", ["Exact Word", "Word Position", "Full Line", "After Word", "Skip 1st Word"], label_visibility="collapsed")
+                with c5: m_mode = st.selectbox(f"mm_{field}", mode_options, index=mode_idx, label_visibility="collapsed")
                 with c6: stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), label_visibility="collapsed")
-                with c7: final_flt = st.selectbox(f"flt_{field}", ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)"], label_visibility="collapsed")
+                with c7: final_flt = st.selectbox(f"flt_{field}", filter_options, index=flt_idx, label_visibility="collapsed")
                 with c8:
                     if st.button("🗑️", key=f"del_h_{field}"):
                         del st.session_state["shipper_database"][selected_shipper]["mapping_rules"][field]
@@ -268,13 +291,16 @@ def render_shipper_data():
                                             if line_i + 1 < len(curr_pdf_lines):
                                                 raw_t = curr_pdf_lines[line_i + 1].strip()
                                                 if raw_t: break
+                                        elif pos == "2 Lines Below":
+                                            if line_i + 2 < len(curr_pdf_lines):
+                                                raw_t = curr_pdf_lines[line_i + 2].strip()
+                                                if raw_t: break
                             else:
                                 raw_t = curr_pdf_text
                                 
                             res_val = apply_rule_filter(raw_t, m_mode, stop_kw, final_flt)
                             st.session_state[f"test_res_{field}"] = res_val if res_val else "❌ (Not Found)"
                 
-                # अगर टेस्ट रन किया गया है तो वैल्यू नीचे दिखाएं
                 if f"test_res_{field}" in st.session_state:
                     res_val = st.session_state[f"test_res_{field}"]
                     if "❌" in res_val:
