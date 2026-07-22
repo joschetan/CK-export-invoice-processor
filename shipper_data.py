@@ -88,6 +88,22 @@ def fetch_data_from_google_sheet(show_toast=False):
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
+@st.dialog("➕ Add New Custom Header Field")
+def add_custom_header_field_dialog(selected_shipper):
+    st.write("यहाँ नया हेडर फ़ील्ड जोड़ें:")
+    new_field = st.text_input("Field Name (उदा: Invoice No, Port of Loading):")
+    if st.button("Confirm & Add Field", type="primary"):
+        if not new_field.strip():
+            st.error("फ़ील्ड नाम खाली नहीं हो सकता!")
+        else:
+            rules = st.session_state["shipper_database"][selected_shipper].setdefault("mapping_rules", {})
+            rules[new_field.strip()] = {
+                "keyword": "", "position": "Right (आगे)", "cell": "",
+                "match_mode": "Exact Word", "stop_kw": "", "filter": "None", "logic": "None"
+            }
+            st.success(f"🎉 फ़ील्ड '{new_field}' जुड़ गया!")
+            st.rerun()
+
 @st.dialog("➕ Add Item Column Rule")
 def add_item_col_dialog(selected_shipper):
     st.write("यहाँ आइटम टेबल के लिए नया कॉलम हेडिंग और एक्सेल कॉलम जोड़ें:")
@@ -140,7 +156,7 @@ def render_shipper_data():
             st.write("---")
             
             # --- SECTION 3: HEADER MAPPING RULES ---
-            col_title, col_sync = st.columns([6, 4])
+            col_title, col_sync, col_add_h = st.columns([5, 3, 2])
             with col_title:
                 st.subheader("🛠️ 3. Header Fields Mapping Rules")
             with col_sync:
@@ -148,11 +164,14 @@ def render_shipper_data():
                     st.session_state["shipper_database"] = {}
                     fetch_data_from_google_sheet(show_toast=True)
                     st.rerun()
+            with col_add_h:
+                if st.button("➕ Add Header Field", type="secondary", use_container_width=True):
+                    add_custom_header_field_dialog(selected_shipper)
             
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 2.5, 1.5, 1, 1.8, 1.5, 1.5])
+            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 2.5, 1.5, 1, 1.8, 1.5, 1.5, 0.8])
             with c1: st.markdown("**Field Name**")
             with c2: st.markdown("**Keyword**")
             with c3: st.markdown("**Position**")
@@ -160,11 +179,12 @@ def render_shipper_data():
             with c5: st.markdown("**Match Mode**")
             with c6: st.markdown("**Stop / Word No.**")
             with c7: st.markdown("**Filter/Logic**")
+            with c8: st.markdown("**Del**")
             st.write("---")
             
             for field in list(current_rules.keys()):
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 2.5, 1.5, 1, 1.8, 1.5, 1.5])
+                c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 2.5, 1.5, 1, 1.8, 1.5, 1.5, 0.8])
                 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
                 with c2: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
@@ -173,6 +193,10 @@ def render_shipper_data():
                 with c5: m_mode = st.selectbox(f"mm_{field}", ["Exact Word", "Word Position", "Full Line", "After Word", "Skip 1st Word"], label_visibility="collapsed")
                 with c6: stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), label_visibility="collapsed")
                 with c7: final_flt = st.selectbox(f"flt_{field}", ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)"], label_visibility="collapsed")
+                with c8:
+                    if st.button("🗑️", key=f"del_h_{field}"):
+                        del st.session_state["shipper_database"][selected_shipper]["mapping_rules"][field]
+                        st.rerun()
                 
                 updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": "None"}
                 
