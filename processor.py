@@ -4,57 +4,18 @@ import pdfplumber
 import re
 from io import BytesIO
 
-def apply_advanced_filters(field_name, raw_text, mode, stop_kw, flt, logic, pdf_full_text=""):
-    if not raw_text and not pdf_full_text: return ""
-    text = raw_text.strip() if raw_text else pdf_full_text.strip()
-    f_lower = field_name.lower()
+def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic):
+    if not raw_text: return ""
+    text = raw_text.strip()
     
-    # 📌 Point 1: Final Dest. Country (Remove 'India')
-    if "country" in f_lower or "dest. country" in f_lower:
-        text = re.sub(r'\bindia\b', '', text, flags=re.IGNORECASE).strip()
-        
-    # 📌 Point 5: IGST Mode (LUT vs P)
-    if "igst" in f_lower or "lut" in f_lower:
-        if "w/o payment" in pdf_full_text.lower() or "without payment" in pdf_full_text.lower() or "lut" in pdf_full_text.lower() or "under bond" in pdf_full_text.lower():
-            return "LUT"
-        elif "with payment" in pdf_full_text.lower() or "with paymenmt" in pdf_full_text.lower():
-            return "P"
-            
-    # 📌 Point 4: Payment Term (DA Check)
-    elif "payment" in f_lower or "term" in f_lower:
-        if not any(k in text.upper() for k in ["DP", "AP", "LC"]):
-            return "DA"
-
-    # 📌 Point 3: Unit of PKG (CTN)
-    elif "unit" in f_lower or "pkg" in f_lower or "cart" in f_lower:
-        if "cart" in pdf_full_text.lower() or "ctn" in pdf_full_text.lower() or "292" in text:
-            return "CTN"
-
-    # 📌 Point 8: Shipping Seal No (HLK2862227)
-    elif "shiping seal" in f_lower or "shipping seal" in f_lower:
-        seals = re.findall(r'\b[A-Z0-9]{6,12}\b', text)
-        for s in seals:
-            if not re.match(r'^[A-Z]{4}\d{7}$', s) and s not in ["40HC", "20FT", "40FT"] and not s.startswith("ENOS"):
-                return s
-
-    # 📌 Point 9: Excise Seal (ENOS03583519)
-    elif "excise seal" in f_lower or "seal device" in f_lower:
-        excise_match = re.search(r'\bENOS\d+\b', text, re.IGNORECASE)
-        if excise_match:
-            return excise_match.group(0)
-        else:
-            seals = re.findall(r'\b[A-Z0-9]{6,12}\b', text)
-            for s in seals:
-                if s.startswith("ENOS"):
-                    return s
-
-    # Standard Filters
+    # 1. Stop Keyword Check
     if stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
         st_idx = text.lower().find(stop_kw.lower())
         text = text[:st_idx].strip()
         
+    # 2. Filters Apply
     if flt == "Numbers Only":
-        nums = re.findall(r'\d+', text)
+        nums = re.findall(r'[\d,.]+', text)
         return nums[0].strip() if nums else ""
     elif flt == "Letters Only":
         lets = re.findall(r'[a-zA-Z]+', text)
@@ -70,7 +31,12 @@ def apply_advanced_filters(field_name, raw_text, mode, stop_kw, flt, logic, pdf_
     elif mode == "Full Line":
         if ":" in text: text = text.split(":", 1)[1].strip()
         return text.split("\n")[0].strip()
-            
+        
+    if logic and logic.strip() and logic != "None":
+        lg_lower = logic.lower()
+        if "cart" in lg_lower or "ctn" in lg_lower:
+            if "cart" in text.lower() or "ctn" in text.lower(): return "CTN"
+
     return text.strip()
 
 def render_processor():
@@ -108,6 +74,7 @@ def render_processor():
                         
                         invoice_number = "INV"
                         
+                        # 🎯 रूल्स के अनुसार डेटा एक्सट्रैक्शन और सटीक सेल मैपिंग
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             pos = r_info.get("position", "Right (आगे)")
@@ -132,13 +99,13 @@ def render_processor():
                                 else:
                                     raw_text = pdf_text
                                     
-                                found_val = apply_advanced_filters(field, raw_text, mode, stop_kw, flt, lg, pdf_text)
+                                found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, lg)
                                 ws[target_cell] = found_val
                                 
                                 if "inv. no" in field.lower() or "invoice no" in field.lower():
                                     if found_val: invoice_number = found_val
 
-                        # 📌 कंटेनर/सील डेटा टेबल प्रोसेसिंग (C20/E20 जबरदस्ती नहीं लिखा जाएगा)
+                        # 🎯 टेबल आइटम्स मैपिंग
                         parsed_item_rows = []
                         for line in pdf_lines:
                             line_str = line.strip()
