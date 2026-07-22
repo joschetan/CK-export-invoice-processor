@@ -24,7 +24,6 @@ def map_items_to_excel_dynamic(ws, parsed_item_rows, item_table_rules, inv_sr_no
     if not parsed_item_rows:
         return ws, start_overall_sr, start_excel_row
         
-    b19_status = ws["B19"].value if ws["B19"].value else ""
     current_overall_sr = start_overall_sr
     
     for idx, item in enumerate(parsed_item_rows):
@@ -46,7 +45,6 @@ def map_items_to_excel_dynamic(ws, parsed_item_rows, item_table_rules, inv_sr_no
             clean_date = date_match.group(0).replace(".", "/").replace("-", "/") if date_match else str(raw_date)
             
         ws[f"J{curr_row}"] = clean_date                                    # Invoice Date (DD/MM/YYYY)
-        ws[f"U{curr_row}"] = b19_status                                    # IGST Status (from B19)
         
         # 🎯 DYNAMIC COLUMN MAPPING FROM UI RULES
         hs_code = item[0]
@@ -78,8 +76,17 @@ def map_items_to_excel_dynamic(ws, parsed_item_rows, item_table_rules, inv_sr_no
                 if rule_type == "Constant Text":
                     val_to_write = rule_detail
                     
+                elif rule_type == "Excel Cell Reference":
+                    # 🎯 Excel Cell Reference Logic (e.g. B19, C2, E2)
+                    cell_ref = rule_detail.upper().strip()
+                    if cell_ref and len(cell_ref) >= 2 and cell_ref[1].isdigit():
+                        c_val = ws[cell_ref].value
+                        val_to_write = c_val if c_val is not None else ""
+                    else:
+                        val_to_write = ""
+                    
                 elif rule_type == "Smart Detection":
-                    # 💡 आपकी दी हुई हिंट: Description of Goods में 'SET' या 'PCS' ढूंढना
+                    # 💡 Description of Goods में 'SET' या 'PCS' ढूंढना
                     full_item_str = " ".join(item).upper()
                     if "SET" in full_item_str or "SET" in desc_text.upper():
                         val_to_write = "SET"
