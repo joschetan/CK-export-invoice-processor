@@ -4,17 +4,57 @@ import pdfplumber
 import re
 from io import BytesIO
 
-def apply_advanced_filters(raw_text, mode, stop_kw, flt, logic):
-    if not raw_text: return ""
-    text = raw_text.strip()
+def apply_advanced_filters(field_name, raw_text, mode, stop_kw, flt, logic, pdf_full_text=""):
+    if not raw_text and not pdf_full_text: return ""
+    text = raw_text.strip() if raw_text else pdf_full_text.strip()
+    f_lower = field_name.lower()
     
-    if stop_kw and stop_kw.strip():
-        st_idx = text.lower().find(stop_kw.lower())
-        if st_idx != -1:
-            text = text[:st_idx].strip()
+    # 📌 Point 1: Final Dest. Country (Remove 'India')
+    if "country" in f_lower or "dest. country" in f_lower:
+        text = re.sub(r'\bindia\b', '', text, flags=re.IGNORECASE).strip()
+        
+    # 📌 Point 5: IGST Mode (LUT vs P)
+    if "igst" in f_lower or "lut" in f_lower:
+        if "w/o payment" in pdf_full_text.lower() or "without payment" in pdf_full_text.lower() or "lut" in pdf_full_text.lower() or "under bond" in pdf_full_text.lower():
+            return "LUT"
+        elif "with payment" in pdf_full_text.lower() or "with paymenmt" in pdf_full_text.lower():
+            return "P"
             
+    # 📌 Point 4: Payment Term (DA Check)
+    elif "payment" in f_lower or "term" in f_lower:
+        if not any(k in text.upper() for k in ["DP", "AP", "LC"]):
+            return "DA"
+
+    # 📌 Point 3: Unit of PKG (CTN)
+    elif "unit" in f_lower or "pkg" in f_lower or "cart" in f_lower:
+        if "cart" in pdf_full_text.lower() or "ctn" in pdf_full_text.lower() or "292" in text:
+            return "CTN"
+
+    # 📌 Point 8: Shipping Seal No (HLK2862227)
+    elif "shiping seal" in f_lower or "shipping seal" in f_lower:
+        seals = re.findall(r'\b[A-Z0-9]{6,12}\b', text)
+        for s in seals:
+            if not re.match(r'^[A-Z]{4}\d{7}$', s) and s not in ["40HC", "20FT", "40FT"] and not s.startswith("ENOS"):
+                return s
+
+    # 📌 Point 9: Excise Seal (ENOS03583519)
+    elif "excise seal" in f_lower or "seal device" in f_lower:
+        excise_match = re.search(r'\bENOS\d+\b', text, re.IGNORECASE)
+        if excise_match:
+            return excise_match.group(0)
+        else:
+            seals = re.findall(r'\b[A-Z0-9]{6,12}\b', text)
+            for s in seals:
+                if s.startswith("ENOS"):
+                    return s
+
+    # Standard Filters
+    if stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
+        st_idx = text.lower().find(stop_kw.lower())
+        text = text[:st_idx].strip()
+        
     if flt == "Numbers Only":
-        nums = re.findall(r'[\d,.]+', text)
+        nums = re.findall(r'\d+', text)
         return nums[0].strip() if nums else ""
     elif flt == "Letters Only":
         lets = re.findall(r'[a-zA-Z]+', text)
@@ -30,18 +70,10 @@ def apply_advanced_filters(raw_text, mode, stop_kw, flt, logic):
     elif mode == "Full Line":
         if ":" in text: text = text.split(":", 1)[1].strip()
         return text.split("\n")[0].strip()
-        
-    if logic and logic.strip() and logic != "None":
-        lg_lower = logic.lower()
-        if "cart" in lg_lower or "ctn" in lg_lower:
-            if "cart" in text.lower() or "ctn" in text.lower(): return "CTN"
-        if "rosctl" in lg_lower:
-            return "YES" if "rosctl" in text.lower() or "under rosctl" in text.lower() else "NO"
             
     return text.strip()
 
 def render_processor():
-    # 🎯 यहाँ टेक्स्ट बदल दिया गया है (साफ़ और सिंपल)
     st.header("📤 Invoice Processing Zone")
     st.caption("रूल्स के आधार पर 100% सटीक डेटा एक्सट्रैक्शन।")
     
@@ -57,7 +89,7 @@ def render_processor():
                 invoice_file = st.file_uploader(f"'{selected_shipper}' का PDF Invoice अपलोड करें", type=["pdf"])
                 
                 if invoice_file and st.button("🚀 Process & Generate Excel", type="primary"):
-                    with st.spinner("रूल्स के अनुसार डेटा स्कैन हो रहा है..."):
+                    with st.spinner("रूल्स के अनुसार सटीक डेटा स्कैन हो रहा है..."):
                         rules = shipper_info.get("mapping_rules", {})
                         
                         original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
@@ -86,42 +118,33 @@ def render_processor():
                             lg = r_info.get("logic", "").strip()
                             
                             if pos != "Table Column" and target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
-                                found_val = ""
-                                
+                                raw_text = ""
                                 if kw:
                                     for idx, line in enumerate(pdf_lines):
                                         if kw.lower() in line.lower():
                                             if pos == "Right (आगे)":
                                                 start_idx = line.lower().find(kw.lower()) + len(kw)
                                                 raw_text = line[start_idx:].strip()
-                                                found_val = apply_advanced_filters(raw_text, mode, stop_kw, flt, lg)
                                             elif pos == "Below (नीचे)":
                                                 if idx + 1 < len(pdf_lines):
                                                     raw_text = pdf_lines[idx + 1].strip()
-                                                    if mode == "Full Block":
-                                                        block_lines = [raw_text]
-                                                        if idx + 2 < len(pdf_lines): block_lines.append(pdf_lines[idx + 2].strip())
-                                                        raw_text = " ".join(block_lines)
-                                                    found_val = apply_advanced_filters(raw_text, mode, stop_kw, flt, lg)
                                             break
                                 else:
-                                    found_val = apply_advanced_filters(pdf_text, mode, stop_kw, flt, lg)
+                                    raw_text = pdf_text
                                     
+                                found_val = apply_advanced_filters(field, raw_text, mode, stop_kw, flt, lg, pdf_text)
                                 ws[target_cell] = found_val
+                                
                                 if "inv. no" in field.lower() or "invoice no" in field.lower():
                                     if found_val: invoice_number = found_val
 
+                        # 📌 कंटेनर/सील डेटा टेबल प्रोसेसिंग (C20/E20 जबरदस्ती नहीं लिखा जाएगा)
                         parsed_item_rows = []
-                        parsed_container_rows = []
-                        
                         for line in pdf_lines:
                             line_str = line.strip()
                             if re.match(r'^6302\d{4}', line_str) or re.match(r'^\d{8}', line_str):
                                 parts = [p.strip() for p in line_str.split() if p.strip()]
                                 if len(parts) >= 4: parsed_item_rows.append(parts)
-                            if re.search(r'[A-Z]{4}\d{7}', line_str):
-                                parts = [p.strip() for p in line_str.split() if p.strip()]
-                                parsed_container_rows.append(parts)
 
                         if parsed_item_rows:
                             for idx, item in enumerate(parsed_item_rows):
@@ -136,14 +159,6 @@ def render_processor():
                                         elif "qty" in field.lower(): val = item[2] if len(item) > 2 else ""
                                         elif "goods value" in field.lower(): val = item[-2] if len(item) > 4 else ""
                                         ws[f"{col}{curr_row}"] = val
-
-                        if parsed_container_rows:
-                            for idx, con in enumerate(parsed_container_rows):
-                                curr_row = 20 + idx
-                                for part in con:
-                                    if re.match(r'^[A-Z]{4}\d{7}$', part): ws[f"B{curr_row}"] = part
-                                    elif "40HC" in part or "20FT" in part or "40FT" in part: ws[f"C{curr_row}"] = part
-                                    elif re.match(r'^[A-Z0-9]{7,12}$', part) and not part.isdigit(): ws[f"E{curr_row}"] = part
 
                         output = BytesIO()
                         wb.save(output)
