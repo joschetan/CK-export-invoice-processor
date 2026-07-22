@@ -57,11 +57,11 @@ def ensure_default_shipper():
             "item_table_rules": {
                 "RITC / HS Code": {"col": "L", "type": "PDF Row Item", "rule": "HS Code"},
                 "Description of Goods": {"col": "M", "type": "PDF Row Item", "rule": "Description"},
-                "Quantity": {"col": "N", "type": "PDF Row Item", "rule": "Qty Number"},
+                "Quantity": {"col": "S", "type": "PDF Row Item", "rule": "Qty Number"},
                 "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "SET"},
-                "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
+                "Rate in": {"col": "O", "type": "PDF Row Item", "rule": "Rate"},
                 "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
-                "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
+                "Drawback SR Code": {"col": "N", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
                 "IGST Status": {"col": "U", "type": "Excel Cell Reference", "rule": "B19"},
                 "Taxable Value (INR)": {"col": "V", "type": "PDF Row Item", "rule": "Taxable Amt"},
                 "IGST Rate (%)": {"col": "W", "type": "PDF Row Item", "rule": "IGST %"},
@@ -105,12 +105,12 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "item_table_rules": {}
                                 }
                             
-                            # Restore Template File from Google Sheet if stored in Base64
+                            # Restore Template File from Google Sheet Base64 if missing
                             tpl_b64 = get_val_case_insensitive(row, "TemplateB64", "template", default="")
                             if tpl_b64 and "Full Job Excel Format File" not in st.session_state["shipper_database"][target_key]["uploaded_files"]:
                                 try:
                                     st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = base64.b64decode(tpl_b64)
-                                except: pass
+                                except Exception as e: pass
 
                             if "item" in rule_kind:
                                 st.session_state["shipper_database"][target_key]["item_table_rules"][f_name] = {
@@ -128,7 +128,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
                                     "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                                 }
-                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स और टेम्पलेट लोड हो गए!")
+                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -258,8 +258,8 @@ def render_shipper_data():
             else:
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
                 if f_upload:
-                    shipper_info["uploaded_files"]["Full Job Excel Format File"] = f_upload.getvalue()
-                    st.success("टेम्पलेट सेव हो गया!")
+                    shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = f_upload.getvalue()
+                    st.success("टेम्पलेट सेव हो गया! अब नीचे 'Save All Rules' बटन दबाकर इसे Google Sheet में भी सेव कर लें।")
                     st.rerun()
                     
             st.write("---")
@@ -425,11 +425,10 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            # 🎯 PERMANENT SAVE (Saves Excel File + Rules to Google Sheet)
+            # SAVE BUTTON
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 
-                # Encode Excel Template to Base64 so it can be stored in Google Sheet
                 tpl_bytes = shipper_info.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
                 tpl_b64 = base64.b64encode(tpl_bytes).decode('utf-8') if tpl_bytes else ""
 
