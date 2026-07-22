@@ -4,22 +4,16 @@ import pdfplumber
 import re
 from io import BytesIO
 
-from item_parser import extract_item_table_rows, map_items_to_excel
+from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
 
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
     text = raw_text.strip()
-    
-    if text.startswith(":"):
-        text = text[1:].strip()
+    if text.startswith(":"): text = text[1:].strip()
     
     if mode == "Word Position" or mode.startswith("Word "):
-        w_num = 1
-        if mode.startswith("Word ") and mode.split()[1].isdigit():
-            w_num = int(mode.split()[1])
-        elif stop_kw and stop_kw.strip().isdigit():
-            w_num = int(stop_kw.strip())
+        w_num = int(mode.split()[1]) if mode.startswith("Word ") and mode.split()[1].isdigit() else 1
         parts = text.split()
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
@@ -27,53 +21,18 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
             text = text[start_idx:].strip()
             if text.startswith(":"): text = text[1:].strip()
-    elif mode == "Between Words":
-        if kw and stop_kw and kw.lower() in text.lower() and stop_kw.lower() in text.lower():
-            s_idx = text.lower().find(kw.lower()) + len(kw)
-            e_idx = text.lower().find(stop_kw.lower(), s_idx)
-            if e_idx != -1:
-                text = text[s_idx:e_idx].strip()
-    elif mode == "Skip 1st Word":
-        parts = text.split(maxsplit=1)
-        text = parts[1].strip() if len(parts) > 1 else text
     elif mode == "Exact Word":
-        if text.startswith(":"): text = text[1:].strip()
         parts = text.split()
         text = parts[0].strip() if parts else ""
     elif mode == "Full Line":
-        if text.startswith(":"): text = text[1:].strip()
         text = text.split("\n")[0].strip()
 
-    if mode != "Word Position" and not mode.startswith("Word ") and mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
-        st_idx = text.lower().find(stop_kw.lower())
-        text = text[:st_idx].strip()
-        
     if flt == "Container Number (ISO Format)":
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
-        if cntr_match:
-            return cntr_match.group(0).replace(" ", "")
-        cntr_match2 = re.search(r'\b[A-Za-z]{4}\d{6,8}\b', text)
-        return cntr_match2.group(0) if cntr_match2 else text.strip()
-    elif flt == "Container Size (20/40 Only)":
-        size_match = re.search(r'\b(20|40)(?=\s*HC|\s*FT|\s*GP|\s*HQ|\b)', text, re.IGNORECASE)
-        if size_match:
-            return size_match.group(1)
-        size_match2 = re.search(r'\b(20|40)\b', text)
-        return size_match2.group(1) if size_match2 else ""
+        return cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
     elif flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
         return nums[0].strip() if nums else ""
-    elif flt == "Letters Only":
-        lets = re.findall(r'[a-zA-Z]+', text)
-        return " ".join(lets).strip() if lets else ""
-    elif flt == "Inside Brackets ()":
-        match = re.search(r'\(([^)]+)\)', text)
-        return match.group(1).strip() if match else text
-        
-    if logic and logic.strip() and logic != "None":
-        lg_lower = logic.lower()
-        if "cart" in lg_lower or "ctn" in lg_lower:
-            if "cart" in text.lower() or "ctn" in text.lower(): return "CTN"
 
     return text.strip()
 
@@ -122,6 +81,7 @@ def render_processor():
             if uploaded_pdf_files and st.button("🚀 Process & Generate Excel", type="primary", use_container_width=True):
                 with st.spinner(f"कुल {len(uploaded_pdf_files)} इनवॉइस स्कैन हो रहे हैं..."):
                     rules = shipper_info.get("mapping_rules", {})
+                    item_table_rules = shipper_info.get("item_table_rules", {})
                     
                     if "uploaded_files" in shipper_info and "Full Job Excel Format File" in shipper_info["uploaded_files"]:
                         original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
@@ -148,6 +108,7 @@ def render_processor():
                         current_inv_number = f"INV_{inv_sr_number}"
                         current_inv_date = ""
                         
+                        # Process Header Rules
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             pos = r_info.get("position", "Right (आगे)")
@@ -155,7 +116,6 @@ def render_processor():
                             mode = r_info.get("match_mode", "Exact Word")
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
-                            lg = r_info.get("logic", "").strip()
                             
                             if pos != "Table Column" and target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
                                 raw_text = ""
@@ -174,7 +134,7 @@ def render_processor():
                                 else:
                                     raw_text = pdf_text
                                     
-                                found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, lg, kw)
+                                found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
                                 
                                 if inv_sr_number == 1:
                                     ws[target_cell] = found_val
@@ -186,9 +146,10 @@ def render_processor():
                                 if "date" in field.lower():
                                     if found_val: current_inv_date = found_val
 
+                        # Process Dynamic Item Rows
                         parsed_items = extract_item_table_rows(pdf_lines)
-                        ws, overall_item_sr, excel_write_row = map_items_to_excel(
-                            ws, parsed_items, 
+                        ws, overall_item_sr, excel_write_row = map_items_to_excel_dynamic(
+                            ws, parsed_items, item_table_rules,
                             inv_sr_no=inv_sr_number, 
                             start_overall_sr=overall_item_sr, 
                             start_excel_row=excel_write_row, 
