@@ -4,15 +4,16 @@ import pdfplumber
 import re
 from io import BytesIO
 
+# 🎯 हमारी नई सेफ मॉड्यूल इंपोर्ट करें
+from item_parser import extract_item_table_rows, map_items_to_excel
+
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
     text = raw_text.strip()
     
-    # 🎯 कोलन ऑटो-स्ट्रिपिंग
     if text.startswith(":"):
         text = text[1:].strip()
     
-    # 🎯 1. Match Mode Logic
     if mode == "Word Position" or mode.startswith("Word "):
         w_num = 1
         if mode.startswith("Word ") and mode.split()[1].isdigit():
@@ -43,12 +44,10 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
         if text.startswith(":"): text = text[1:].strip()
         text = text.split("\n")[0].strip()
 
-    # 🎯 2. Stop Keyword Check
     if mode != "Word Position" and not mode.startswith("Word ") and mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
         st_idx = text.lower().find(stop_kw.lower())
         text = text[:st_idx].strip()
         
-    # 🎯 3. Smart Filters
     if flt == "Container Number (ISO Format)":
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
         if cntr_match:
@@ -113,6 +112,7 @@ def render_processor():
                         
                         invoice_number = "INV"
                         
+                        # 🎯 1. Header Fields Mapping
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             pos = r_info.get("position", "Right (आगे)")
@@ -148,27 +148,9 @@ def render_processor():
                                 if "inv. no" in field.lower() or "invoice no" in field.lower():
                                     if found_val: invoice_number = found_val
 
-                        # टेबल आइटम्स मैपिंग
-                        parsed_item_rows = []
-                        for line in pdf_lines:
-                            line_str = line.strip()
-                            if re.match(r'^6302\d{4}', line_str) or re.match(r'^\d{8}', line_str):
-                                parts = [p.strip() for p in line_str.split() if p.strip()]
-                                if len(parts) >= 4: parsed_item_rows.append(parts)
-
-                        if parsed_item_rows:
-                            for idx, item in enumerate(parsed_item_rows):
-                                curr_row = 2 + idx
-                                for field, r_info in rules.items():
-                                    col = r_info.get("cell", "").strip()
-                                    pos = r_info.get("position", "")
-                                    if pos == "Table Column" and len(col) == 1:
-                                        val = ""
-                                        if "ritc" in field.lower() or "hs code" in field.lower(): val = item[0] if len(item) > 0 else ""
-                                        elif "product" in field.lower() or "description" in field.lower(): val = item[1] if len(item) > 1 else ""
-                                        elif "qty" in field.lower(): val = item[2] if len(item) > 2 else ""
-                                        elif "goods value" in field.lower(): val = item[-2] if len(item) > 4 else ""
-                                        ws[f"{col}{curr_row}"] = val
+                        # 🎯 2. Item Table Mapping (Safe Module Calling)
+                        parsed_items = extract_item_table_rows(pdf_lines)
+                        ws = map_items_to_excel(ws, parsed_items, invoice_number)
 
                         output = BytesIO()
                         wb.save(output)
