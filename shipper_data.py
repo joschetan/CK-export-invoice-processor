@@ -36,6 +36,7 @@ def ensure_default_shipper():
                 "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "Detect SET or PCS from Description"},
                 "Goods Value (USD)": {"col": "P", "type": "PDF Row Item", "rule": "Goods Value"},
                 "Drawback SR Code": {"col": "R", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
+                "IGST Status": {"col": "U", "type": "Excel Cell Reference", "rule": "B19"},
                 "Taxable Value (INR)": {"col": "V", "type": "PDF Row Item", "rule": "Taxable Amt"},
                 "IGST Rate (%)": {"col": "W", "type": "PDF Row Item", "rule": "IGST %"},
                 "IGST Amount (INR)": {"col": "X", "type": "PDF Row Item", "rule": "IGST Amt"}
@@ -92,8 +93,8 @@ def add_item_col_dialog(selected_shipper):
     st.write("यहाँ आइटम टेबल के लिए नया कॉलम हेडिंग और एक्सेल कॉलम जोड़ें:")
     c_name = st.text_input("Heading Name (उदा: Net Weight, Boxes, Size):")
     c_col = st.text_input("Excel Column Letter (उदा: L, M, N, Z):").upper()
-    c_type = st.selectbox("Rule Type:", ["PDF Row Item", "Constant Text", "Smart Detection"])
-    c_rule = st.text_input("Rule Detail / Value (उदा: SET, PCS, Numbers Only):")
+    c_type = st.selectbox("Rule Type:", ["PDF Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"])
+    c_rule = st.text_input("Rule Detail / Value (उदा: B19, SET, PCS, Numbers Only):")
     
     if st.button("Confirm & Add Item Column", type="primary"):
         if not c_name or not c_col:
@@ -198,13 +199,18 @@ def render_shipper_data():
             with ic5: st.markdown("**Del**")
             st.write("---")
             
+            rule_type_options = ["PDF Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
+            
             for item_field in list(item_rules.keys()):
                 ir = item_rules[item_field]
                 ic1, ic2, ic3, ic4, ic5 = st.columns([3, 2, 3, 3, 1])
                 
+                saved_type = ir.get("type", "PDF Row Item")
+                type_idx = rule_type_options.index(saved_type) if saved_type in rule_type_options else 0
+                
                 with ic1: e_ifield = st.text_input(f"if_{item_field}", value=item_field, label_visibility="collapsed")
                 with ic2: e_icol = st.text_input(f"ic_{item_field}", value=ir.get("col", "K"), label_visibility="collapsed").upper()
-                with ic3: e_itype = st.selectbox(f"it_{item_field}", ["PDF Row Item", "Constant Text", "Smart Detection"], index=0 if ir.get("type")=="PDF Row Item" else (1 if ir.get("type")=="Constant Text" else 2), label_visibility="collapsed")
+                with ic3: e_itype = st.selectbox(f"it_{item_field}", rule_type_options, index=type_idx, label_visibility="collapsed")
                 with ic4: e_irule = st.text_input(f"ir_{item_field}", value=ir.get("rule", ""), label_visibility="collapsed")
                 with ic5:
                     if st.button("🗑️", key=f"idel_{item_field}"):
