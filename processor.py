@@ -8,11 +8,15 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
     text = raw_text.strip()
     
-    # 🎯 1. Match Mode Logic
+    # 🎯 कोलन ऑटो-स्ट्रिपिंग (जैसे ":NORFOLK" को "NORFOLK" बनाना)
+    if text.startswith(":"):
+        text = text[1:].strip()
+    
     if mode == "After Word" and stop_kw:
         if stop_kw.lower() in text.lower():
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
             text = text[start_idx:].strip()
+            if text.startswith(":"): text = text[1:].strip()
     elif mode == "Between Words":
         if kw and stop_kw and kw.lower() in text.lower() and stop_kw.lower() in text.lower():
             s_idx = text.lower().find(kw.lower()) + len(kw)
@@ -23,19 +27,17 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
         parts = text.split(maxsplit=1)
         text = parts[1].strip() if len(parts) > 1 else text
     elif mode == "Exact Word":
-        if ":" in text: text = text.split(":", 1)[1].strip()
+        if text.startswith(":"): text = text[1:].strip()
         parts = text.split()
         text = parts[0].strip() if parts else ""
     elif mode == "Full Line":
-        if ":" in text: text = text.split(":", 1)[1].strip()
+        if text.startswith(":"): text = text[1:].strip()
         text = text.split("\n")[0].strip()
 
-    # 🎯 2. Stop Keyword Check
     if mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
         st_idx = text.lower().find(stop_kw.lower())
         text = text[:st_idx].strip()
         
-    # 🎯 3. Filters Apply
     if flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
         return nums[0].strip() if nums else ""
