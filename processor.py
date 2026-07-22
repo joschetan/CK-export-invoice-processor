@@ -12,6 +12,7 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if text.startswith(":"):
         text = text[1:].strip()
     
+    # 🎯 1. Match Mode Logic
     if mode == "After Word" and stop_kw:
         if stop_kw.lower() in text.lower():
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
@@ -34,11 +35,20 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
         if text.startswith(":"): text = text[1:].strip()
         text = text.split("\n")[0].strip()
 
+    # 🎯 2. Stop Keyword Check
     if mode not in ["Between Words", "After Word"] and stop_kw and stop_kw.strip() and stop_kw.lower() in text.lower():
         st_idx = text.lower().find(stop_kw.lower())
         text = text[:st_idx].strip()
         
-    if flt == "Numbers Only":
+    # 🎯 3. Smart Filters
+    if flt == "Container Size (20/40 Only)":
+        # पूरी लाइन में से केवल 20 या 40 निकालना (HC/FT/GP के साथ या अलग)
+        size_match = re.search(r'\b(20|40)(?=\s*HC|\s*FT|\s*GP|\s*HQ|\b)', text, re.IGNORECASE)
+        if size_match:
+            return size_match.group(1)
+        size_match2 = re.search(r'\b(20|40)\b', text)
+        return size_match2.group(1) if size_match2 else ""
+    elif flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
         return nums[0].strip() if nums else ""
     elif flt == "Letters Only":
@@ -107,10 +117,15 @@ def render_processor():
                                             if pos == "Right (आगे)":
                                                 start_idx = line.lower().find(kw.lower()) + len(kw)
                                                 raw_text = line[start_idx:].strip()
+                                                if raw_text.startswith(":"):
+                                                    raw_text = raw_text[1:].strip()
+                                                if raw_text:
+                                                    break
                                             elif pos == "Below (नीचे)":
                                                 if idx + 1 < len(pdf_lines):
                                                     raw_text = pdf_lines[idx + 1].strip()
-                                            break
+                                                    if raw_text:
+                                                        break
                                 else:
                                     raw_text = pdf_text
                                     
