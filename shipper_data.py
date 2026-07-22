@@ -45,7 +45,6 @@ def fetch_data_from_google_sheet():
                                     "mapping_rules": {}
                                 }
                             
-                            # गूगल शीट की वैल्यूज़ सुरक्षित मैपिंग
                             st.session_state["shipper_database"][s_name]["mapping_rules"][f_name] = {
                                 "keyword": str(row.get("keyword", "")),
                                 "position": str(row.get("position", "Right (आगे)")),
@@ -55,7 +54,7 @@ def fetch_data_from_google_sheet():
                                 "filter": str(row.get("filter", "None")),
                                 "logic": str(row.get("logic", "None"))
                             }
-    except Exception as e:
+    except Exception:
         pass
 
 @st.dialog("⚡ Field Extraction Test Result")
@@ -272,7 +271,7 @@ def render_shipper_data():
                 if st.button("🔄 Reload Saved Rules from Sheet", type="secondary", use_container_width=True):
                     st.session_state["shipper_database"] = {}
                     fetch_data_from_google_sheet()
-                    st.success("🎉 गूगल शीट से रूल्स वापस आ गए!")
+                    st.success("🎉 गूगल शीट से रूल्स लोड हो गए!")
                     st.rerun()
             with col_add:
                 if st.button("➕ Add Field", type="secondary", use_container_width=True):
