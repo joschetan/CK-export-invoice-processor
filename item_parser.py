@@ -53,11 +53,10 @@ def map_items_to_excel(ws, parsed_item_rows, default_invoice_no="INV", default_i
         # 🎯 Rule 4: RITC, Product Name and Blank L/M
         hs_code = item[0]
         ws[f"K{curr_row}"] = hs_code                                       # RITC (HS Code)
-        ws[f"L{curr_row}"] = ""                                            # Blank (बाद में समझेंगे)
-        ws[f"M{curr_row}"] = ""                                            # Blank (बाद में समझेंगे)
+        ws[f"L{curr_row}"] = ""                                            # Blank
+        ws[f"M{curr_row}"] = ""                                            # Blank
         
         # 🎯 Rule 5 & 6: Qty and UNIT (Quantity SET)
-        # Array Parts: ['63026090', 'Set', 'Towel', '133.272', '630201', '180.000', '5.08', '914.40', '87,279.48', '5.00', '4,363.97']
         qty_val = ""
         dbk_sr = ""
         
@@ -70,7 +69,6 @@ def map_items_to_excel(ws, parsed_item_rows, default_invoice_no="INV", default_i
                 
         # Qty is usually after DBK in PDF table
         if len(item) >= 6:
-            # Finding Qty field (number with decimals)
             for p in item[3:]:
                 if re.match(r'^\d{1,3}(,\d{3})*(\.\d+)?$', p) and p != hs_code:
                     qty_val = p
@@ -81,7 +79,7 @@ def map_items_to_excel(ws, parsed_item_rows, default_invoice_no="INV", default_i
         
         # Goods Value (USD)
         ws[f"P{curr_row}"] = item[-4] if len(item) >= 4 else ""             # Goods Value
-        ws[f"Q{curr_row}"] = ""                                            # SCHEME CODE (बाद में समझेंगे)
+        ws[f"Q{curr_row}"] = ""                                            # SCHEME CODE
         
         # 🎯 Rule 8: Drawback SR with Compulsory 'B' and No Space
         if dbk_sr:
@@ -103,7 +101,7 @@ def map_items_to_excel(ws, parsed_item_rows, default_invoice_no="INV", default_i
         ws[f"W{curr_row}"] = item[-2] if len(item) >= 2 else ""             # IGSTPer (%)
         ws[f"X{curr_row}"] = item[-1] if len(item) >= 1 else ""             # IGST AMT
         
-        ws[f"Y{curr_row}"] = ""                                            # Blank (बाद में समझेंगे)
-        ws[f"Z{curr_row}"] = ""                                            # Blank (बाद में समझेंगे)
+        ws[f"Y{curr_row}"] = ""                                            # Blank
+        ws[f"Z{curr_row}"] = ""                                            # Blank
         
     return ws
