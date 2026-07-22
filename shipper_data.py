@@ -31,15 +31,14 @@ def ensure_default_shipper():
             "uploaded_files": {},
             "mapping_rules": initial_rules,
             "item_table_rules": {
-                "RITC / HS Code": {"col": "K", "type": "PDF Row Item", "rule": "HS Code"},
-                "Quantity": {"col": "N", "type": "PDF Row Item", "rule": "Qty Number"},
-                "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "Detect SET or PCS from Description"},
-                "Goods Value (USD)": {"col": "P", "type": "PDF Row Item", "rule": "Goods Value"},
-                "Drawback SR Code": {"col": "R", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
-                "IGST Status": {"col": "U", "type": "Excel Cell Reference", "rule": "B19"},
-                "Taxable Value (INR)": {"col": "V", "type": "PDF Row Item", "rule": "Taxable Amt"},
-                "IGST Rate (%)": {"col": "W", "type": "PDF Row Item", "rule": "IGST %"},
-                "IGST Amount (INR)": {"col": "X", "type": "PDF Row Item", "rule": "IGST Amt"}
+                "RITC / HS Code": {"col": "L", "type": "PDF Row Item", "rule": "HS Code"},
+                "Description of Goods": {"col": "N", "type": "PDF Row Item", "rule": "Description"},
+                "Quantity": {"col": "O", "type": "PDF Row Item", "rule": "Qty Number"},
+                "Unit (UNIT)": {"col": "P", "type": "Smart Detection", "rule": "SET"},
+                "Rate in": {"col": "Q", "type": "PDF Row Item", "rule": "Rate"},
+                "Amount": {"col": "R", "type": "PDF Row Item", "rule": "Amount USD"},
+                "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
+                "Nt.Wt(KGS)": {"col": "AB", "type": "PDF Row Item", "rule": "Net Weight"}
             }
         }
 
@@ -87,6 +86,35 @@ def fetch_data_from_google_sheet(show_toast=False):
                 if show_toast: st.toast(f"✅ गूगल शीट से रूल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
+
+def apply_rule_filter(raw_text, mode, stop_kw, flt):
+    if not raw_text: return ""
+    text = raw_text.strip()
+    if text.startswith(":"): text = text[1:].strip()
+    
+    if mode == "Word Position" or mode.startswith("Word "):
+        w_num = int(mode.split()[1]) if mode.startswith("Word ") and mode.split()[1].isdigit() else 1
+        parts = text.split()
+        text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
+    elif mode == "After Word" and stop_kw:
+        if stop_kw.lower() in text.lower():
+            start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
+            text = text[start_idx:].strip()
+            if text.startswith(":"): text = text[1:].strip()
+    elif mode == "Exact Word":
+        parts = text.split()
+        text = parts[0].strip() if parts else ""
+    elif mode == "Full Line":
+        text = text.split("\n")[0].strip()
+
+    if flt == "Container Number (ISO Format)":
+        cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
+        return cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
+    elif flt == "Numbers Only":
+        nums = re.findall(r'[\d,.]+', text)
+        return nums[0].strip() if nums else ""
+
+    return text.strip()
 
 @st.dialog("➕ Add New Custom Header Field")
 def add_custom_header_field_dialog(selected_shipper):
@@ -153,6 +181,74 @@ def render_shipper_data():
                     st.success("टेम्पलेट सेव हो गया!")
                     st.rerun()
                     
+            st.write("---")
+            
+            # --- SECTION 2: LIVE TEST PDF ENGINE (RESTORED!) ---
+            st.subheader("🧪 2. Instant PDF Upload & Live Data Test Engine")
+            st.caption("यहाँ कोई भी नमूना (Sample) इनवॉइस PDF अपलोड करके लाइव चेक करें कि रूल्स सही डेटा निकाल रहे हैं या नहीं।")
+            
+            test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
+            
+            if test_pdf:
+                pdf_lines = []
+                pdf_text = ""
+                with pdfplumber.open(test_pdf) as pdf:
+                    for page in pdf.pages:
+                        t = page.extract_text()
+                        if t:
+                            pdf_text += t + "\n"
+                            pdf_lines.extend(t.split("\n"))
+                            
+                st.success(f"📄 PDF सफलतापूर्वक स्कैन हो गई! कुल {len(pdf_lines)} पंक्तियाँ पाई गईं।")
+                
+                with st.expander("🔍 1. Scanned Header Fields Test Results (लाइव रिजल्ट)", expanded=True):
+                    extracted_header_preview = {}
+                    rules = shipper_info.get("mapping_rules", {})
+                    
+                    for field, r_info in rules.items():
+                        kw = r_info.get("keyword", "").strip()
+                        pos = r_info.get("position", "Right (आगे)")
+                        mode = r_info.get("match_mode", "Exact Word")
+                        stop_kw = r_info.get("stop_kw", "").strip()
+                        flt = r_info.get("filter", "None")
+                        
+                        raw_text = ""
+                        if kw:
+                            for line_i, line in enumerate(pdf_lines):
+                                if kw.lower() in line.lower():
+                                    if pos == "Right (आगे)":
+                                        start_idx = line.lower().find(kw.lower()) + len(kw)
+                                        raw_text = line[start_idx:].strip()
+                                        if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
+                                        if raw_text: break
+                                    elif pos == "Below (नीचे)":
+                                        if line_i + 1 < len(pdf_lines):
+                                            raw_text = pdf_lines[line_i + 1].strip()
+                                            if raw_text: break
+                        else:
+                            raw_text = pdf_text
+                            
+                        found_val = apply_rule_filter(raw_text, mode, stop_kw, flt)
+                        extracted_header_preview[field] = found_val if found_val else "❌ (Not Found)"
+                        
+                    st.json(extracted_header_preview)
+
+                with st.expander("📦 2. Scanned Item Table Rows Preview (लाइव रो एक्सट्रैक्शन)", expanded=True):
+                    item_rows = []
+                    for line in pdf_lines:
+                        line_str = line.strip()
+                        if re.match(r'^\d{8}\b', line_str):
+                            parts = [p.strip() for p in line_str.split() if p.strip()]
+                            if len(parts) >= 3:
+                                item_rows.append(parts)
+                                
+                    if item_rows:
+                        st.write(f"✅ **कुल {len(item_rows)} आइटम्स मिले!**")
+                        for idx, row_data in enumerate(item_rows):
+                            st.text(f"Row #{idx+1}: { '  |  '.join(row_data) }")
+                    else:
+                        st.warning("⚠️ इस PDF में RITC (8-digit code) वाली कोई आइटम पंक्ति नहीं मिली।")
+
             st.write("---")
             
             # --- SECTION 3: HEADER MAPPING RULES ---
