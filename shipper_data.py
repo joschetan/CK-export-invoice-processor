@@ -42,7 +42,6 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                     if pos == "Right (आगे)":
                         start_idx = line.lower().find(kw.lower()) + len(kw)
                         raw_found = line[start_idx:].strip()
-                        # 🎯 Fix for Colon attached words like ":NORFOLK" -> "NORFOLK"
                         if raw_found.startswith(":"):
                             raw_found = raw_found[1:].strip()
                         if raw_found:
@@ -85,8 +84,16 @@ def test_field_dialog(field_name, rule_data, test_pdf_bytes):
                 raw_found = raw_found[:st_idx].strip()
 
             # 🎯 3. Smart Filters
-            if flt == "Container Size (20/40 Only)":
-                # पूरी लाइन में से केवल 20 या 40 निकालना (HC/FT/GP/HQ के साथ या अलग)
+            if flt == "Container Number (ISO Format)":
+                # 4 Letters + 7 Digits matching (Standard Container No.)
+                cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', raw_found)
+                if cntr_match:
+                    extracted_val = cntr_match.group(0).replace(" ", "")
+                else:
+                    # Fallback for 4 letters + 6 to 8 digits
+                    cntr_match2 = re.search(r'\b[A-Za-z]{4}\d{6,8}\b', raw_found)
+                    extracted_val = cntr_match2.group(0) if cntr_match2 else raw_found.strip()
+            elif flt == "Container Size (20/40 Only)":
                 size_match = re.search(r'\b(20|40)(?=\s*HC|\s*FT|\s*GP|\s*HQ|\b)', raw_found, re.IGNORECASE)
                 if size_match:
                     extracted_val = size_match.group(1)
@@ -255,15 +262,15 @@ def render_shipper_data():
                     stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), placeholder="e.g. Date / End Word", label_visibility="collapsed")
                     
                 with c7:
-                    # 🎯 ड्रॉपडाउन में Container Size (20/40 Only) फ़िल्टर ऐड कर दिया गया है
-                    flt_opts = ["None", "Numbers Only", "Letters Only", "Container Size (20/40 Only)", "Inside Brackets ()", "Write Custom..."]
+                    # 🎯 'Container Number (ISO Format)' नया फ़िल्टर ऐड कर दिया गया है
+                    flt_opts = ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)", "Inside Brackets ()", "Write Custom..."]
                     saved_flt = s_val.get("filter", "None")
                     saved_lg = s_val.get("logic", "None")
                     
                     if saved_flt in flt_opts and saved_flt != "Write Custom...":
                         f_idx = flt_opts.index(saved_flt)
                     elif saved_lg and saved_lg != "None":
-                        f_idx = 5
+                        f_idx = 6
                     else:
                         f_idx = 0
                         
