@@ -183,9 +183,9 @@ def render_shipper_data():
                     
             st.write("---")
             
-            # --- SECTION 2: LIVE TEST PDF ENGINE (RESTORED!) ---
+            # --- SECTION 2: LIVE TEST PDF ENGINE ---
             st.subheader("🧪 2. Instant PDF Upload & Live Data Test Engine")
-            st.caption("यहाँ कोई भी नमूना (Sample) इनवॉइस PDF अपलोड करके लाइव चेक करें कि रूल्स सही डेटा निकाल रहे हैं या नहीं।")
+            st.caption("यहाँ कोई भी नमूना PDF अपलोड करें और रूल्स बदलने के बाद नीचे 'Run Live Test' दबाकर परिणाम देखें।")
             
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             
@@ -199,55 +199,62 @@ def render_shipper_data():
                             pdf_text += t + "\n"
                             pdf_lines.extend(t.split("\n"))
                             
-                st.success(f"📄 PDF सफलतापूर्वक स्कैन हो गई! कुल {len(pdf_lines)} पंक्तियाँ पाई गईं।")
+                st.success(f"📄 PDF स्कैन हो गई ({len(pdf_lines)} पंक्तियाँ)।")
                 
-                with st.expander("🔍 1. Scanned Header Fields Test Results (लाइव रिजल्ट)", expanded=True):
-                    extracted_header_preview = {}
-                    rules = shipper_info.get("mapping_rules", {})
-                    
-                    for field, r_info in rules.items():
-                        kw = r_info.get("keyword", "").strip()
-                        pos = r_info.get("position", "Right (आगे)")
-                        mode = r_info.get("match_mode", "Exact Word")
-                        stop_kw = r_info.get("stop_kw", "").strip()
-                        flt = r_info.get("filter", "None")
-                        
-                        raw_text = ""
-                        if kw:
-                            for line_i, line in enumerate(pdf_lines):
-                                if kw.lower() in line.lower():
-                                    if pos == "Right (आगे)":
-                                        start_idx = line.lower().find(kw.lower()) + len(kw)
-                                        raw_text = line[start_idx:].strip()
-                                        if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
-                                        if raw_text: break
-                                    elif pos == "Below (नीचे)":
-                                        if line_i + 1 < len(pdf_lines):
-                                            raw_text = pdf_lines[line_i + 1].strip()
-                                            if raw_text: break
-                        else:
-                            raw_text = pdf_text
-                            
-                        found_val = apply_rule_filter(raw_text, mode, stop_kw, flt)
-                        extracted_header_preview[field] = found_val if found_val else "❌ (Not Found)"
-                        
-                    st.json(extracted_header_preview)
+                col_t1, col_t2 = st.columns([7, 3])
+                with col_t2:
+                    run_test_btn = st.button("🔍 Run Live Extraction Test", type="primary", use_container_width=True)
 
-                with st.expander("📦 2. Scanned Item Table Rows Preview (लाइव रो एक्सट्रैक्शन)", expanded=True):
-                    item_rows = []
-                    for line in pdf_lines:
-                        line_str = line.strip()
-                        if re.match(r'^\d{8}\b', line_str):
-                            parts = [p.strip() for p in line_str.split() if p.strip()]
-                            if len(parts) >= 3:
-                                item_rows.append(parts)
+                if run_test_btn or "last_pdf_tested" in st.session_state:
+                    st.session_state["last_pdf_tested"] = True
+                    
+                    with st.expander("🔍 1. Scanned Header Fields Test Results (लाइव रिजल्ट)", expanded=True):
+                        extracted_header_preview = {}
+                        rules = shipper_info.get("mapping_rules", {})
+                        
+                        for field, r_info in rules.items():
+                            kw = r_info.get("keyword", "").strip()
+                            pos = r_info.get("position", "Right (आगे)")
+                            mode = r_info.get("match_mode", "Exact Word")
+                            stop_kw = r_info.get("stop_kw", "").strip()
+                            flt = r_info.get("filter", "None")
+                            
+                            raw_text = ""
+                            if kw:
+                                for line_i, line in enumerate(pdf_lines):
+                                    if kw.lower() in line.lower():
+                                        if pos == "Right (आगे)":
+                                            start_idx = line.lower().find(kw.lower()) + len(kw)
+                                            raw_text = line[start_idx:].strip()
+                                            if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
+                                            if raw_text: break
+                                        elif pos == "Below (नीचे)":
+                                            if line_i + 1 < len(pdf_lines):
+                                                raw_text = pdf_lines[line_i + 1].strip()
+                                                if raw_text: break
+                            else:
+                                raw_text = pdf_text
                                 
-                    if item_rows:
-                        st.write(f"✅ **कुल {len(item_rows)} आइटम्स मिले!**")
-                        for idx, row_data in enumerate(item_rows):
-                            st.text(f"Row #{idx+1}: { '  |  '.join(row_data) }")
-                    else:
-                        st.warning("⚠️ इस PDF में RITC (8-digit code) वाली कोई आइटम पंक्ति नहीं मिली।")
+                            found_val = apply_rule_filter(raw_text, mode, stop_kw, flt)
+                            extracted_header_preview[field] = found_val if found_val else "❌ (Not Found)"
+                            
+                        st.json(extracted_header_preview)
+
+                    with st.expander("📦 2. Scanned Item Table Rows Preview (लाइव रो एक्सट्रैक्शन)", expanded=True):
+                        item_rows = []
+                        for line in pdf_lines:
+                            line_str = line.strip()
+                            if re.match(r'^\d{8}\b', line_str):
+                                parts = [p.strip() for p in line_str.split() if p.strip()]
+                                if len(parts) >= 3:
+                                    item_rows.append(parts)
+                                    
+                        if item_rows:
+                            st.write(f"✅ **कुल {len(item_rows)} आइटम रो मिलीं!**")
+                            for idx, row_data in enumerate(item_rows):
+                                st.code(f"Row #{idx+1}: { '  |  '.join(row_data) }")
+                        else:
+                            st.warning("⚠️ इस PDF में RITC (8-digit code) वाली कोई आइटम पंक्ति नहीं मिली।")
 
             st.write("---")
             
