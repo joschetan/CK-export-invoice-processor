@@ -10,7 +10,6 @@ from io import BytesIO
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
 def get_val_case_insensitive(d, *keys, default=""):
-    """किसी भी केस (Small/Capital) के हेडर से सही वैल्यू निकालने का फ़ंक्शन"""
     if not isinstance(d, dict):
         return default
     d_lower = {str(k).lower(): v for k, v in d.items()}
@@ -34,14 +33,18 @@ def ensure_default_shipper():
         }
 
 def fetch_data_from_google_sheet(show_toast=False):
-    """गूगल शीट से सभी शिपर और उनके रूल्स ऑटोमैटिक लोड करने का फ़ंक्शन"""
     ensure_default_shipper()
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
         if response.status_code == 200:
+            # चेक करें कि HTML तो नहीं आया
+            res_text = response.text.strip()
+            if res_text.startswith("<"):
+                if show_toast:
+                    st.error("⚠️ गूगल शीट से HTML मिला (Apps Script Access को 'Anyone' पर सेट करें)।")
+                return
+
             data = response.json()
-            
-            # JSON रिस्पॉन्स से लिस्ट निकालना
             rules_list = []
             if isinstance(data, dict):
                 rules_list = data.get("rules", data.get("data", []))
@@ -76,11 +79,12 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                             }
                 if show_toast:
-                    st.toast(f"✅ गूगल शीट से {len(rules_list)} रूल्स सफलतापूर्वक लोड हो गए!")
+                    st.toast(f"✅ गूगल शीट से {len(rules_list)} रूल्स लोड हो गए!")
             elif show_toast:
-                st.warning("⚠️ गूगल शीट से कोई रूल्स डेटा प्राप्त नहीं हुआ।")
-        elif show_toast:
-            st.error(f"शीट कनेक्ट एरर: HTTP status {response.status_code}")
+                st.warning("⚠️ गूगल शीट खाली मिली।")
+    except json.decoder.JSONDecodeError:
+        if show_toast:
+            st.error("⚠️ रिस्पांस JSON नहीं है (गूगल ऐप स्क्रिप्ट कोड अपडेट करें)।")
     except Exception as e:
         if show_toast:
             st.error(f"फ़ैच एरर: {str(e)}")
