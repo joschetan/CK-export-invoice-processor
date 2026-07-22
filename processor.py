@@ -4,7 +4,6 @@ import pdfplumber
 import re
 from io import BytesIO
 
-# 🎯 हमारी नई सेफ मॉड्यूल इंपोर्ट करें
 from item_parser import extract_item_table_rows, map_items_to_excel
 
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
@@ -79,7 +78,7 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
 
 def render_processor():
     st.header("📤 Invoice Processing Zone")
-    st.caption("रूल्स के आधार पर 100% सटीक डेटा एक्सट्रैक्शन।")
+    st.caption("रूल्स के आधार पर 100% सटीक डेटा एक्सट्रैक्शन (Multi-Invoice Enabled)।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -90,78 +89,121 @@ def render_processor():
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
             if "Full Job Excel Format File" in shipper_info.get("uploaded_files", {}):
-                invoice_file = st.file_uploader(f"'{selected_shipper}' का PDF Invoice अपलोड करें", type=["pdf"])
                 
-                if invoice_file and st.button("🚀 Process & Generate Excel", type="primary"):
-                    with st.spinner("रूल्स के अनुसार सटीक डेटा स्कैन हो रहा है..."):
+                # 🎯 MULTI-INVOICE DYNAMIC UPLOADER UI
+                if "invoice_count" not in st.session_state:
+                    st.session_state["invoice_count"] = 1
+                
+                uploaded_pdf_files = []
+                st.subheader("📑 Upload Invoices (PDFs)")
+                
+                for i in range(st.session_state["invoice_count"]):
+                    pdf_f = st.file_uploader(f"➡️ Invoice #{i+1} का PDF अपलोड करें", type=["pdf"], key=f"inv_pdf_{selected_shipper}_{i}")
+                    if pdf_f:
+                        uploaded_pdf_files.append(pdf_f)
+                
+                col_btn1, col_btn2 = st.columns([1, 4])
+                with col_btn1:
+                    if st.session_state["invoice_count"] < 10:
+                        if st.button("➕ Add Invoice", help="एक और इनवॉइस जोड़ने के लिए क्लिक करें"):
+                            st.session_state["invoice_count"] += 1
+                            st.rerun()
+                with col_btn2:
+                    if st.session_state["invoice_count"] > 1:
+                        if st.button("➖ Remove Last Invoice"):
+                            st.session_state["invoice_count"] -= 1
+                            st.rerun()
+                            
+                st.write("---")
+                
+                if uploaded_pdf_files and st.button("🚀 Process & Generate Excel", type="primary", use_container_width=True):
+                    with st.spinner(f"कुल {len(uploaded_pdf_files)} इनवॉइस स्कैन हो रहे हैं..."):
                         rules = shipper_info.get("mapping_rules", {})
                         
                         original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
                         wb = openpyxl.load_workbook(BytesIO(original_template_bytes))
                         ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
                         
-                        pdf_text = ""
-                        pdf_lines = []
+                        first_inv_no = "INV"
+                        overall_item_sr = 1
+                        excel_write_row = 2
                         
-                        with pdfplumber.open(invoice_file) as pdf:
-                            for page in pdf.pages:
-                                t = page.extract_text()
-                                if t:
-                                    pdf_text += t + "\n"
-                                    pdf_lines.extend(t.split("\n"))
-                        
-                        invoice_number = "INV"
-                        
-                        # 🎯 1. Header Fields Mapping
-                        for field, r_info in rules.items():
-                            kw = r_info.get("keyword", "").strip()
-                            pos = r_info.get("position", "Right (आगे)")
-                            target_cell = r_info.get("cell", "").strip()
-                            mode = r_info.get("match_mode", "Exact Word")
-                            stop_kw = r_info.get("stop_kw", "").strip()
-                            flt = r_info.get("filter", "None")
-                            lg = r_info.get("logic", "").strip()
+                        # 🎯 MULTI-INVOICE LOOP
+                        for inv_idx, inv_file in enumerate(uploaded_pdf_files):
+                            inv_sr_number = inv_idx + 1  # 1, 2, 3...
                             
-                            if pos != "Table Column" and target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
-                                raw_text = ""
-                                if kw:
-                                    for idx, line in enumerate(pdf_lines):
-                                        if kw.lower() in line.lower():
-                                            if pos == "Right (आगे)":
-                                                start_idx = line.lower().find(kw.lower()) + len(kw)
-                                                raw_text = line[start_idx:].strip()
-                                                if raw_text.startswith(":"):
-                                                    raw_text = raw_text[1:].strip()
-                                                if raw_text:
-                                                    break
-                                            elif pos == "Below (नीचे)":
-                                                if idx + 1 < len(pdf_lines):
-                                                    raw_text = pdf_lines[idx + 1].strip()
-                                                    if raw_text:
-                                                        break
-                                else:
-                                    raw_text = pdf_text
-                                    
-                                found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, lg, kw)
-                                ws[target_cell] = found_val
+                            pdf_text = ""
+                            pdf_lines = []
+                            with pdfplumber.open(inv_file) as pdf:
+                                for page in pdf.pages:
+                                    t = page.extract_text()
+                                    if t:
+                                        pdf_text += t + "\n"
+                                        pdf_lines.extend(t.split("\n"))
+                            
+                            current_inv_number = f"INV_{inv_sr_number}"
+                            current_inv_date = ""
+                            
+                            # Header Fields Mapping (केवल पहली इनवॉइस के लिए C2/D2 में लिख सकते हैं या रिफ़र कर सकते हैं)
+                            for field, r_info in rules.items():
+                                kw = r_info.get("keyword", "").strip()
+                                pos = r_info.get("position", "Right (आगे)")
+                                target_cell = r_info.get("cell", "").strip()
+                                mode = r_info.get("match_mode", "Exact Word")
+                                stop_kw = r_info.get("stop_kw", "").strip()
+                                flt = r_info.get("filter", "None")
+                                lg = r_info.get("logic", "").strip()
                                 
-                                if "inv. no" in field.lower() or "invoice no" in field.lower():
-                                    if found_val: invoice_number = found_val
+                                if pos != "Table Column" and target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
+                                    raw_text = ""
+                                    if kw:
+                                        for line_i, line in enumerate(pdf_lines):
+                                            if kw.lower() in line.lower():
+                                                if pos == "Right (आगे)":
+                                                    start_idx = line.lower().find(kw.lower()) + len(kw)
+                                                    raw_text = line[start_idx:].strip()
+                                                    if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
+                                                    if raw_text: break
+                                                elif pos == "Below (नीचे)":
+                                                    if line_i + 1 < len(pdf_lines):
+                                                        raw_text = pdf_lines[line_i + 1].strip()
+                                                        if raw_text: break
+                                    else:
+                                        raw_text = pdf_text
+                                        
+                                    found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, lg, kw)
+                                    
+                                    # केवल 1st इनवॉइस का हेडर C2/D2 में भरेगा
+                                    if inv_idx == 0:
+                                        ws[target_cell] = found_val
+                                    
+                                    if "inv. no" in field.lower() or "invoice no" in field.lower():
+                                        if found_val:
+                                            current_inv_number = found_val
+                                            if inv_idx == 0: first_inv_no = found_val
+                                    if "date" in field.lower():
+                                        if found_val: current_inv_date = found_val
 
-                        # 🎯 2. Item Table Mapping (Safe Module Calling with Date Support)
-                        parsed_items = extract_item_table_rows(pdf_lines)
-                        invoice_date_val = ws["D2"].value if ws["D2"].value else ""
-                        ws = map_items_to_excel(ws, parsed_items, invoice_number, invoice_date_val)
+                            # 🎯 ITEM TABLE MAPPING FOR THIS INVOICE
+                            parsed_items = extract_item_table_rows(pdf_lines)
+                            ws, overall_item_sr, excel_write_row = map_items_to_excel(
+                                ws, parsed_items, 
+                                inv_sr_no=inv_sr_number, 
+                                start_overall_sr=overall_item_sr, 
+                                start_excel_row=excel_write_row, 
+                                default_invoice_no=current_inv_number, 
+                                default_invoice_date=current_inv_date
+                            )
 
                         output = BytesIO()
                         wb.save(output)
                         
                         short_shipper = selected_shipper.split(" ")[0].lower()
-                        clean_inv = re.sub(r'[\\/*?:"<>|]', "", invoice_number)
-                        final_filename = f"{clean_inv}_{short_shipper}.xlsx"
+                        clean_inv = re.sub(r'[\\/*?:"<>|]', "", first_inv_no)
+                        final_filename = f"{clean_inv}_{short_shipper}_MultiInv.xlsx"
                         
                         st.session_state["processed_file_ready"] = {"filename": final_filename, "data": output.getvalue()}
-                        st.success(f"🎉 फ़ाइल '{final_filename}' सफलतापुर्वक तैयार है!")
+                        st.success(f"🎉 सफलता! कुल {len(uploaded_pdf_files)} इनवॉइस की फ़ाइल '{final_filename}' तैयार है!")
                 
                 if st.session_state.get("processed_file_ready", None):
                     st.download_button(
