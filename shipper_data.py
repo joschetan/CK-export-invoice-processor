@@ -10,6 +10,9 @@ from io import BytesIO
 # Import core extraction logic from separated engine module
 from pdf_engine import extract_header_value
 
+# Import Universal Test Suite module
+from test_suite import render_universal_test_suite
+
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
 def get_val_case_insensitive(d, *keys, default=""):
@@ -398,3 +401,6 @@ def render_shipper_data():
                         st.balloons()
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
+
+            # 🎯 ATTACHED UNIVERSAL TEST SUITE AT THE VERY BOTTOM
+            render_universal_test_suite(selected_shipper)
