@@ -3,10 +3,12 @@ import requests
 import json
 import base64
 import pdfplumber
-import re
 import time
 import os
 from io import BytesIO
+
+# Import core extraction logic from separated engine module
+from pdf_engine import extract_header_value
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
@@ -117,43 +119,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                 if show_toast: st.toast(f"✅ गूगल शीट से रूल्स और फाइल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
-
-def apply_rule_filter(raw_text, mode, stop_kw, flt):
-    if not raw_text: return ""
-    text = raw_text.strip()
-    if text.startswith(":"): text = text[1:].strip()
-    
-    if mode == "Word Position":
-        w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
-        parts = text.split()
-        text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
-    elif mode == "After Word" and stop_kw:
-        if stop_kw.lower() in text.lower():
-            start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
-            text = text[start_idx:].strip()
-            if text.startswith(":"): text = text[1:].strip()
-    elif mode == "Between Keywords" and stop_kw:
-        if stop_kw.lower() in text.lower():
-            text = text.lower().split(stop_kw.lower())[0].strip()
-    elif mode == "Exact Word":
-        parts = text.split()
-        text = parts[0].strip() if parts else ""
-    elif mode == "Full Line":
-        text = text.split("\n")[0].strip()
-
-    if flt == "Container Number (ISO Format)":
-        cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
-        return cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
-    elif flt == "Numbers Only":
-        nums = re.findall(r'[\d,.]+', text)
-        return nums[0].strip() if nums else ""
-    elif flt == "Letters Only":
-        return re.sub(r'[^A-Za-z\s]', '', text).strip()
-    elif flt == "Clean Date (DD/MM/YYYY)":
-        d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
-        return d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
-
-    return text.strip()
 
 @st.dialog("🧪 Live Extraction Field Test Result")
 def show_field_test_dialog(field_name, rule_data, result_val):
@@ -282,7 +247,6 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            # 🎯 SECTION 3 DROPDOWNS FULLY UPDATED WITH ALL OPTIONS
             pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below", "Table Row Item", "Table Row Index"]
             mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
             filter_options = ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)", "Clean Date (DD/MM/YYYY)"]
@@ -331,27 +295,8 @@ def render_shipper_data():
                         if not curr_pdf_lines:
                             st.toast("⚠️ पहले Section 2 में PDF अपलोड करें!")
                         else:
-                            raw_t = ""
-                            if ky:
-                                for line_i, line in enumerate(curr_pdf_lines):
-                                    if ky.lower() in line.lower():
-                                        if pos == "Right (आगे)":
-                                            start_idx = line.lower().find(ky.lower()) + len(ky)
-                                            raw_t = line[start_idx:].strip()
-                                            if raw_t.startswith(":"): raw_t = raw_t[1:].strip()
-                                            if raw_t: break
-                                        elif pos == "Below (नीचे)":
-                                            if line_i + 1 < len(curr_pdf_lines):
-                                                raw_t = curr_pdf_lines[line_i + 1].strip()
-                                                if raw_t: break
-                                        elif pos == "2 Lines Below":
-                                            if line_i + 2 < len(curr_pdf_lines):
-                                                raw_t = curr_pdf_lines[line_i + 2].strip()
-                                                if raw_t: break
-                            else:
-                                raw_t = curr_pdf_text
-                                
-                            res_val = apply_rule_filter(raw_t, m_mode, stop_kw, final_flt)
+                            # Clean invocation to external engine module
+                            res_val = extract_header_value(curr_pdf_lines, curr_pdf_text, ky, pos, m_mode, stop_kw, final_flt)
                             
                             rule_summary = {
                                 "keyword": ky, "position": pos, "cell": cl,
@@ -384,7 +329,6 @@ def render_shipper_data():
             with ic5: st.markdown("**Del**")
             st.write("---")
             
-            # 🎯 SECTION 4 DROPDOWN FULLY UPDATED
             rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
             
             for item_field in list(item_rules.keys()):
