@@ -2,6 +2,7 @@ import streamlit as st
 import openpyxl
 import pdfplumber
 import re
+import base64
 from io import BytesIO
 
 from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
@@ -103,14 +104,23 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🛡️ SAFEGUARD FOR TEMPLATE LOADING (Prevents BadZipFile error)
+                    # 🎯 100% RELIABLE TEMPLATE LOADING LOGIC
                     wb = None
                     if "uploaded_files" in shipper_info and "Full Job Excel Format File" in shipper_info["uploaded_files"]:
-                        original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
-                        if original_template_bytes and len(original_template_bytes) > 100:
+                        tpl_data = shipper_info["uploaded_files"]["Full Job Excel Format File"]
+                        
+                        # Convert to bytes if string/base64
+                        if isinstance(tpl_data, str) and len(tpl_data) > 0:
                             try:
-                                wb = openpyxl.load_workbook(BytesIO(original_template_bytes))
+                                tpl_data = base64.b64decode(tpl_data)
                             except Exception:
+                                pass
+                                
+                        if isinstance(tpl_data, bytes) and len(tpl_data) > 100:
+                            try:
+                                wb = openpyxl.load_workbook(BytesIO(tpl_data))
+                            except Exception as e:
+                                st.warning(f"⚠️ टेम्पलेट लोड करने में दिक्कत: {e}। नई वर्कबुक बनाई जा रही है।")
                                 wb = openpyxl.Workbook()
                     
                     if wb is None:
