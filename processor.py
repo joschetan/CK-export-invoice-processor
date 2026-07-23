@@ -105,30 +105,31 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 FOOLPROOF TEMPLATE LOADING LOGIC
+                    # 🎯 FOOLPROOF GOOGLE SHEET BASE64 TEMPLATE LOADER
                     wb = None
                     uploaded_files = shipper_info.get("uploaded_files", {})
-                    tpl_bytes = uploaded_files.get("Full Job Excel Format File", b"")
+                    tpl_data = uploaded_files.get("Full Job Excel Format File", b"")
                     
-                    # 1. Try loading from session memory (Google Sheet / Uploaded)
-                    if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 100:
+                    if isinstance(tpl_data, str) and len(tpl_data.strip()) > 0:
                         try:
-                            wb = openpyxl.load_workbook(BytesIO(tpl_bytes))
+                            clean_b64 = tpl_data.lstrip("'").strip().replace(" ", "+")
+                            missing_padding = len(clean_b64) % 4
+                            if missing_padding:
+                                clean_b64 += '=' * (4 - missing_padding)
+                            tpl_data = base64.b64decode(clean_b64)
+                        except Exception:
+                            pass
+                    
+                    if isinstance(tpl_data, bytes) and len(tpl_data) > 100:
+                        try:
+                            wb = openpyxl.load_workbook(BytesIO(tpl_data))
                         except Exception:
                             wb = None
 
-                    # 2. Try loading from local fallback "template.xlsx" if session failed
-                    if wb is None and os.path.exists("template.xlsx"):
-                        try:
-                            wb = openpyxl.load_workbook("template.xlsx")
-                        except Exception:
-                            wb = None
-
-                    # 3. Absolute last resort fallback
+                    # Fallback to blank workbook only if completely missing
                     if wb is None:
                         wb = openpyxl.Workbook()
                         
-                    # Target "INV" sheet as confirmed by user
                     ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
                     
                     first_inv_no = "INV"
@@ -249,29 +250,3 @@ def render_processor():
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
                 st.session_state["processed_file_ready"] = None
-                # 🎯 FOOLPROOF GOOGLE SHEET BASEG64 TEMPLATE LOADER
-                    wb = None
-                    uploaded_files = shipper_info.get("uploaded_files", {})
-                    tpl_data = uploaded_files.get("Full Job Excel Format File", b"")
-                    
-                    if isinstance(tpl_data, str) and len(tpl_data.strip()) > 0:
-                        try:
-                            clean_b64 = tpl_data.lstrip("'").strip().replace(" ", "+")
-                            missing_padding = len(clean_b64) % 4
-                            if missing_padding:
-                                clean_b64 += '=' * (4 - missing_padding)
-                            tpl_data = base64.b64decode(clean_b64)
-                        except Exception:
-                            pass
-                    
-                    if isinstance(tpl_data, bytes) and len(tpl_data) > 100:
-                        try:
-                            wb = openpyxl.load_workbook(BytesIO(tpl_data))
-                        except Exception:
-                            wb = None
-
-                    # Fallback to blank workbook only if completely missing
-                    if wb is None:
-                        wb = openpyxl.Workbook()
-                        
-                    ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
