@@ -33,17 +33,17 @@ def ensure_default_shipper():
             "uploaded_files": {},
             "mapping_rules": initial_rules,
             "item_table_rules": {
-                "RITC / HS Code": {"col": "L", "type": "PDF Row Item", "rule": "HS Code"},
+                "RITC / HS Code": {"col": "K", "type": "PDF Row Item", "rule": "HS Code"},
                 "Description of Goods": {"col": "M", "type": "PDF Row Item", "rule": "Description"},
-                "Quantity": {"col": "S", "type": "PDF Row Item", "rule": "Qty Number"},
+                "Quantity": {"col": "N", "type": "PDF Row Item", "rule": "Qty Number"},
                 "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "SET"},
-                "Rate in": {"col": "O", "type": "PDF Row Item", "rule": "Rate"},
+                "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
                 "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
-                "Drawback SR Code": {"col": "N", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
-                "IGST Status": {"col": "U", "type": "Excel Cell Reference", "rule": "B19"},
-                "Taxable Value (INR)": {"col": "V", "type": "PDF Row Item", "rule": "Taxable Amt"},
-                "IGST Rate (%)": {"col": "W", "type": "PDF Row Item", "rule": "IGST %"},
-                "IGST Amount (INR)": {"col": "X", "type": "PDF Row Item", "rule": "IGST Amt"},
+                "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
+                "IGST Status": {"col": "V", "type": "Excel Cell Reference", "rule": "B19"},
+                "Taxable Value (INR)": {"col": "W", "type": "PDF Row Item", "rule": "Taxable Amt"},
+                "IGST Rate (%)": {"col": "X", "type": "PDF Row Item", "rule": "IGST %"},
+                "IGST Amount (INR)": {"col": "Y", "type": "PDF Row Item", "rule": "IGST Amt"},
                 "Nt.Wt(KGS)": {"col": "AB", "type": "PDF Row Item", "rule": "Net Weight"}
             }
         }
@@ -198,7 +198,7 @@ def add_item_col_dialog(selected_shipper):
     st.write("यहाँ आइटम टेबल के लिए नया कॉलम हेडिंग और एक्सेल कॉलम जोड़ें:")
     c_name = st.text_input("Heading Name (उदा: Net Weight, Boxes, Size):")
     c_col = st.text_input("Excel Column Letter (उदा: L, M, N, Z):").upper()
-    c_type = st.selectbox("Rule Type:", ["PDF Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"])
+    c_type = st.selectbox("Rule Type:", ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"])
     c_rule = st.text_input("Rule Detail / Value (उदा: B19, SET, PCS, Numbers Only):")
     
     if st.button("Confirm & Add Item Column", type="primary"):
@@ -282,8 +282,9 @@ def render_shipper_data():
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
             
-            pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below"]
-            mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords"]
+            # 🎯 SECTION 3 DROPDOWNS FULLY UPDATED WITH ALL OPTIONS
+            pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below", "Table Row Item", "Table Row Index"]
+            mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
             filter_options = ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)", "Clean Date (DD/MM/YYYY)"]
             
             c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.8, 0.8, 1.2])
@@ -383,7 +384,8 @@ def render_shipper_data():
             with ic5: st.markdown("**Del**")
             st.write("---")
             
-            rule_type_options = ["PDF Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
+            # 🎯 SECTION 4 DROPDOWN FULLY UPDATED
+            rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
             
             for item_field in list(item_rules.keys()):
                 ir = item_rules[item_field]
@@ -412,7 +414,7 @@ def render_shipper_data():
                 files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
-                    # 1. Header & Item Rules
+                    # 1. Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
