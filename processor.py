@@ -6,6 +6,7 @@ from io import BytesIO
 
 from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
+from pdf_engine import apply_value_replacement
 
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
@@ -17,7 +18,7 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
         parts = text.split()
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
-        if stop_kw.lower() in text.lower():
+        if "=" not in stop_kw and stop_kw.lower() in text.lower():
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
             text = text[start_idx:].strip()
             if text.startswith(":"): text = text[1:].strip()
@@ -29,13 +30,19 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
 
     if flt == "Clean Date (DD/MM/YYYY)":
         d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
-        return d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
+        text = d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
     elif flt == "Container Number (ISO Format)":
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
-        return cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
+        text = cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
     elif flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
-        return nums[0].strip() if nums else ""
+        text = nums[0].strip() if nums else ""
+
+    # 🎯 APPLY MULTI-CONDITION VALUE REPLACEMENT (FIND=REPLACE)
+    if stop_kw and "=" in stop_kw:
+        text = apply_value_replacement(text, stop_kw)
+    if flt and "=" in flt:
+        text = apply_value_replacement(text, flt)
 
     return text.strip()
 
@@ -116,7 +123,7 @@ def render_processor():
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             pos = r_info.get("position", "Right (आगे)")
-                            target_cell = r_info.get("cell", "").strip()
+                            target_cell = r_info.get("cell", "").strip().upper()
                             mode = r_info.get("match_mode", "Exact Word")
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
@@ -140,9 +147,16 @@ def render_processor():
                             found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
                             inv_data_dict[field.lower()] = found_val
                             
-                            if target_cell and len(target_cell) >= 2 and target_cell[1].isdigit():
-                                if inv_sr_number == 1:
-                                    ws[target_cell] = found_val
+                            # 🎯 SMART CELL WRITE LOGIC (Support Static like 'AW2' AND Dynamic Column like 'AW')
+                            if target_cell:
+                                if target_cell.isalpha():
+                                    # If only column letter provided (e.g. AW, AX), auto-append current invoice row
+                                    dynamic_cell = f"{target_cell}{1 + inv_sr_number}"
+                                    ws[dynamic_cell] = found_val
+                                elif len(target_cell) >= 2 and target_cell[1].isdigit():
+                                    # Fixed static cell (e.g. AW2) -> write only for 1st invoice
+                                    if inv_sr_number == 1:
+                                        ws[target_cell] = found_val
                             
                             if "inv. no" in field.lower() or "invoice no" in field.lower():
                                 if found_val:
