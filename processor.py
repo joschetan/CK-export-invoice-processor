@@ -29,7 +29,7 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
         text = text.split("\n")[0].strip()
 
     # 🎯 FILTERS IMPLEMENTATION
-    if flt == "Text Inside Parentheses ()":
+    if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
         bracket_match = re.search(r'\((.*?)\)', text)
         text = bracket_match.group(1).strip() if bracket_match else text.strip()
     elif flt == "Clean Date (DD/MM/YYYY)":
