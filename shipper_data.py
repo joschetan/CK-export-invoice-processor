@@ -34,6 +34,7 @@ def get_default_item_rules():
         "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "SET"},
         "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
         "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
+        "ROSCTL": {"col": "R", "type": "Smart Detection", "rule": "ROSCTL:60:19"},
         "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
         "Taxable Value (INR)": {"col": "W", "type": "PDF Row Item", "rule": "Taxable Amt"},
         "IGST Rate (%)": {"col": "X", "type": "PDF Row Item", "rule": "IGST %"},
@@ -51,7 +52,7 @@ def ensure_default_shipper():
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
             "mapping_rules": {},
-            "item_table_rules": get_default_item_rules(), # 🎯 Default fallback restored
+            "item_table_rules": get_default_item_rules(),
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                 "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -70,8 +71,11 @@ def fetch_data_from_google_sheet(show_toast=False):
 
             data = response.json()
             
-            # Temporary storage to check if item rules are received
             fetched_item_rules = {}
+            fetched_header_rules = {}
+
+            # Item Column Letters list for Auto-Detection
+            item_columns = ["K", "M", "N", "O", "P", "Q", "R", "S", "W", "X", "Y", "AB"]
 
             # 1. Fetch Rules
             rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
@@ -83,7 +87,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                         rule_kind = get_val_case_insensitive(row, "RuleKind", "kind", default="header").lower()
                         cell_val = get_val_case_insensitive(row, "Cell", "cell", "col").strip().upper()
                         
-                        # 🛡️ Guard: Strictly block legacy IGST Status / B19 / V Column Rules from Sheet
+                        # 🛡️ Guard: Strictly block legacy IGST Status / B19 / V Column Rules
                         if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
                             continue
 
@@ -104,14 +108,15 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     }
                                 }
                             
-                            if "item" in rule_kind:
+                            # 🎯 AUTO-CLASSIFICATION: If RuleKind is 'item' OR Cell matches an Item Column (like R, K, N, etc.)
+                            if "item" in rule_kind or cell_val in item_columns or f_name.upper() == "ROSCTL":
                                 fetched_item_rules.setdefault(target_key, {})[f_name] = {
-                                    "col": cell_val,
-                                    "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
+                                    "col": cell_val if cell_val else "R",
+                                    "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="Smart Detection"),
                                     "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
                                 }
                             else:
-                                st.session_state["shipper_database"][target_key]["mapping_rules"][f_name] = {
+                                fetched_header_rules.setdefault(target_key, {})[f_name] = {
                                     "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
                                     "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
                                     "cell": cell_val,
@@ -121,8 +126,13 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                                 }
 
-                # Populate Item rules safely without making Section 4 blank
+                # Populate rules safely
                 for s_key, s_data in st.session_state["shipper_database"].items():
+                    if s_key in fetched_header_rules:
+                        # 🎯 Filter out ROSCTL from Header mapping if present
+                        filtered_headers = {k: v for k, v in fetched_header_rules[s_key].items() if k.upper() != "ROSCTL"}
+                        s_data["mapping_rules"] = filtered_headers
+                        
                     if s_key in fetched_item_rules and fetched_item_rules[s_key]:
                         s_data["item_table_rules"] = fetched_item_rules[s_key]
                     elif not s_data.get("item_table_rules"):
@@ -322,8 +332,8 @@ def render_shipper_data():
             curr_pdf_text = st.session_state.get("cached_pdf_text", "")
 
             for field in list(current_rules.keys()):
-                # Filter out legacy IGST Mode / B19 / V cell rules from UI
-                if field.lower() in ["igst status", "igst mode"] or current_rules[field].get("cell", "").strip().upper() in ["V", "B19"]:
+                # 🎯 Strictly filter out ROSCTL or Item Rules from Header Section
+                if field.lower() in ["igst status", "igst mode", "rosctl"] or current_rules[field].get("cell", "").strip().upper() in ["V", "B19", "R"]:
                     continue
 
                 s_val = current_rules[field]
@@ -455,7 +465,7 @@ def render_shipper_data():
                 files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
-                    # 1. Rules
+                    # 1. Header Rules (RuleKind = 'header')
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
@@ -464,6 +474,7 @@ def render_shipper_data():
                             "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None"),
                             "RuleKind": "header"
                         })
+                    # 2. Item Rules (RuleKind = 'item')
                     for i_field, i_info in s_data.get("item_table_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": i_field, "Keyword": i_info.get("rule", ""),
@@ -473,7 +484,7 @@ def render_shipper_data():
                             "RuleKind": "item"
                         })
                         
-                    # 2. Template File
+                    # 3. Template File
                     tpl_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
                     if tpl_bytes:
                         b64_str = base64.b64encode(tpl_bytes).decode('utf-8')
