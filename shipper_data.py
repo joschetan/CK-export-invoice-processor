@@ -152,11 +152,17 @@ def fetch_data_from_google_sheet(show_toast=False):
 def show_field_test_dialog(field_name, rule_data, result_val):
     st.write(f"### 🔍 Field: **`{field_name}`**")
     st.markdown("#### 📋 Applied Rule Parameters:")
+    
+    raw_cell = str(rule_data.get('cell', 'Blank')).strip()
+    display_cell = raw_cell
+    if raw_cell and raw_cell.isalpha():
+        display_cell = f"{raw_cell} (Dynamic Row)"
+
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown(f"* **Keyword:** `{rule_data.get('keyword', 'N/A')}`")
         st.markdown(f"* **Position:** `{rule_data.get('position', 'Right (आगे)')}`")
-        st.markdown(f"* **Target Cell:** `{rule_data.get('cell', 'Blank')}`")
+        st.markdown(f"* **Target Cell:** `{display_cell}`")
     with col_b:
         st.markdown(f"* **Match Mode:** `{rule_data.get('match_mode', 'Exact Word')}`")
         st.markdown(f"* **Stop / Word No.:** `{rule_data.get('stop_kw', 'N/A')}`")
