@@ -57,7 +57,11 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
     elif mode == "Full Line":
         text = text.split("\n")[0].strip()
 
-    if flt == "Container Number (ISO Format)":
+    # 🎯 FILTERS IMPLEMENTATION
+    if flt == "Text Inside Parentheses ()":
+        bracket_match = re.search(r'\((.*?)\)', text)
+        text = bracket_match.group(1).strip() if bracket_match else text.strip()
+    elif flt == "Container Number (ISO Format)":
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
         text = cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
     elif flt == "Numbers Only":
