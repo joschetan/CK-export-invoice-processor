@@ -1,28 +1,5 @@
 import re
 
-def format_to_ddmmyyyy(raw_date_str):
-    if not raw_date_str:
-        return ""
-    
-    date_str = str(raw_date_str).strip()
-    
-    # 1. Regex to extract clean DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
-    d_match = re.search(r'\b(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})\b', date_str)
-    if d_match:
-        part1, part2, part3 = d_match.group(1), d_match.group(2), d_match.group(3)
-        
-        # If year is in front (YYYY.MM.DD)
-        if len(part1) == 4:
-            yyyy, mm, dd = part1, part2.zfill(2), part3.zfill(2)
-        else:
-            dd, mm, yyyy = part1.zfill(2), part2.zfill(2), part3
-            if len(yyyy) == 2:
-                yyyy = f"20{yyyy}"
-                
-        return f"{dd}/{mm}/{yyyy}"
-        
-    return ""
-
 def extract_item_table_rows(pdf_lines):
     parsed_items = []
     
@@ -67,7 +44,12 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     overall_sr = start_overall_sr
     
     # Clean Date Formatting (DD/MM/YYYY)
-    clean_date = format_to_ddmmyyyy(default_invoice_date)
+    clean_date = ""
+    d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', str(default_invoice_date))
+    if d_match:
+        clean_date = d_match.group(0).replace(".", "/").replace("-", "/")
+    elif default_invoice_date and len(str(default_invoice_date)) >= 8 and not str(default_invoice_date).lower().startswith("inv"):
+        clean_date = str(default_invoice_date)
 
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
@@ -110,7 +92,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 
                 raw_val = ""
                 
-                # 🎯 STRICT HIGHEST PRIORITY: IGST Fields Check BEFORE General Rate
+                # 🎯 FIXED PRIORITY: Check IGST % First BEFORE checking normal "rate"
                 if "igst %" in r_val_lower or "igst rate" in f_name_lower or ("igst" in f_name_lower and "%" in f_name_lower) or ("igst" in f_name_lower and "rate" in f_name_lower):
                     raw_val = nums[5] if len(nums) > 5 else ""
                 elif "igst amt" in r_val_lower or "igst amount" in f_name_lower or ("igst" in f_name_lower and "amt" in f_name_lower):
@@ -127,12 +109,12 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     raw_val = nums[0] if len(nums) > 0 else ""
                 elif "qty" in r_val_lower or "quantity" in f_name_lower:
                     raw_val = nums[1] if len(nums) > 1 else ""
+                elif "rate" in r_val_lower or "rate" in f_name_lower:
+                    raw_val = nums[2] if len(nums) > 2 else ""
                 elif "amount usd" in r_val_lower or "goods value" in f_name_lower or "amount" in r_val_lower:
                     raw_val = nums[3] if len(nums) > 3 else ""
                 elif "taxable" in r_val_lower or "taxable" in f_name_lower:
                     raw_val = nums[4] if len(nums) > 4 else ""
-                elif "rate" in r_val_lower or "rate" in f_name_lower:
-                    raw_val = nums[2] if len(nums) > 2 else ""
                 
                 try:
                     ws[cell_ref] = float(str(raw_val).replace(",", ""))
