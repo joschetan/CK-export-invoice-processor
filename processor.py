@@ -10,9 +10,6 @@ from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
 from pdf_engine import apply_value_replacement
 
-TEMPLATE_DIR = "uploaded_templates"
-DEFAULT_TEMPLATE = "default_template.xlsx"  # Main Project Folder Template File
-
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
     text = raw_text.strip()
@@ -108,43 +105,27 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 SAFE & GUARANTEED TEMPLATE LOADING
+                    # 🎯 DIRECT TEMPLATE LOADING FROM SHIPPER DATABASE (NO SKIP)
                     wb = None
+                    uploaded_files = shipper_info.get("uploaded_files", {})
                     
-                    # Priority 1: Check from uploaded_files in session_state
-                    if "uploaded_files" in shipper_info and "Full Job Excel Format File" in shipper_info["uploaded_files"]:
-                        tpl_data = shipper_info["uploaded_files"]["Full Job Excel Format File"]
+                    if "Full Job Excel Format File" in uploaded_files:
+                        tpl_data = uploaded_files["Full Job Excel Format File"]
                         
+                        # Convert to bytes if String/Base64
                         if isinstance(tpl_data, str) and len(tpl_data) > 0:
                             try:
                                 tpl_data = base64.b64decode(tpl_data)
                             except Exception:
                                 pass
-                                
+                        
                         if isinstance(tpl_data, bytes) and len(tpl_data) > 100:
                             try:
                                 wb = openpyxl.load_workbook(BytesIO(tpl_data))
-                            except Exception:
+                            except Exception as e:
                                 wb = None
 
-                    # Priority 2: Check local uploaded_templates directory
-                    if wb is None:
-                        clean_s_name = re.sub(r'[^A-Za-z0-9]', '_', selected_shipper)
-                        local_tpl_path = os.path.join(TEMPLATE_DIR, f"{clean_s_name}.xlsx")
-                        if os.path.exists(local_tpl_path) and os.path.getsize(local_tpl_path) > 100:
-                            try:
-                                wb = openpyxl.load_workbook(local_tpl_path)
-                            except Exception:
-                                wb = None
-
-                    # Priority 3: Load default template from root folder
-                    if wb is None and os.path.exists(DEFAULT_TEMPLATE):
-                        try:
-                            wb = openpyxl.load_workbook(DEFAULT_TEMPLATE)
-                        except Exception:
-                            wb = None
-
-                    # Priority 4: Fallback to blank workbook
+                    # Fallback to new workbook only if no template found/valid
                     if wb is None:
                         wb = openpyxl.Workbook()
                         
