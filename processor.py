@@ -249,3 +249,29 @@ def render_processor():
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
                 st.session_state["processed_file_ready"] = None
+                # 🎯 FOOLPROOF GOOGLE SHEET BASEG64 TEMPLATE LOADER
+                    wb = None
+                    uploaded_files = shipper_info.get("uploaded_files", {})
+                    tpl_data = uploaded_files.get("Full Job Excel Format File", b"")
+                    
+                    if isinstance(tpl_data, str) and len(tpl_data.strip()) > 0:
+                        try:
+                            clean_b64 = tpl_data.lstrip("'").strip().replace(" ", "+")
+                            missing_padding = len(clean_b64) % 4
+                            if missing_padding:
+                                clean_b64 += '=' * (4 - missing_padding)
+                            tpl_data = base64.b64decode(clean_b64)
+                        except Exception:
+                            pass
+                    
+                    if isinstance(tpl_data, bytes) and len(tpl_data) > 100:
+                        try:
+                            wb = openpyxl.load_workbook(BytesIO(tpl_data))
+                        except Exception:
+                            wb = None
+
+                    # Fallback to blank workbook only if completely missing
+                    if wb is None:
+                        wb = openpyxl.Workbook()
+                        
+                    ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
