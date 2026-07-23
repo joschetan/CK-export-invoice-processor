@@ -98,6 +98,26 @@ def render_universal_test_suite(selected_shipper):
                     sample_res = rule_val
                 elif rule_type == "Excel Cell Reference":
                     sample_res = f"={rule_val}"
+                elif rule_type == "Smart Detection":
+                    if ":" in rule_val:
+                        smart_parts = [p.strip() for p in rule_val.split(":")]
+                        if len(smart_parts) == 3:
+                            search_kw = smart_parts[0].upper()
+                            match_val = smart_parts[1]
+                            fallback_val = smart_parts[2]
+                            
+                            if search_kw in str(pdf_text).upper():
+                                sample_res = match_val
+                            else:
+                                sample_res = fallback_val
+                        else:
+                            sample_res = rule_val
+                    else:
+                        line_upper = first_item_found['line'].upper()
+                        if "PCS" in line_upper or "PC" in line_upper:
+                            sample_res = "PCS"
+                        else:
+                            sample_res = rule_val if rule_val else "SET"
                 else:
                     sample_res = f"Mapped via {rule_type} ({rule_val})"
 
