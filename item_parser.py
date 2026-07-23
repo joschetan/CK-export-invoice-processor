@@ -1,4 +1,5 @@
 import re
+from pdf_engine import detect_igst_status
 
 def extract_item_table_rows(pdf_lines):
     parsed_items = []
@@ -39,26 +40,34 @@ def extract_item_table_rows(pdf_lines):
                 
     return parsed_items
 
-def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date=""):
+def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws=""):
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
     # 🎯 TEST LOGIC FOR J COLUMN:
-    # Pehle dekhenge ki processor se kya aa raha hai, agar wo khali hai to direct '18/07/2026' likhenge
     raw_dt = str(default_invoice_date).strip()
     if raw_dt and raw_dt.lower() != "none" and raw_dt != "T":
         clean_date = raw_dt
     else:
         clean_date = "18/07/2026"
 
+    # 🛡️ 0% RISK LOGIC FOR V COLUMN (IGST STATUS: LUT / P)
+    detected_v_status = detect_igst_status(pdf_text, lut_keywords=lut_kws, paid_keywords=paid_kws)
+    if detected_v_status not in ["LUT", "P"]:
+        # Fallback to LUT if undetermined to prevent blank/garbage values
+        v_column_value = "LUT"
+    else:
+        v_column_value = detected_v_status
+
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
         
-        # 🎯 STRICTLY SYSTEM COLUMNS ONLY (G, H, I, J)
+        # 🎯 STRICTLY SYSTEM COLUMNS ONLY (G, H, I, J, V)
         ws[f"G{curr_row}"] = inv_sr_no                    # G = Inv Sr No
         ws[f"H{curr_row}"] = item_sr_no                   # H = Item Sr No
         ws[f"I{curr_row}"] = default_invoice_no           # I = Invoice No
-        ws[f"J{curr_row}"] = clean_date                   # J = Clean Date (TEST PRINT)
+        ws[f"J{curr_row}"] = clean_date                   # J = Clean Date
+        ws[f"V{curr_row}"] = v_column_value               # V = IGST Status (LUT / P Only)
         
         nums = item.get("nums", [])
         
@@ -68,7 +77,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             rule_type = r_info.get("type", "PDF Row Item")
             rule_val = r_info.get("rule", "").strip()
             
-            if not col_letter:
+            # Skip if target is column V as it is strictly handled above by system logic
+            if not col_letter or col_letter == "V":
                 continue
                 
             cell_ref = f"{col_letter}{curr_row}"
