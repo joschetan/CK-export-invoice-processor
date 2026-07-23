@@ -9,23 +9,20 @@ def extract_item_table_rows(pdf_lines):
         if re.match(r'^\d{8}\b', line_str):
             parts = [p.strip() for p in line_str.split() if p.strip()]
             if len(parts) >= 3:
-                # Fully Dynamic Dictionary - No Fixed Keys
                 item_dict = {
                     "raw_parts": parts,
                     "hs_code": parts[0]
                 }
                 
-                # Extract all floating point numbers (Amounts, Qty, Rates, Weights)
+                # Extract all floating point/decimal numbers dynamically
                 nums = re.findall(r'[\d,]+\.\d{2,3}', line_str)
-                
-                # Dynamic positional list of numbers extracted from PDF line
                 item_dict["nums"] = nums
                 
-                # Finding DBK Code if present (6-digit or 10-digit with suffix)
+                # Dynamic DBK Code Match (6-10 digits with optional letter suffix)
                 dbk_match = re.search(r'\b\d{6}[A-Za-z]?\b|\b\d{10}[A-Za-z]?\b', line_str)
                 item_dict["dbk_found"] = dbk_match.group(0) if dbk_match else ""
 
-                # Dynamic Description (Text between HS Code and First Number)
+                # Universal Description Extraction (Text between HS Code and First Numeric Value)
                 if len(nums) > 0:
                     first_num = nums[0]
                     start_pos = len(parts[0])
@@ -35,6 +32,8 @@ def extract_item_table_rows(pdf_lines):
                         if item_dict["dbk_found"]:
                             desc_text = desc_text.replace(item_dict["dbk_found"], "").strip()
                         item_dict["description_text"] = desc_text
+                else:
+                    item_dict["description_text"] = " ".join(parts[1:]) if len(parts) > 1 else ""
                         
                 parsed_items.append(item_dict)
                 
@@ -93,7 +92,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 
                 raw_val = ""
                 
-                # Flexible Rule Detection
                 if "hs" in r_val_lower or "ritc" in f_name_lower or "hs code" in r_val_lower:
                     raw_val = item.get("hs_code", "")
                 elif "description" in r_val_lower or "description" in f_name_lower:
