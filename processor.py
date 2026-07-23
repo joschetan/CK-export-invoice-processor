@@ -99,10 +99,6 @@ def render_processor():
                     rules = shipper_info.get("mapping_rules", {})
                     item_table_rules = shipper_info.get("item_table_rules", {})
                     
-                    igst_cfg = shipper_info.get("igst_config", {})
-                    lut_kws = igst_cfg.get("lut_keywords", "")
-                    paid_kws = igst_cfg.get("paid_keywords", "")
-                    
                     if "uploaded_files" in shipper_info and "Full Job Excel Format File" in shipper_info["uploaded_files"]:
                         original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
                         wb = openpyxl.load_workbook(BytesIO(original_template_bytes))
@@ -157,14 +153,12 @@ def render_processor():
                             found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
                             inv_data_dict[field.lower()] = found_val
                             
-                            # 🎯 SMART CELL WRITE LOGIC (Support Static like 'AW2' AND Dynamic Column like 'AW')
+                            # 🎯 SMART CELL WRITE LOGIC
                             if target_cell:
                                 if target_cell.isalpha():
-                                    # If only column letter provided (e.g. AW, AX), auto-append current invoice row
                                     dynamic_cell = f"{target_cell}{1 + inv_sr_number}"
                                     ws[dynamic_cell] = found_val
                                 elif len(target_cell) >= 2 and target_cell[1].isdigit():
-                                    # Fixed static cell (e.g. AW2) -> write only for 1st invoice
                                     if inv_sr_number == 1:
                                         ws[target_cell] = found_val
                             
@@ -173,7 +167,6 @@ def render_processor():
                                     current_inv_number = found_val
                                     if inv_sr_number == 1: first_inv_no = found_val
                             
-                            # 🎯 Invoice Date strict extraction fix
                             if "date" in field.lower() or "dt" in field.lower():
                                 d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', found_val)
                                 if d_match:
@@ -181,7 +174,7 @@ def render_processor():
                                 elif found_val and not found_val.lower().startswith("inv"):
                                     current_inv_date = found_val
 
-                        # MULTI-INVOICE SUMMARY TABLE MAPPING (AH to AT Columns)
+                        # MULTI-INVOICE SUMMARY TABLE MAPPING
                         summary_row = 1 + inv_sr_number
                         
                         ws[f"AH{summary_row}"] = inv_sr_number
@@ -201,7 +194,7 @@ def render_processor():
                             elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
                             elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
 
-                        # Process Dynamic Item Rows (🎯 Fixed: pdf_text, lut_kws, paid_kws strictly passed here)
+                        # Process Dynamic Item Rows
                         parsed_items = extract_item_table_rows(pdf_lines)
                         ws, overall_item_sr, excel_write_row = map_items_to_excel_dynamic(
                             ws, parsed_items, item_table_rules,
@@ -210,9 +203,7 @@ def render_processor():
                             start_excel_row=excel_write_row, 
                             default_invoice_no=current_inv_number, 
                             default_invoice_date=current_inv_date,
-                            pdf_text=pdf_text,
-                            lut_kws=lut_kws,
-                            paid_kws=paid_kws
+                            pdf_text=pdf_text  # 🎯 BHAI YAHI LINE GAYAB THI
                         )
 
                     output = BytesIO()
