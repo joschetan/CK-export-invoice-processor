@@ -99,10 +99,21 @@ def render_processor():
                     rules = shipper_info.get("mapping_rules", {})
                     item_table_rules = shipper_info.get("item_table_rules", {})
                     
+                    igst_cfg = shipper_info.get("igst_config", {})
+                    lut_kws = igst_cfg.get("lut_keywords", "")
+                    paid_kws = igst_cfg.get("paid_keywords", "")
+                    
+                    # 🛡️ SAFEGUARD FOR TEMPLATE LOADING (Prevents BadZipFile error)
+                    wb = None
                     if "uploaded_files" in shipper_info and "Full Job Excel Format File" in shipper_info["uploaded_files"]:
                         original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
-                        wb = openpyxl.load_workbook(BytesIO(original_template_bytes))
-                    else:
+                        if original_template_bytes and len(original_template_bytes) > 100:
+                            try:
+                                wb = openpyxl.load_workbook(BytesIO(original_template_bytes))
+                            except Exception:
+                                wb = openpyxl.Workbook()
+                    
+                    if wb is None:
                         wb = openpyxl.Workbook()
                         
                     ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
@@ -203,7 +214,9 @@ def render_processor():
                             start_excel_row=excel_write_row, 
                             default_invoice_no=current_inv_number, 
                             default_invoice_date=current_inv_date,
-                            pdf_text=pdf_text  # 🎯 BHAI YAHI LINE GAYAB THI
+                            pdf_text=pdf_text,
+                            lut_kws=lut_kws,
+                            paid_kws=paid_kws
                         )
 
                     output = BytesIO()
