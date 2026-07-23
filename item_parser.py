@@ -74,8 +74,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         # 🎯 100% DYNAMIC UI MAPPING
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
-            rule_type = r_info.get("type", "PDF Row Item")
-            rule_val = r_info.get("rule", "").strip()
+            rule_type_raw = str(r_info.get("type", "PDF Row Item")).strip()
+            rule_val = str(r_info.get("rule", "")).strip()
             
             # Skip if target is column V as it is strictly handled above by system logic
             if not col_letter or col_letter == "V":
@@ -83,25 +83,27 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 
             cell_ref = f"{col_letter}{curr_row}"
             
-            if rule_type == "Constant Text":
+            if rule_type_raw.lower() == "constant text":
                 # Check for FIND=REPLACE mapping inside Constant Text or raw rule
                 ws[cell_ref] = apply_value_replacement(rule_val, rule_val)
-            elif rule_type == "Excel Cell Reference":
+            elif rule_type_raw.lower() == "excel cell reference":
                 if rule_val and len(rule_val) >= 2 and rule_val[1].isdigit():
                     ws[cell_ref] = f"={rule_val}"
                 else:
                     ws[cell_ref] = rule_val
-            elif rule_type == "Smart Detection":
+            elif "smart" in rule_type_raw.lower():
                 # Check for dynamic syntax format like "ROSCTL:60:19"
                 if ":" in rule_val:
                     smart_parts = [p.strip() for p in rule_val.split(":")]
                     if len(smart_parts) == 3:
-                        search_kw = smart_parts[0].upper()
+                        search_kw = smart_parts[0].upper().replace(" ", "")
                         match_val = smart_parts[1]
                         fallback_val = smart_parts[2]
                         
-                        full_pdf_upper = str(pdf_text).upper()
-                        if search_kw in full_pdf_upper:
+                        # Clean PDF text spaces for 100% reliable matching
+                        clean_pdf_upper = re.sub(r'\s+', '', str(pdf_text).upper())
+                        
+                        if search_kw in clean_pdf_upper:
                             ws[cell_ref] = match_val
                         else:
                             ws[cell_ref] = fallback_val
@@ -114,7 +116,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                         ws[cell_ref] = "PCS"
                     else:
                         ws[cell_ref] = rule_val if rule_val else "SET"
-            elif rule_type == "PDF Row Item":
+            elif "pdf" in rule_type_raw.lower():
                 r_val_lower = rule_val.lower().strip()
                 f_name_lower = field_name.lower().strip()
                 
