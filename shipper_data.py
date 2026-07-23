@@ -1,31 +1,13 @@
 import streamlit as st
-import requests
-import json
 import base64
 import pdfplumber
-import time
 import os
 import re
 from io import BytesIO
 
-# Import core extraction logic from separated engine module
 from pdf_engine import extract_header_value, detect_igst_status
-
-# Import Universal Test Suite module
 from test_suite import render_universal_test_suite
-
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
-
-def get_val_case_insensitive(d, *keys, default=""):
-    if not isinstance(d, dict):
-        return default
-    d_lower = {str(k).lower(): v for k, v in d.items()}
-    for k in keys:
-        if str(k).lower() in d_lower:
-            val = d_lower[str(k).lower()]
-            if val is not None:
-                return str(val).strip()
-    return default
+from google_sheet_sync import fetch_all_from_sheet, push_all_to_sheet, get_val_case_insensitive
 
 def get_default_item_rules():
     return {
@@ -35,7 +17,6 @@ def get_default_item_rules():
         "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "SET"},
         "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
         "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
-        "ROSCTL": {"col": "R", "type": "Smart Detection", "rule": "ROSCTL:60:19"},
         "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
         "Taxable Value (INR)": {"col": "W", "type": "PDF Row Item", "rule": "Taxable Amt"},
         "IGST Rate (%)": {"col": "X", "type": "PDF Row Item", "rule": "IGST %"},
@@ -63,96 +44,64 @@ def ensure_default_shipper():
 def fetch_data_from_google_sheet(show_toast=False):
     ensure_default_shipper()
     try:
-        response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
-        if response.status_code == 200:
-            res_text = response.text.strip()
-            if res_text.startswith("<"):
-                if show_toast: st.error("⚠️ गूगल शीट से HTML मिला। Web App Access 'Anyone' करें।")
-                return
+        data = fetch_all_from_sheet()
+        if not data:
+            if show_toast: st.error("⚠️ गूगल शीट से डेटा नहीं मिला।")
+            return
 
-            data = response.json()
-            
-            fetched_item_rules = {}
-            fetched_header_rules = {}
-            item_columns = ["K", "M", "N", "O", "P", "Q", "R", "S", "W", "X", "Y", "AB"]
+        fetched_item_rules = {}
+        rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
+        
+        if isinstance(rules_list, list) and len(rules_list) > 0:
+            for row in rules_list:
+                if isinstance(row, dict):
+                    s_name = get_val_case_insensitive(row, "ShipperName", "shipper", "shippername")
+                    f_name = get_val_case_insensitive(row, "FieldName", "field", "fieldname")
+                    rule_kind = get_val_case_insensitive(row, "RuleKind", "kind", default="header").lower()
+                    cell_val = get_val_case_insensitive(row, "Cell", "cell", "col").strip().upper()
+                    
+                    if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
+                        continue
 
-            rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
-            if isinstance(rules_list, list) and len(rules_list) > 0:
-                for row in rules_list:
-                    if isinstance(row, dict):
-                        s_name = get_val_case_insensitive(row, "ShipperName", "shipper", "shippername")
-                        f_name = get_val_case_insensitive(row, "FieldName", "field", "fieldname")
-                        rule_kind = get_val_case_insensitive(row, "RuleKind", "kind", default="header").lower()
-                        cell_val = get_val_case_insensitive(row, "Cell", "cell", "col").strip().upper()
-                        
-                        if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
-                            continue
-
-                        if s_name and f_name:
-                            target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
-                                
-                            if target_key not in st.session_state["shipper_database"]:
-                                st.session_state["shipper_database"][target_key] = {
-                                    "allowed_uploads": ["Full Job Excel Format File"],
-                                    "uploaded_files": {},
-                                    "mapping_rules": {},
-                                    "item_table_rules": {},
-                                    "igst_config": {
-                                        "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
-                                        "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
-                                    }
-                                }
-                            
-                            if "item" in rule_kind or cell_val in item_columns or f_name.upper() == "ROSCTL":
-                                fetched_item_rules.setdefault(target_key, {})[f_name] = {
-                                    "col": cell_val if cell_val else "R",
-                                    "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="Smart Detection"),
-                                    "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
-                                }
-                            else:
-                                fetched_header_rules.setdefault(target_key, {})[f_name] = {
-                                    "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
-                                    "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
-                                    "cell": cell_val,
-                                    "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
-                                    "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
-                                    "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
-                                    "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
-                                }
-
-                for s_key, s_data in st.session_state["shipper_database"].items():
-                    if s_key in fetched_header_rules:
-                        s_data["mapping_rules"] = {k: v for k, v in fetched_header_rules[s_key].items() if k.upper() != "ROSCTL"}
-                        
-                    if s_key in fetched_item_rules and fetched_item_rules[s_key]:
-                        s_data["item_table_rules"] = fetched_item_rules[s_key]
-                    elif not s_data.get("item_table_rules"):
-                        s_data["item_table_rules"] = get_default_item_rules()
-
-            # 2. Fetch Files (From Shipper_Files)
-            files_list = data.get("files", []) if isinstance(data, dict) else []
-            if isinstance(files_list, list):
-                for f_row in files_list:
-                    if isinstance(f_row, dict):
-                        s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
-                        b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
+                    if s_name and f_name:
                         target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
-                        if target_key in st.session_state["shipper_database"]:
-                            if b64_str and len(b64_str.strip()) > 0:
-                                try:
-                                    # Cleanup Base64 string from spaces or leading quotes
-                                    clean_b64 = b64_str.lstrip("'").strip().replace(" ", "+")
-                                    missing_padding = len(clean_b64) % 4
-                                    if missing_padding:
-                                        clean_b64 += '=' * (4 - missing_padding)
-                                    
-                                    decoded_bytes = base64.b64decode(clean_b64)
-                                    if decoded_bytes.startswith(b'PK'):
-                                        st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = decoded_bytes
-                                except Exception:
-                                    pass
+                            
+                        if target_key not in st.session_state["shipper_database"]:
+                            st.session_state["shipper_database"][target_key] = {
+                                "allowed_uploads": ["Full Job Excel Format File"],
+                                "uploaded_files": {},
+                                "mapping_rules": {},
+                                "item_table_rules": {},
+                                "igst_config": {
+                                    "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
+                                    "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
+                                }
+                            }
+                        
+                        if "item" in rule_kind:
+                            fetched_item_rules.setdefault(target_key, {})[f_name] = {
+                                "col": cell_val,
+                                "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
+                                "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
+                            }
+                        else:
+                            st.session_state["shipper_database"][target_key]["mapping_rules"][f_name] = {
+                                "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
+                                "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
+                                "cell": cell_val,
+                                "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
+                                "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
+                                "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
+                                "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
+                            }
 
-                if show_toast: st.toast("✅ गूगल शीट से रूल्स और फ़ाइल लोड हो गए!")
+            for s_key, s_data in st.session_state["shipper_database"].items():
+                if s_key in fetched_item_rules and fetched_item_rules[s_key]:
+                    s_data["item_table_rules"] = fetched_item_rules[s_key]
+                elif not s_data.get("item_table_rules"):
+                    s_data["item_table_rules"] = get_default_item_rules()
+
+        if show_toast: st.toast("✅ गूगल शीट से रूल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -247,23 +196,18 @@ def render_shipper_data():
             # --- SECTION 1: TEMPLATE UPLOAD ---
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             
-            uploaded_files_dict = shipper_info.get("uploaded_files", {})
-            tpl_bytes = uploaded_files_dict.get("Full Job Excel Format File", b"")
-            has_file = isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 0 and tpl_bytes.startswith(b'PK')
-
+            has_file = "Full Job Excel Format File" in shipper_info.get("uploaded_files", {})
             if has_file:
-                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है (Google Sheet Synced)।")
+                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है।")
                 if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
-                    shipper_info["uploaded_files"]["Full Job Excel Format File"] = b""
+                    del shipper_info["uploaded_files"]["Full Job Excel Format File"]
                     st.rerun()
             else:
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
-                if f_upload is not None:
-                    file_bytes = f_upload.getvalue()
-                    if file_bytes and len(file_bytes) > 0:
-                        shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = file_bytes
-                        st.success("🎉 टेम्पलेट लोड हो गया! अब नीचे 'Save All' दबाकर गूगल शीट में सेव करें।")
-                        st.rerun()
+                if f_upload:
+                    shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = f_upload.getvalue()
+                    st.success("टेम्पलेट सेव हो गया! अब नीचे 'Save All Rules' दबाकर गूगल शीट में लॉक करें।")
+                    st.rerun()
                     
             st.write("---")
             
@@ -333,7 +277,7 @@ def render_shipper_data():
             curr_pdf_text = st.session_state.get("cached_pdf_text", "")
 
             for field in list(current_rules.keys()):
-                if field.lower() in ["igst status", "igst mode", "rosctl"] or current_rules[field].get("cell", "").strip().upper() in ["V", "B19", "R"]:
+                if field.lower() in ["igst status", "igst mode"] or current_rules[field].get("cell", "").strip().upper() in ["V", "B19"]:
                     continue
 
                 s_val = current_rules[field]
@@ -465,7 +409,6 @@ def render_shipper_data():
                 files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
-                    # 1. Header Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
@@ -474,7 +417,6 @@ def render_shipper_data():
                             "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None"),
                             "RuleKind": "header"
                         })
-                    # 2. Item Rules
                     for i_field, i_info in s_data.get("item_table_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": i_field, "Keyword": i_info.get("rule", ""),
@@ -483,33 +425,21 @@ def render_shipper_data():
                             "Filter": "None", "Logic": "None",
                             "RuleKind": "item"
                         })
-
-                    # 3. File Payload Syncing to Shipper_Files Tab
-                    f_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
-                    if isinstance(f_bytes, bytes) and len(f_bytes) > 0 and f_bytes.startswith(b'PK'):
+                        
+                    tpl_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
+                    if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 0:
+                        b64_str = base64.b64encode(tpl_bytes).decode('utf-8')
                         files_payload.append({
                             "ShipperName": s_name,
-                            "FileBase64": base64.b64encode(f_bytes).decode('utf-8')
-                        })
-                    else:
-                        files_payload.append({
-                            "ShipperName": s_name,
-                            "FileBase64": ""
+                            "FileBase64": b64_str
                         })
                 
-                full_post_data = {
-                    "action": "save_all",
-                    "rules": rules_payload,
-                    "files": files_payload
-                }
-                
-                with st.spinner("⏳ गूगल शीट में रूल्स एवं फ़ाइल सिंक हो रही है..."):
-                    try:
-                        requests.post(WEB_APP_URL, data=json.dumps(full_post_data), timeout=30)
-                        st.success("🎉 आपके रूल्स और Excel टेम्पलेट गूगल शीट में 100% सेव हो गए हैं!")
+                with st.spinner("⏳ गूगल शीट में सुरक्षित सेव हो रहा है..."):
+                    success = push_all_to_sheet(rules_payload, files_payload)
+                    if success:
+                        st.success("🎉 आपके सभी रूल्स और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
                         st.balloons()
-                    except Exception as e:
-                        st.error(f"सिंक एरर: {str(e)}")
+                    else:
+                        st.error("❌ सेव करते समय एरर आया!")
 
-            # ATTACHED UNIVERSAL TEST SUITE AT THE VERY BOTTOM
             render_universal_test_suite(selected_shipper)
