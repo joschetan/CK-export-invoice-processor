@@ -129,7 +129,30 @@ def fetch_data_from_google_sheet(show_toast=False):
                     elif not s_data.get("item_table_rules"):
                         s_data["item_table_rules"] = get_default_item_rules()
 
-            if show_toast: st.toast("✅ गूगल शीट से रूल्स लोड हो गए!")
+            # 2. Fetch Files (From Shipper_Files)
+            files_list = data.get("files", []) if isinstance(data, dict) else []
+            if isinstance(files_list, list):
+                for f_row in files_list:
+                    if isinstance(f_row, dict):
+                        s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
+                        b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
+                        target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
+                        if target_key in st.session_state["shipper_database"]:
+                            if b64_str and len(b64_str.strip()) > 0:
+                                try:
+                                    # Cleanup Base64 string from spaces or leading quotes
+                                    clean_b64 = b64_str.lstrip("'").strip().replace(" ", "+")
+                                    missing_padding = len(clean_b64) % 4
+                                    if missing_padding:
+                                        clean_b64 += '=' * (4 - missing_padding)
+                                    
+                                    decoded_bytes = base64.b64decode(clean_b64)
+                                    if decoded_bytes.startswith(b'PK'):
+                                        st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = decoded_bytes
+                                except Exception:
+                                    pass
+
+                if show_toast: st.toast("✅ गूगल शीट से रूल्स और फ़ाइल लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -226,15 +249,12 @@ def render_shipper_data():
             
             uploaded_files_dict = shipper_info.get("uploaded_files", {})
             tpl_bytes = uploaded_files_dict.get("Full Job Excel Format File", b"")
-            has_session_file = isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 0 and tpl_bytes.startswith(b'PK')
-            has_local_file = os.path.exists("template.xlsx")
+            has_file = isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 0 and tpl_bytes.startswith(b'PK')
 
-            if has_session_file or has_local_file:
-                st.success("✅ Blank Full Job Excel Format File उपलब्ध एवं सुरक्षित है।")
+            if has_file:
+                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है (Google Sheet Synced)।")
                 if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
                     shipper_info["uploaded_files"]["Full Job Excel Format File"] = b""
-                    if os.path.exists("template.xlsx"):
-                        os.remove("template.xlsx")
                     st.rerun()
             else:
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
@@ -242,10 +262,7 @@ def render_shipper_data():
                     file_bytes = f_upload.getvalue()
                     if file_bytes and len(file_bytes) > 0:
                         shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = file_bytes
-                        # Save locally for absolute guarantee
-                        with open("template.xlsx", "wb") as f:
-                            f.write(file_bytes)
-                        st.success("🎉 टेम्पलेट अपलोड और सेव हो गया!")
+                        st.success("🎉 टेम्पलेट लोड हो गया! अब नीचे 'Save All' दबाकर गूगल शीट में सेव करें।")
                         st.rerun()
                     
             st.write("---")
@@ -445,6 +462,7 @@ def render_shipper_data():
             # SAVE BUTTON
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
+                files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
                     # 1. Header Rules
@@ -465,17 +483,30 @@ def render_shipper_data():
                             "Filter": "None", "Logic": "None",
                             "RuleKind": "item"
                         })
+
+                    # 3. File Payload Syncing to Shipper_Files Tab
+                    f_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
+                    if isinstance(f_bytes, bytes) and len(f_bytes) > 0 and f_bytes.startswith(b'PK'):
+                        files_payload.append({
+                            "ShipperName": s_name,
+                            "FileBase64": base64.b64encode(f_bytes).decode('utf-8')
+                        })
+                    else:
+                        files_payload.append({
+                            "ShipperName": s_name,
+                            "FileBase64": ""
+                        })
                 
                 full_post_data = {
                     "action": "save_all",
                     "rules": rules_payload,
-                    "files": []
+                    "files": files_payload
                 }
                 
-                with st.spinner("⏳ गूगल शीट में रूल्स सुरक्षित सेव हो रहे हैं..."):
+                with st.spinner("⏳ गूगल शीट में रूल्स एवं फ़ाइल सिंक हो रही है..."):
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps(full_post_data), timeout=30)
-                        st.success("🎉 आपके सभी रूल्स गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
+                        st.success("🎉 आपके रूल्स और Excel टेम्पलेट गूगल शीट में 100% सेव हो गए हैं!")
                         st.balloons()
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
