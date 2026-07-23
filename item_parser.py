@@ -1,5 +1,5 @@
 import re
-from pdf_engine import detect_igst_status
+from pdf_engine import detect_igst_status, apply_value_replacement
 
 def extract_item_table_rows(pdf_lines):
     parsed_items = []
@@ -84,7 +84,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             cell_ref = f"{col_letter}{curr_row}"
             
             if rule_type == "Constant Text":
-                ws[cell_ref] = rule_val
+                # Check for FIND=REPLACE mapping inside Constant Text or raw rule
+                ws[cell_ref] = apply_value_replacement(rule_val, rule_val)
             elif rule_type == "Excel Cell Reference":
                 if rule_val and len(rule_val) >= 2 and rule_val[1].isdigit():
                     ws[cell_ref] = f"={rule_val}"
@@ -143,6 +144,10 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 elif "taxable" in r_val_lower or "taxable" in f_name_lower:
                     raw_val = nums[4] if len(nums) > 4 else ""
                 
+                # Apply FIND=REPLACE Mapping if specified in rule_val
+                if "=" in rule_val:
+                    raw_val = apply_value_replacement(raw_val, rule_val)
+
                 try:
                     ws[cell_ref] = float(str(raw_val).replace(",", ""))
                 except:
