@@ -15,6 +15,10 @@ from test_suite import render_universal_test_suite
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
+# 🎯 LOCAL DISK TEMPLATE FOLDER (Prevents Base64 Truncation/Corruption)
+TEMPLATE_DIR = "uploaded_templates"
+os.makedirs(TEMPLATE_DIR, exist_ok=True)
+
 def get_val_case_insensitive(d, *keys, default=""):
     if not isinstance(d, dict):
         return default
@@ -163,9 +167,7 @@ def show_field_test_dialog(field_name, rule_data, result_val):
     st.markdown("#### 📋 Applied Rule Parameters:")
     
     raw_cell = str(rule_data.get('cell', 'Blank')).strip()
-    display_cell = raw_cell
-    if raw_cell and raw_cell.isalpha():
-        display_cell = f"{raw_cell} (Dynamic Row)"
+    display_cell = f"{raw_cell} (Dynamic Row)" if raw_cell and raw_cell.isalpha() else raw_cell
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -248,21 +250,28 @@ def render_shipper_data():
             st.write(f"### ⚙️ प्रोफाइल सेटअप और रूल्स: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
-            # --- SECTION 1: TEMPLATE UPLOAD ---
+            # --- SECTION 1: TEMPLATE UPLOAD (SAFE DISK SAVING) ---
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             
-            has_file = "Full Job Excel Format File" in shipper_info.get("uploaded_files", {})
+            clean_s_name = re.sub(r'[^A-Za-z0-9]', '_', selected_shipper)
+            local_tpl_path = os.path.join(TEMPLATE_DIR, f"{clean_s_name}.xlsx")
+            
+            has_file = os.path.exists(local_tpl_path) and os.path.getsize(local_tpl_path) > 100
             if has_file:
-                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है।")
+                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है (लोकल डिस्क)।")
                 if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
-                    del shipper_info["uploaded_files"]["Full Job Excel Format File"]
+                    if os.path.exists(local_tpl_path):
+                        os.remove(local_tpl_path)
                     st.rerun()
             else:
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
-                if f_upload:
-                    shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = f_upload.getvalue()
-                    st.success("टेम्पलेट सेव हो गया! अब नीचे 'Save All Rules' दबाकर गूगल शीट में लॉक करें।")
-                    st.rerun()
+                if f_upload is not None:
+                    file_bytes = f_upload.getvalue()
+                    if len(file_bytes) > 100:
+                        with open(local_tpl_path, "wb") as f:
+                            f.write(file_bytes)
+                        st.success("🎉 टेम्पलेट लोकल डिस्क में 100% परमानेंट सेव हो गया!")
+                        st.rerun()
                     
             st.write("---")
             
@@ -462,10 +471,9 @@ def render_shipper_data():
             # SAVE BUTTON
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
-                files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
-                    # 1. Header Rules (RuleKind = 'header')
+                    # 1. Header Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
@@ -474,7 +482,7 @@ def render_shipper_data():
                             "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None"),
                             "RuleKind": "header"
                         })
-                    # 2. Item Rules (RuleKind = 'item')
+                    # 2. Item Rules
                     for i_field, i_info in s_data.get("item_table_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": i_field, "Keyword": i_info.get("rule", ""),
@@ -483,31 +491,17 @@ def render_shipper_data():
                             "Filter": "None", "Logic": "None",
                             "RuleKind": "item"
                         })
-                        
-                    # 3. Template File (Send Base64 if present, else send empty string to clear from Sheet)
-                    tpl_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
-                    if tpl_bytes:
-                        b64_str = base64.b64encode(tpl_bytes).decode('utf-8')
-                        files_payload.append({
-                            "ShipperName": s_name,
-                            "FileBase64": b64_str
-                        })
-                    else:
-                        files_payload.append({
-                            "ShipperName": s_name,
-                            "FileBase64": ""
-                        })
                 
                 full_post_data = {
                     "action": "save_all",
                     "rules": rules_payload,
-                    "files": files_payload
+                    "files": []
                 }
                 
-                with st.spinner("⏳ गूगल शीट (Shipper_Rules + Shipper_Files) में सुरक्षित सेव हो रहा है..."):
+                with st.spinner("⏳ गूगल शीट में रूल्स सुरक्षित सेव हो रहे हैं..."):
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps(full_post_data), timeout=30)
-                        st.success("🎉 आपके सभी रूल्स और Excel टेम्पलेट गूगल शीट में 100% परमानент सेव हो गए हैं!")
+                        st.success("🎉 आपके सभी रूल्स गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
                         st.balloons()
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
