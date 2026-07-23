@@ -91,11 +91,28 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 else:
                     ws[cell_ref] = rule_val
             elif rule_type == "Smart Detection":
-                desc = item.get("description_text", "").upper()
-                if "PCS" in desc or "PC" in desc:
-                    ws[cell_ref] = "PCS"
+                # Check for dynamic syntax format like "ROSCTL:60:19"
+                if ":" in rule_val:
+                    smart_parts = [p.strip() for p in rule_val.split(":")]
+                    if len(smart_parts) == 3:
+                        search_kw = smart_parts[0].upper()
+                        match_val = smart_parts[1]
+                        fallback_val = smart_parts[2]
+                        
+                        full_pdf_upper = str(pdf_text).upper()
+                        if search_kw in full_pdf_upper:
+                            ws[cell_ref] = match_val
+                        else:
+                            ws[cell_ref] = fallback_val
+                    else:
+                        ws[cell_ref] = rule_val
                 else:
-                    ws[cell_ref] = rule_val if rule_val else "SET"
+                    # Legacy Unit Detection
+                    desc = item.get("description_text", "").upper()
+                    if "PCS" in desc or "PC" in desc:
+                        ws[cell_ref] = "PCS"
+                    else:
+                        ws[cell_ref] = rule_val if rule_val else "SET"
             elif rule_type == "PDF Row Item":
                 r_val_lower = rule_val.lower().strip()
                 f_name_lower = field_name.lower().strip()
