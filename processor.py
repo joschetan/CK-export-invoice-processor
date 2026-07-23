@@ -28,19 +28,21 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     elif mode == "Full Line":
         text = text.split("\n")[0].strip()
 
-    # 🎯 FILTERS IMPLEMENTATION
+    # 🎯 ALL FILTERS IMPLEMENTATION
     if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
         bracket_match = re.search(r'\((.*?)\)', text)
         text = bracket_match.group(1).strip() if bracket_match else text.strip()
+    elif flt == "Letters Only":
+        text = re.sub(r'[^A-Za-z\s]', '', text).strip()
+    elif flt == "Numbers Only":
+        nums = re.findall(r'[\d,.]+', text)
+        text = nums[0].strip() if nums else ""
     elif flt == "Clean Date (DD/MM/YYYY)":
         d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
         text = d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
     elif flt == "Container Number (ISO Format)":
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
         text = cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
-    elif flt == "Numbers Only":
-        nums = re.findall(r'[\d,.]+', text)
-        text = nums[0].strip() if nums else ""
 
     # 🎯 APPLY MULTI-CONDITION VALUE REPLACEMENT (FIND=REPLACE)
     if stop_kw and "=" in stop_kw:
