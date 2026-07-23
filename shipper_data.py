@@ -153,6 +153,19 @@ def show_field_test_dialog(field_name, rule_data, result_val):
         st.success(f"🎉 **SUCCESS! Extracted Value:**")
         st.code(result_val, language="text")
 
+# 🎯 MANUAL IGST VERIFICATION DIALOG ADDED HERE
+@st.dialog("⚠️ Urgent: Verify IGST Status for Column V")
+def show_igst_manual_prompt_dialog(invoice_no):
+    st.warning(f"⚠️ इन्वॉइस **`{invoice_no}`** पर LUT या Paid (P) का स्पष्ट टेक्स्ट नहीं मिला!")
+    st.write("कस्टम्स में भारी पेनाल्टी से बचने के लिए कृपया खुद से कन्फर्म करें:")
+    
+    selected_status = st.selectbox("Column V के लिए सही मोड चुनें:", ["P", "LUT"], index=0)
+    
+    if st.button("Confirm & Apply to Column V", type="primary"):
+        st.session_state[f"manual_igst_{invoice_no}"] = selected_status
+        st.success(f"✅ Selected `{selected_status}` for Invoice `{invoice_no}`")
+        st.rerun()
+
 @st.dialog("➕ Add New Custom Header Field")
 def add_custom_header_field_dialog(selected_shipper):
     st.write("यहाँ नया हेडर फ़ील्ड जोड़ें:")
