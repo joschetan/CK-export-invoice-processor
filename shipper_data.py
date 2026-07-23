@@ -412,7 +412,7 @@ def render_shipper_data():
                 files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
-                    # 1. Rules
+                    # 1. Header & Item Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
@@ -445,7 +445,7 @@ def render_shipper_data():
                     "files": files_payload
                 }
                 
-                with st.spinner("⏳ गूगल शीट (Shipper_Rules + Shipper_Files) में सेव हो रहा है..."):
+                with st.spinner("⏳ गूगल शीट (Shipper_Rules + Shipper_Files) में सुरक्षित सेव हो रहा है..."):
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps(full_post_data), timeout=30)
                         st.success("🎉 आपके सभी रूल्स और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
