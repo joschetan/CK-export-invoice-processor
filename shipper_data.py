@@ -26,6 +26,21 @@ def get_val_case_insensitive(d, *keys, default=""):
                 return str(val).strip()
     return default
 
+def get_default_item_rules():
+    return {
+        "RITC / HS Code": {"col": "K", "type": "PDF Row Item", "rule": "HS Code"},
+        "Description of Goods": {"col": "M", "type": "PDF Row Item", "rule": "Description"},
+        "Quantity": {"col": "N", "type": "PDF Row Item", "rule": "Qty Number"},
+        "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "SET"},
+        "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
+        "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
+        "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
+        "Taxable Value (INR)": {"col": "W", "type": "PDF Row Item", "rule": "Taxable Amt"},
+        "IGST Rate (%)": {"col": "X", "type": "PDF Row Item", "rule": "IGST %"},
+        "IGST Amount (INR)": {"col": "Y", "type": "PDF Row Item", "rule": "IGST Amt"},
+        "Nt.Wt(KGS)": {"col": "AB", "type": "PDF Row Item", "rule": "Net Weight"}
+    }
+
 def ensure_default_shipper():
     if "shipper_database" not in st.session_state:
         st.session_state["shipper_database"] = {}
@@ -37,19 +52,7 @@ def ensure_default_shipper():
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
             "mapping_rules": initial_rules,
-            "item_table_rules": {
-                "RITC / HS Code": {"col": "K", "type": "PDF Row Item", "rule": "HS Code"},
-                "Description of Goods": {"col": "M", "type": "PDF Row Item", "rule": "Description"},
-                "Quantity": {"col": "N", "type": "PDF Row Item", "rule": "Qty Number"},
-                "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "SET"},
-                "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
-                "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
-                "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
-                "Taxable Value (INR)": {"col": "W", "type": "PDF Row Item", "rule": "Taxable Amt"},
-                "IGST Rate (%)": {"col": "X", "type": "PDF Row Item", "rule": "IGST %"},
-                "IGST Amount (INR)": {"col": "Y", "type": "PDF Row Item", "rule": "IGST Amt"},
-                "Nt.Wt(KGS)": {"col": "AB", "type": "PDF Row Item", "rule": "Net Weight"}
-            },
+            "item_table_rules": get_default_item_rules(),
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                 "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -68,6 +71,9 @@ def fetch_data_from_google_sheet(show_toast=False):
 
             data = response.json()
             
+            # Temporary storage to check if item rules are received
+            fetched_item_rules = {}
+
             # 1. Fetch Rules
             rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
             if isinstance(rules_list, list) and len(rules_list) > 0:
@@ -78,7 +84,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                         rule_kind = get_val_case_insensitive(row, "RuleKind", "kind", default="header").lower()
                         cell_val = get_val_case_insensitive(row, "Cell", "cell", "col").strip().upper()
                         
-                        # Guard: Filter out legacy IGST Status / B19 / V Column Rules from Sheet
+                        # 🛡️ Guard: Strictly block legacy IGST Status / B19 / V Column Rules from Sheet
                         if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
                             continue
 
@@ -100,7 +106,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 }
                             
                             if "item" in rule_kind:
-                                st.session_state["shipper_database"][target_key]["item_table_rules"][f_name] = {
+                                fetched_item_rules.setdefault(target_key, {})[f_name] = {
                                     "col": cell_val,
                                     "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
                                     "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
@@ -115,6 +121,13 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
                                     "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                                 }
+
+                # Populate Item rules safely without making Section 4 blank
+                for s_key, s_data in st.session_state["shipper_database"].items():
+                    if s_key in fetched_item_rules and fetched_item_rules[s_key]:
+                        s_data["item_table_rules"] = fetched_item_rules[s_key]
+                    elif not s_data.get("item_table_rules"):
+                        s_data["item_table_rules"] = get_default_item_rules()
 
             # 2. Fetch Files (From Shipper_Files)
             files_list = data.get("files", []) if isinstance(data, dict) else []
@@ -379,7 +392,7 @@ def render_shipper_data():
                 if st.button("➕ Add Item Column", use_container_width=True):
                     add_item_col_dialog(selected_shipper)
             
-            item_rules = shipper_info.setdefault("item_table_rules", {})
+            item_rules = shipper_info.setdefault("item_table_rules", get_default_item_rules())
             updated_item_rules = {}
             
             ic1, ic2, ic3, ic4, ic5 = st.columns([3, 2, 3, 3, 1])
