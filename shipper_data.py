@@ -129,7 +129,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                     elif not s_data.get("item_table_rules"):
                         s_data["item_table_rules"] = get_default_item_rules()
 
-            # 2. Fetch Files (From Shipper_Files)
+            # 2. Fetch Files (From Shipper_Files with ZIP Verification)
             files_list = data.get("files", []) if isinstance(data, dict) else []
             if isinstance(files_list, list):
                 for f_row in files_list:
@@ -140,14 +140,18 @@ def fetch_data_from_google_sheet(show_toast=False):
                         if target_key in st.session_state["shipper_database"]:
                             if b64_str and len(b64_str.strip()) > 0:
                                 try:
-                                    decoded_bytes = base64.b64decode(b64_str)
-                                    st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = decoded_bytes
-                                except Exception as e: pass
+                                    decoded_bytes = base64.b64decode(b64_str.strip())
+                                    # 🎯 Check if valid Excel ZIP header (starts with b'PK')
+                                    if decoded_bytes.startswith(b'PK'):
+                                        st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = decoded_bytes
+                                    else:
+                                        st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = b""
+                                except Exception:
+                                    st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = b""
                             else:
-                                # 🎯 Sheet mein khali hai toh session se bhi uda do
                                 st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = b""
 
-                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स लोड हो गए!")
+                if show_toast: st.toast("✅ गूगल शीट से रूल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -174,7 +178,7 @@ def show_field_test_dialog(field_name, rule_data, result_val):
     if "❌" in result_val or not result_val.strip():
         st.error(f"❌ **Not Found!** Value: `{result_val}`")
     else:
-        st.success(f"🎉 **SUCCESS! Extracted Value:**")
+        st.success("🎉 **SUCCESS! Extracted Value:**")
         st.code(result_val, language="text")
 
 @st.dialog("⚠️ Urgent: Verify IGST Status for Column V")
@@ -243,7 +247,8 @@ def render_shipper_data():
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             
             uploaded_files_dict = shipper_info.get("uploaded_files", {})
-            has_file = "Full Job Excel Format File" in uploaded_files_dict and len(uploaded_files_dict["Full Job Excel Format File"]) > 0
+            tpl_bytes = uploaded_files_dict.get("Full Job Excel Format File", b"")
+            has_file = isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 0 and tpl_bytes.startswith(b'PK')
             
             if has_file:
                 st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है।")
@@ -480,14 +485,13 @@ def render_shipper_data():
                         
                     # 3. Template File payload
                     tpl_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
-                    if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 0:
+                    if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 0 and tpl_bytes.startswith(b'PK'):
                         b64_str = base64.b64encode(tpl_bytes).decode('utf-8')
                         files_payload.append({
                             "ShipperName": s_name,
                             "FileBase64": b64_str
                         })
                     else:
-                        # 🎯 FORCE GOOGLE SHEET TO CLEAR FILE ROW IF DELETED
                         files_payload.append({
                             "ShipperName": s_name,
                             "FileBase64": ""
@@ -502,7 +506,7 @@ def render_shipper_data():
                 with st.spinner("⏳ गूगल शीट (Shipper_Rules + Shipper_Files) में सुरक्षित सेव हो रहा है..."):
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps(full_post_data), timeout=30)
-                        st.success("🎉 आपके सभी रूल्स गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
+                        st.success("🎉 आपके सभी रूल्स और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
                         st.balloons()
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
