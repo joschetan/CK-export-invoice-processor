@@ -99,6 +99,10 @@ def render_processor():
                     rules = shipper_info.get("mapping_rules", {})
                     item_table_rules = shipper_info.get("item_table_rules", {})
                     
+                    igst_cfg = shipper_info.get("igst_config", {})
+                    lut_kws = igst_cfg.get("lut_keywords", "")
+                    paid_kws = igst_cfg.get("paid_keywords", "")
+                    
                     if "uploaded_files" in shipper_info and "Full Job Excel Format File" in shipper_info["uploaded_files"]:
                         original_template_bytes = shipper_info["uploaded_files"]["Full Job Excel Format File"]
                         wb = openpyxl.load_workbook(BytesIO(original_template_bytes))
@@ -197,7 +201,7 @@ def render_processor():
                             elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
                             elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
 
-                        # Process Dynamic Item Rows
+                        # Process Dynamic Item Rows (🎯 Fixed: pdf_text, lut_kws, paid_kws strictly passed here)
                         parsed_items = extract_item_table_rows(pdf_lines)
                         ws, overall_item_sr, excel_write_row = map_items_to_excel_dynamic(
                             ws, parsed_items, item_table_rules,
@@ -205,7 +209,10 @@ def render_processor():
                             start_overall_sr=overall_item_sr, 
                             start_excel_row=excel_write_row, 
                             default_invoice_no=current_inv_number, 
-                            default_invoice_date=current_inv_date
+                            default_invoice_date=current_inv_date,
+                            pdf_text=pdf_text,
+                            lut_kws=lut_kws,
+                            paid_kws=paid_kws
                         )
 
                     output = BytesIO()
