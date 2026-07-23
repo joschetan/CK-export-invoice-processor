@@ -115,8 +115,7 @@ def render_processor():
                         # 1. Clean string/base64 before decoding
                         if isinstance(tpl_data, str) and len(tpl_data.strip()) > 0:
                             try:
-                                clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', tpl_data.strip())
-                                # Fix Base64 Padding if truncated
+                                clean_b64 = tpl_data.lstrip("'").strip().replace(" ", "+")
                                 missing_padding = len(clean_b64) % 4
                                 if missing_padding:
                                     clean_b64 += '=' * (4 - missing_padding)
@@ -124,8 +123,8 @@ def render_processor():
                             except Exception:
                                 pass
                         
-                        # 2. Try loading workbook with strict sheet check ("INV")
-                        if isinstance(tpl_data, bytes) and len(tpl_data) > 100:
+                        # 2. Try loading workbook
+                        if isinstance(tpl_data, bytes) and len(tpl_data) > 100 and tpl_data.startswith(b'PK'):
                             try:
                                 wb = openpyxl.load_workbook(BytesIO(tpl_data))
                             except Exception as load_err:
@@ -137,7 +136,7 @@ def render_processor():
                         st.warning("⚠️ ब्लैंक फ़ॉर्मेट फ़ाइल यूज़ हो रही है क्योंकि कोई मान्य Excel टेम्पलेट नहीं मिला।")
                         wb = openpyxl.Workbook()
                         
-                    # Target "INV" sheet if present as confirmed
+                    # Target "INV" sheet if present
                     ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
                     
                     first_inv_no = "INV"
