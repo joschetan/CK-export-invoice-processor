@@ -10,8 +10,6 @@ from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
 from pdf_engine import apply_value_replacement
 
-DEFAULT_TEMPLATE_PATH = "template.xlsx"  # Project root directory template
-
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
     text = raw_text.strip()
@@ -107,11 +105,10 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 TEMPLATE LOADING LOGIC
+                    # 🎯 TEMPLATE LOADING DIRECTLY FROM GOOGLE SHEET DATA
                     wb = None
                     uploaded_files = shipper_info.get("uploaded_files", {})
                     
-                    # 1. Try from Session Memory
                     if "Full Job Excel Format File" in uploaded_files:
                         tpl_bytes = uploaded_files["Full Job Excel Format File"]
                         if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 100 and tpl_bytes.startswith(b'PK'):
@@ -120,14 +117,7 @@ def render_processor():
                             except Exception:
                                 wb = None
 
-                    # 2. Try from Local Project Template File
-                    if wb is None and os.path.exists(DEFAULT_TEMPLATE_PATH):
-                        try:
-                            wb = openpyxl.load_workbook(DEFAULT_TEMPLATE_PATH)
-                        except Exception:
-                            wb = None
-
-                    # 3. Fallback to blank workbook
+                    # Fallback to new workbook if no template found
                     if wb is None:
                         wb = openpyxl.Workbook()
                         
