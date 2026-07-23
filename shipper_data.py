@@ -5,6 +5,7 @@ import base64
 import pdfplumber
 import time
 import os
+import re  # 👈 यह मिसिंग था, इसे जोड़ दिया है
 from io import BytesIO
 
 # Import core extraction logic from separated engine module
@@ -15,8 +16,8 @@ from test_suite import render_universal_test_suite
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-# 🎯 LOCAL DISK TEMPLATE FOLDER (Prevents Base64 Truncation/Corruption)
 TEMPLATE_DIR = "uploaded_templates"
+DEFAULT_TEMPLATE = "default_template.xlsx"
 os.makedirs(TEMPLATE_DIR, exist_ok=True)
 
 def get_val_case_insensitive(d, *keys, default=""):
@@ -77,11 +78,8 @@ def fetch_data_from_google_sheet(show_toast=False):
             
             fetched_item_rules = {}
             fetched_header_rules = {}
-
-            # Item Column Letters list for Auto-Detection
             item_columns = ["K", "M", "N", "O", "P", "Q", "R", "S", "W", "X", "Y", "AB"]
 
-            # 1. Fetch Rules
             rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
             if isinstance(rules_list, list) and len(rules_list) > 0:
                 for row in rules_list:
@@ -91,14 +89,11 @@ def fetch_data_from_google_sheet(show_toast=False):
                         rule_kind = get_val_case_insensitive(row, "RuleKind", "kind", default="header").lower()
                         cell_val = get_val_case_insensitive(row, "Cell", "cell", "col").strip().upper()
                         
-                        # 🛡️ Guard: Strictly block legacy IGST Status / B19 / V Column Rules
                         if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
                             continue
 
                         if s_name and f_name:
-                            target_key = s_name
-                            if "welspun" in s_name.lower():
-                                target_key = "WELSPUN GLOBAL BRANDS LIMITED"
+                            target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
                                 
                             if target_key not in st.session_state["shipper_database"]:
                                 st.session_state["shipper_database"][target_key] = {
@@ -112,7 +107,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     }
                                 }
                             
-                            # 🎯 AUTO-CLASSIFICATION: If RuleKind is 'item' OR Cell matches an Item Column (like R, K, N, etc.)
                             if "item" in rule_kind or cell_val in item_columns or f_name.upper() == "ROSCTL":
                                 fetched_item_rules.setdefault(target_key, {})[f_name] = {
                                     "col": cell_val if cell_val else "R",
@@ -130,34 +124,16 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                                 }
 
-                # Populate rules safely
                 for s_key, s_data in st.session_state["shipper_database"].items():
                     if s_key in fetched_header_rules:
-                        # 🎯 Filter out ROSCTL from Header mapping if present
-                        filtered_headers = {k: v for k, v in fetched_header_rules[s_key].items() if k.upper() != "ROSCTL"}
-                        s_data["mapping_rules"] = filtered_headers
+                        s_data["mapping_rules"] = {k: v for k, v in fetched_header_rules[s_key].items() if k.upper() != "ROSCTL"}
                         
                     if s_key in fetched_item_rules and fetched_item_rules[s_key]:
                         s_data["item_table_rules"] = fetched_item_rules[s_key]
                     elif not s_data.get("item_table_rules"):
                         s_data["item_table_rules"] = get_default_item_rules()
 
-            # 2. Fetch Files (From Shipper_Files)
-            files_list = data.get("files", []) if isinstance(data, dict) else []
-            if isinstance(files_list, list):
-                for f_row in files_list:
-                    if isinstance(f_row, dict):
-                        s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
-                        b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
-                        if s_name and b64_str:
-                            target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
-                            if target_key in st.session_state["shipper_database"]:
-                                try:
-                                    decoded_bytes = base64.b64decode(b64_str)
-                                    st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = decoded_bytes
-                                except Exception as e: pass
-
-                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स और फाइल्स लोड हो गए!")
+            if show_toast: st.toast("✅ गूगल शीट से रूल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -184,10 +160,9 @@ def show_field_test_dialog(field_name, rule_data, result_val):
     if "❌" in result_val or not result_val.strip():
         st.error(f"❌ **Not Found!** Value: `{result_val}`")
     else:
-        st.success(f"🎉 **SUCCESS! Extracted Value:**")
+        st.success("🎉 **SUCCESS! Extracted Value:**")
         st.code(result_val, language="text")
 
-# 🎯 MANUAL IGST VERIFICATION DIALOG ADDED HERE
 @st.dialog("⚠️ Urgent: Verify IGST Status for Column V")
 def show_igst_manual_prompt_dialog(invoice_no):
     st.warning(f"⚠️ इन्वॉइस **`{invoice_no}`** पर LUT या Paid (P) का स्पष्ट टेक्स्ट नहीं मिला!")
@@ -250,15 +225,17 @@ def render_shipper_data():
             st.write(f"### ⚙️ प्रोफाइल सेटअप और रूल्स: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
-            # --- SECTION 1: TEMPLATE UPLOAD (SAFE DISK SAVING) ---
+            # --- SECTION 1: TEMPLATE UPLOAD ---
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             
             clean_s_name = re.sub(r'[^A-Za-z0-9]', '_', selected_shipper)
             local_tpl_path = os.path.join(TEMPLATE_DIR, f"{clean_s_name}.xlsx")
             
-            has_file = os.path.exists(local_tpl_path) and os.path.getsize(local_tpl_path) > 100
+            # Check either shipper-specific temp file OR project root file
+            has_file = (os.path.exists(local_tpl_path) and os.path.getsize(local_tpl_path) > 100) or os.path.exists(DEFAULT_TEMPLATE)
+            
             if has_file:
-                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है (लोकल डिस्क)।")
+                st.success("✅ Blank Full Job Excel Format File (Template) उपलब्ध है और सुरक्षित है।")
                 if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
                     if os.path.exists(local_tpl_path):
                         os.remove(local_tpl_path)
@@ -270,7 +247,7 @@ def render_shipper_data():
                     if len(file_bytes) > 100:
                         with open(local_tpl_path, "wb") as f:
                             f.write(file_bytes)
-                        st.success("🎉 टेम्पलेट लोकल डिस्क में 100% परमानेंट सेव हो गया!")
+                        st.success("🎉 टेम्पलेट परमानेंट सेव हो गया!")
                         st.rerun()
                     
             st.write("---")
@@ -341,7 +318,6 @@ def render_shipper_data():
             curr_pdf_text = st.session_state.get("cached_pdf_text", "")
 
             for field in list(current_rules.keys()):
-                # 🎯 Strictly filter out ROSCTL or Item Rules from Header Section
                 if field.lower() in ["igst status", "igst mode", "rosctl"] or current_rules[field].get("cell", "").strip().upper() in ["V", "B19", "R"]:
                     continue
 
@@ -506,5 +482,5 @@ def render_shipper_data():
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
 
-            # 🎯 ATTACHED UNIVERSAL TEST SUITE AT THE VERY BOTTOM
+            # ATTACHED UNIVERSAL TEST SUITE AT THE VERY BOTTOM
             render_universal_test_suite(selected_shipper)
