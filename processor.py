@@ -28,7 +28,11 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     elif mode == "Full Line":
         text = text.split("\n")[0].strip()
 
-    if flt == "Clean Date (DD/MM/YYYY)":
+    # 🎯 FILTERS IMPLEMENTATION
+    if flt == "Text Inside Parentheses ()":
+        bracket_match = re.search(r'\((.*?)\)', text)
+        text = bracket_match.group(1).strip() if bracket_match else text.strip()
+    elif flt == "Clean Date (DD/MM/YYYY)":
         d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
         text = d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
     elif flt == "Container Number (ISO Format)":
