@@ -484,13 +484,18 @@ def render_shipper_data():
                             "RuleKind": "item"
                         })
                         
-                    # 3. Template File
+                    # 3. Template File (Send Base64 if present, else send empty string to clear from Sheet)
                     tpl_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
                     if tpl_bytes:
                         b64_str = base64.b64encode(tpl_bytes).decode('utf-8')
                         files_payload.append({
                             "ShipperName": s_name,
                             "FileBase64": b64_str
+                        })
+                    else:
+                        files_payload.append({
+                            "ShipperName": s_name,
+                            "FileBase64": ""
                         })
                 
                 full_post_data = {
@@ -502,7 +507,7 @@ def render_shipper_data():
                 with st.spinner("⏳ गूगल शीट (Shipper_Rules + Shipper_Files) में सुरक्षित सेव हो रहा है..."):
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps(full_post_data), timeout=30)
-                        st.success("🎉 आपके सभी रूल्स और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
+                        st.success("🎉 आपके सभी रूल्स और Excel टेम्पलेट गूगल शीट में 100% परमानент सेव हो गए हैं!")
                         st.balloons()
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
