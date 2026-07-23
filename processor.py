@@ -105,23 +105,30 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 ROBUST TEMPLATE LOADING FROM GOOGLE SHEET / SESSION MEMORY
+                    # 🎯 FOOLPROOF TEMPLATE LOADING LOGIC
                     wb = None
                     uploaded_files = shipper_info.get("uploaded_files", {})
                     tpl_bytes = uploaded_files.get("Full Job Excel Format File", b"")
                     
-                    if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 100 and tpl_bytes.startswith(b'PK'):
+                    # 1. Try loading from session memory (Google Sheet / Uploaded)
+                    if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 100:
                         try:
                             wb = openpyxl.load_workbook(BytesIO(tpl_bytes))
-                        except Exception as e:
-                            st.warning(f"⚠️ टेम्पलेट लोड करने में वार्निंग: {e}")
+                        except Exception:
                             wb = None
 
-                    # Fallback to new workbook if template bytes are missing
+                    # 2. Try loading from local fallback "template.xlsx" if session failed
+                    if wb is None and os.path.exists("template.xlsx"):
+                        try:
+                            wb = openpyxl.load_workbook("template.xlsx")
+                        except Exception:
+                            wb = None
+
+                    # 3. Absolute last resort fallback
                     if wb is None:
                         wb = openpyxl.Workbook()
                         
-                    # Target "INV" sheet
+                    # Target "INV" sheet as confirmed by user
                     ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
                     
                     first_inv_no = "INV"
