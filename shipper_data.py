@@ -50,8 +50,8 @@ def ensure_default_shipper():
         st.session_state["shipper_database"][s_name] = {
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
-            "mapping_rules": {},       # 🎯 Khaali rakha taaki Google Sheet ka data override na ho
-            "item_table_rules": {},    # 🎯 Khaali rakha taaki purane deleted rules wapas na aayein
+            "mapping_rules": {},
+            "item_table_rules": get_default_item_rules(), # 🎯 Default fallback restored
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                 "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -121,10 +121,12 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                                 }
 
-                # Populate Item rules strictly from Google Sheet data
+                # Populate Item rules safely without making Section 4 blank
                 for s_key, s_data in st.session_state["shipper_database"].items():
-                    if s_key in fetched_item_rules:
+                    if s_key in fetched_item_rules and fetched_item_rules[s_key]:
                         s_data["item_table_rules"] = fetched_item_rules[s_key]
+                    elif not s_data.get("item_table_rules"):
+                        s_data["item_table_rules"] = get_default_item_rules()
 
             # 2. Fetch Files (From Shipper_Files)
             files_list = data.get("files", []) if isinstance(data, dict) else []
@@ -294,7 +296,6 @@ def render_shipper_data():
             pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below", "Table Row Item", "Table Row Index"]
             mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
             
-            # 🎯 UPDATED FILTER OPTIONS WITH 'Text Inside Parentheses ()'
             filter_options = [
                 "None", 
                 "Text Inside Parentheses ()", 
@@ -335,7 +336,6 @@ def render_shipper_data():
                 mode_idx = mode_options.index(saved_mode) if saved_mode in mode_options else 0
                 
                 saved_flt = s_val.get("filter", "None")
-                # 🎯 SAFEGUARD FIX FOR PARENTHESES FILTER MATCHING
                 if saved_flt in ["Inside Parentheses ()", "Text Inside ()"]:
                     saved_flt = "Text Inside Parentheses ()"
                 
@@ -357,7 +357,6 @@ def render_shipper_data():
                         if not curr_pdf_lines:
                             st.toast("⚠️ पहले Section 2 में PDF अपलोड करें!")
                         else:
-                            # Clean invocation to external engine module
                             res_val = extract_header_value(curr_pdf_lines, curr_pdf_text, ky, pos, m_mode, stop_kw, final_flt)
                             
                             rule_summary = {
@@ -410,6 +409,10 @@ def render_shipper_data():
                     add_item_col_dialog(selected_shipper)
             
             item_rules = shipper_info.get("item_table_rules", {})
+            if not item_rules:
+                item_rules = get_default_item_rules()
+                shipper_info["item_table_rules"] = item_rules
+
             updated_item_rules = {}
             
             ic1, ic2, ic3, ic4, ic5 = st.columns([3, 2, 3, 3, 1])
@@ -423,7 +426,6 @@ def render_shipper_data():
             rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
             
             for item_field in list(item_rules.keys()):
-                # Filter out legacy IGST Status / B19 / V column rule from Item Rules
                 if item_field.lower() in ["igst status", "igst mode"] or item_rules[item_field].get("col", "").strip().upper() in ["V", "B19"]:
                     continue
 
