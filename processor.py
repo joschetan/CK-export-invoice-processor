@@ -2,13 +2,12 @@ import streamlit as st
 import openpyxl
 import pdfplumber
 import re
-import base64
-import os
 from io import BytesIO
 
 from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
 from pdf_engine import apply_value_replacement
+from google_sheet_sync import load_template_from_sheet
 
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     if not raw_text: return ""
@@ -30,7 +29,6 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
     elif mode == "Full Line":
         text = text.split("\n")[0].strip()
 
-    # ALL FILTERS IMPLEMENTATION
     if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
         bracket_match = re.search(r'\((.*?)\)', text)
         text = bracket_match.group(1).strip() if bracket_match else text.strip()
@@ -46,7 +44,6 @@ def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
         text = cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
 
-    # APPLY MULTI-CONDITION VALUE REPLACEMENT (FIND=REPLACE)
     if stop_kw and "=" in stop_kw:
         text = apply_value_replacement(text, stop_kw)
     if flt and "=" in flt:
@@ -105,28 +102,9 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 FOOLPROOF GOOGLE SHEET BASE64 TEMPLATE LOADER
-                    wb = None
-                    uploaded_files = shipper_info.get("uploaded_files", {})
-                    tpl_data = uploaded_files.get("Full Job Excel Format File", b"")
+                    # 🎯 LOAD TEMPLATE DIRECTLY FROM GOOGLE SHEET VIA SYNC MODULE
+                    wb = load_template_from_sheet(selected_shipper)
                     
-                    if isinstance(tpl_data, str) and len(tpl_data.strip()) > 0:
-                        try:
-                            clean_b64 = tpl_data.lstrip("'").strip().replace(" ", "+")
-                            missing_padding = len(clean_b64) % 4
-                            if missing_padding:
-                                clean_b64 += '=' * (4 - missing_padding)
-                            tpl_data = base64.b64decode(clean_b64)
-                        except Exception:
-                            pass
-                    
-                    if isinstance(tpl_data, bytes) and len(tpl_data) > 100:
-                        try:
-                            wb = openpyxl.load_workbook(BytesIO(tpl_data))
-                        except Exception:
-                            wb = None
-
-                    # Fallback to blank workbook only if completely missing
                     if wb is None:
                         wb = openpyxl.Workbook()
                         
@@ -150,7 +128,6 @@ def render_processor():
                         current_inv_date = ""
                         inv_data_dict = {}
                         
-                        # Process Header Rules
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             pos = r_info.get("position", "Right (आगे)")
@@ -198,9 +175,7 @@ def render_processor():
                                 elif found_val and not found_val.lower().startswith("inv"):
                                     current_inv_date = found_val
 
-                        # MULTI-INVOICE SUMMARY TABLE MAPPING
                         summary_row = 1 + inv_sr_number
-                        
                         ws[f"AH{summary_row}"] = inv_sr_number
                         ws[f"AI{summary_row}"] = current_inv_number
                         ws[f"AJ{summary_row}"] = current_inv_date
@@ -218,7 +193,6 @@ def render_processor():
                             elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
                             elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
 
-                        # Process Dynamic Item Rows
                         parsed_items = extract_item_table_rows(pdf_lines)
                         ws, overall_item_sr, excel_write_row = map_items_to_excel_dynamic(
                             ws, parsed_items, item_table_rules,
