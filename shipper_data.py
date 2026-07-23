@@ -5,7 +5,6 @@ import base64
 import pdfplumber
 import re
 import time
-import os
 from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
@@ -21,22 +20,6 @@ def get_val_case_insensitive(d, *keys, default=""):
                 return str(val).strip()
     return default
 
-def load_template_from_disk(shipper_name):
-    """GitHub / Local 'templates' Folder se Shipper-wise Template Auto-load Function"""
-    safe_folder_name = shipper_name.replace(" ", "_").upper()
-    template_path = os.path.join("templates", f"{safe_folder_name}.xlsx")
-    
-    if os.path.exists(template_path):
-        with open(template_path, "rb") as f:
-            return f.read()
-            
-    default_path = os.path.join("templates", "default_job_format.xlsx")
-    if os.path.exists(default_path):
-        with open(default_path, "rb") as f:
-            return f.read()
-            
-    return None
-
 def ensure_default_shipper():
     if "shipper_database" not in st.session_state:
         st.session_state["shipper_database"] = {}
@@ -44,15 +27,9 @@ def ensure_default_shipper():
     s_name = "WELSPUN GLOBAL BRANDS LIMITED"
     if s_name not in st.session_state["shipper_database"]:
         initial_rules = dict(st.session_state.get("master_rules_template", {}))
-        
-        uploaded_files_dict = {}
-        disk_tpl = load_template_from_disk(s_name)
-        if disk_tpl:
-            uploaded_files_dict["Full Job Excel Format File"] = disk_tpl
-
         st.session_state["shipper_database"][s_name] = {
             "allowed_uploads": ["Full Job Excel Format File"], 
-            "uploaded_files": uploaded_files_dict,
+            "uploaded_files": {},
             "mapping_rules": initial_rules,
             "item_table_rules": {
                 "RITC / HS Code": {"col": "L", "type": "PDF Row Item", "rule": "HS Code"},
@@ -81,8 +58,9 @@ def fetch_data_from_google_sheet(show_toast=False):
                 return
 
             data = response.json()
+            
+            # 1. Fetch Rules Data
             rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
-                
             if isinstance(rules_list, list) and len(rules_list) > 0:
                 for row in rules_list:
                     if isinstance(row, dict):
@@ -96,22 +74,13 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 target_key = "WELSPUN GLOBAL BRANDS LIMITED"
                                 
                             if target_key not in st.session_state["shipper_database"]:
-                                disk_tpl = load_template_from_disk(target_key)
-                                u_dict = {"Full Job Excel Format File": disk_tpl} if disk_tpl else {}
                                 st.session_state["shipper_database"][target_key] = {
                                     "allowed_uploads": ["Full Job Excel Format File"],
-                                    "uploaded_files": u_dict,
+                                    "uploaded_files": {},
                                     "mapping_rules": {},
                                     "item_table_rules": {}
                                 }
                             
-                            # Restore Template File from Google Sheet Base64 if missing
-                            tpl_b64 = get_val_case_insensitive(row, "TemplateB64", "template", default="")
-                            if tpl_b64 and "Full Job Excel Format File" not in st.session_state["shipper_database"][target_key]["uploaded_files"]:
-                                try:
-                                    st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = base64.b64decode(tpl_b64)
-                                except Exception as e: pass
-
                             if "item" in rule_kind:
                                 st.session_state["shipper_database"][target_key]["item_table_rules"][f_name] = {
                                     "col": get_val_case_insensitive(row, "Cell", "cell", "col"),
@@ -128,7 +97,23 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
                                     "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                                 }
-                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स लोड हो गए!")
+
+            # 2. Fetch Files Data (From Shipper_Files Tab)
+            files_list = data.get("files", []) if isinstance(data, dict) else []
+            if isinstance(files_list, list):
+                for f_row in files_list:
+                    if isinstance(f_row, dict):
+                        s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
+                        b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
+                        if s_name and b64_str:
+                            target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
+                            if target_key in st.session_state["shipper_database"]:
+                                try:
+                                    decoded_bytes = base64.b64decode(b64_str)
+                                    st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = decoded_bytes
+                                except Exception as e: pass
+
+                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स और फाइल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -244,11 +229,6 @@ def render_shipper_data():
             # --- SECTION 1: TEMPLATE UPLOAD ---
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             
-            if "Full Job Excel Format File" not in shipper_info.get("uploaded_files", {}):
-                disk_tpl = load_template_from_disk(selected_shipper)
-                if disk_tpl:
-                    shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = disk_tpl
-
             has_file = "Full Job Excel Format File" in shipper_info.get("uploaded_files", {})
             if has_file:
                 st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है।")
@@ -259,7 +239,7 @@ def render_shipper_data():
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
                 if f_upload:
                     shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = f_upload.getvalue()
-                    st.success("टेम्पलेट सेव हो गया! अब नीचे 'Save All Rules' बटन दबाकर इसे Google Sheet में भी सेव कर लें।")
+                    st.success("टेम्पलेट सेव हो गया! अब नीचे 'Save All Rules' दबाकर गूगल शीट में लॉक करें।")
                     st.rerun()
                     
             st.write("---")
@@ -425,21 +405,20 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            # SAVE BUTTON
+            # 🎯 SAVE BUTTON (Saves Rules to Shipper_Rules & File Base64 to Shipper_Files)
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
+                files_payload = []
                 
-                tpl_bytes = shipper_info.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
-                tpl_b64 = base64.b64encode(tpl_bytes).decode('utf-8') if tpl_bytes else ""
-
                 for s_name, s_data in st.session_state["shipper_database"].items():
+                    # 1. Prepare Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
                             "Position": r_info.get("position", "Right (आगे)"), "Cell": r_info.get("cell", ""),
                             "MatchMode": r_info.get("match_mode", "Exact Word"), "StopKw": r_info.get("stop_kw", ""),
                             "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None"),
-                            "RuleKind": "header", "TemplateB64": tpl_b64
+                            "RuleKind": "header"
                         })
                     for i_field, i_info in s_data.get("item_table_rules", {}).items():
                         rules_payload.append({
@@ -447,13 +426,28 @@ def render_shipper_data():
                             "Position": "Right (आगे)", "Cell": i_info.get("col", "K"),
                             "MatchMode": i_info.get("type", "PDF Row Item"), "StopKw": "",
                             "Filter": "None", "Logic": "None",
-                            "RuleKind": "item", "TemplateB64": tpl_b64
+                            "RuleKind": "item"
+                        })
+                        
+                    # 2. Prepare Template File for Shipper_Files Tab
+                    tpl_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
+                    if tpl_bytes:
+                        b64_str = base64.b64encode(tpl_bytes).decode('utf-8')
+                        files_payload.append({
+                            "ShipperName": s_name,
+                            "FileBase64": b64_str
                         })
                 
-                with st.spinner("⏳ गूगल शीट में सुरक्षित सेव हो रहा है..."):
+                full_post_data = {
+                    "action": "save_all",
+                    "rules": rules_payload,
+                    "files": files_payload
+                }
+                
+                with st.spinner("⏳ गूगल शीट (Shipper_Rules + Shipper_Files) में सेव हो रहा है..."):
                     try:
-                        requests.post(WEB_APP_URL, data=json.dumps({"action": "save_rules", "rules": rules_payload}), timeout=30)
-                        st.success("🎉 आपके सभी रूल्स + Excel टेम्पलेट फ़ाइल गूगल शीट में हमेशा के लिए सुरक्षित सेव हो गए!")
+                        requests.post(WEB_APP_URL, data=json.dumps(full_post_data), timeout=30)
+                        st.success("🎉 आपके सभी रूल्स और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
                         st.balloons()
                     except Exception as e:
                         st.error(f"सिंक एरर: {str(e)}")
