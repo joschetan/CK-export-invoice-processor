@@ -129,7 +129,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                     elif not s_data.get("item_table_rules"):
                         s_data["item_table_rules"] = get_default_item_rules()
 
-            # 2. Fetch Files (From Shipper_Files with ZIP Verification)
+            # 2. Fetch Files (From Shipper_Files with STRICT BASE64 CLEANUP)
             files_list = data.get("files", []) if isinstance(data, dict) else []
             if isinstance(files_list, list):
                 for f_row in files_list:
@@ -140,8 +140,11 @@ def fetch_data_from_google_sheet(show_toast=False):
                         if target_key in st.session_state["shipper_database"]:
                             if b64_str and len(b64_str.strip()) > 0:
                                 try:
-                                    decoded_bytes = base64.b64decode(b64_str.strip())
-                                    # 🎯 Check if valid Excel ZIP header (starts with b'PK')
+                                    # 🎯 FIX: Remove quotes and replace spaces with + for Base64 integrity
+                                    clean_b64 = b64_str.lstrip("'").strip().replace(" ", "+")
+                                    decoded_bytes = base64.b64decode(clean_b64)
+                                    
+                                    # Check if valid Excel ZIP header (starts with b'PK')
                                     if decoded_bytes.startswith(b'PK'):
                                         st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = decoded_bytes
                                     else:
