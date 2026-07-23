@@ -5,6 +5,7 @@ import base64
 import pdfplumber
 import re
 import time
+import os
 from io import BytesIO
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
@@ -59,7 +60,7 @@ def fetch_data_from_google_sheet(show_toast=False):
 
             data = response.json()
             
-            # 1. Fetch Rules Data
+            # 1. Fetch Rules
             rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
             if isinstance(rules_list, list) and len(rules_list) > 0:
                 for row in rules_list:
@@ -98,7 +99,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                                 }
 
-            # 2. Fetch Files Data (From Shipper_Files Tab)
+            # 2. Fetch Files (From Shipper_Files)
             files_list = data.get("files", []) if isinstance(data, dict) else []
             if isinstance(files_list, list):
                 for f_row in files_list:
@@ -405,13 +406,13 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            # 🎯 SAVE BUTTON (Saves Rules to Shipper_Rules & File Base64 to Shipper_Files)
+            # SAVE BUTTON
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
-                    # 1. Prepare Rules
+                    # 1. Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
@@ -429,7 +430,7 @@ def render_shipper_data():
                             "RuleKind": "item"
                         })
                         
-                    # 2. Prepare Template File for Shipper_Files Tab
+                    # 2. Template File
                     tpl_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
                     if tpl_bytes:
                         b64_str = base64.b64encode(tpl_bytes).decode('utf-8')
