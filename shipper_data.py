@@ -297,7 +297,7 @@ def render_shipper_data():
             pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below", "Table Row Item", "Table Row Index"]
             mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
             
-            # 🎯 ADDED 'Text Inside Parentheses ()' TO FILTER OPTIONS
+            # 🎯 UPDATED FILTER OPTIONS WITH 'Text Inside Parentheses ()'
             filter_options = [
                 "None", 
                 "Text Inside Parentheses ()", 
@@ -338,6 +338,9 @@ def render_shipper_data():
                 mode_idx = mode_options.index(saved_mode) if saved_mode in mode_options else 0
                 
                 saved_flt = s_val.get("filter", "None")
+                # Fallback safeguard for legacy names like "Inside Parentheses ()"
+                if saved_flt == "Inside Parentheses ()":
+                    saved_flt = "Text Inside Parentheses ()"
                 flt_idx = filter_options.index(saved_flt) if saved_flt in filter_options else 0
 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
