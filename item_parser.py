@@ -96,7 +96,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     raw_val = item.get("hs_code", "")
                 elif "description" in r_val_lower or "description" in f_name_lower:
                     raw_val = item.get("description_text", "")
-                elif "dbk" in r_val_lower or "drawback" in f_name_lower:
+                elif "dbk" in r_val_lower or "drawback" in f_name_lower or col_letter == "S":
                     raw_val = item.get("dbk_found", "")
                     if raw_val and not str(raw_val).endswith("B"):
                         raw_val = f"{raw_val}B"
