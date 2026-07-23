@@ -105,30 +105,39 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 DIRECT TEMPLATE LOADING FROM SHIPPER DATABASE (NO SKIP)
+                    # 🎯 STRICT & ACCURATE TEMPLATE LOADING LOGIC
                     wb = None
                     uploaded_files = shipper_info.get("uploaded_files", {})
                     
                     if "Full Job Excel Format File" in uploaded_files:
                         tpl_data = uploaded_files["Full Job Excel Format File"]
                         
-                        # Convert to bytes if String/Base64
-                        if isinstance(tpl_data, str) and len(tpl_data) > 0:
+                        # 1. Clean string/base64 before decoding
+                        if isinstance(tpl_data, str) and len(tpl_data.strip()) > 0:
                             try:
-                                tpl_data = base64.b64decode(tpl_data)
+                                clean_b64 = re.sub(r'[^A-Za-z0-9+/=]', '', tpl_data.strip())
+                                # Fix Base64 Padding if truncated
+                                missing_padding = len(clean_b64) % 4
+                                if missing_padding:
+                                    clean_b64 += '=' * (4 - missing_padding)
+                                tpl_data = base64.b64decode(clean_b64)
                             except Exception:
                                 pass
                         
+                        # 2. Try loading workbook with strict sheet check ("INV")
                         if isinstance(tpl_data, bytes) and len(tpl_data) > 100:
                             try:
                                 wb = openpyxl.load_workbook(BytesIO(tpl_data))
-                            except Exception as e:
+                            except Exception as load_err:
+                                st.error(f"⚠️ टेम्पलेट फ़ाइल लोड करने में एरर आया: {load_err}")
                                 wb = None
 
-                    # Fallback to new workbook only if no template found/valid
+                    # If no template uploaded or file corrupt, notify user
                     if wb is None:
+                        st.warning("⚠️ ब्लैंक फ़ॉर्मेट फ़ाइल यूज़ हो रही है क्योंकि कोई मान्य Excel टेम्पलेट नहीं मिला।")
                         wb = openpyxl.Workbook()
                         
+                    # Target "INV" sheet if present as confirmed
                     ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
                     
                     first_inv_no = "INV"
