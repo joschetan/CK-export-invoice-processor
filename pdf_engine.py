@@ -1,5 +1,31 @@
 import re
 
+def apply_value_replacement(extracted_text, mapping_str):
+    """
+    Parses 'FIND=REPLACE, FIND2=REPLACE2' mapping syntax and applies it to extracted_text.
+    """
+    if not extracted_text or not mapping_str or "=" not in mapping_str:
+        return extracted_text
+
+    text_clean = str(extracted_text).strip()
+    pairs = [p.strip() for p in mapping_str.split(",") if "=" in p]
+    
+    for pair in pairs:
+        parts = pair.split("=")
+        if len(parts) == 2:
+            find_kw = parts[0].strip()
+            replace_kw = parts[1].strip()
+            
+            # Case-insensitive full word or exact match check
+            if text_clean.lower() == find_kw.lower():
+                return replace_kw
+            elif find_kw.lower() in text_clean.lower():
+                # Replace matching substring cleanly
+                pattern = re.compile(re.escape(find_kw), re.IGNORECASE)
+                return pattern.sub(replace_kw, text_clean)
+                
+    return text_clean
+
 def apply_rule_filter(raw_text, mode, stop_kw, flt):
     """
     Core Extraction Engine: Filters raw PDF extracted text based on user rules
@@ -16,13 +42,14 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
         parts = text.split()
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
-        if stop_kw.lower() in text.lower():
+        # Check if stop_kw contains replacement dictionary like "CART=CTN"
+        if "=" not in stop_kw and stop_kw.lower() in text.lower():
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
             text = text[start_idx:].strip()
             if text.startswith(":"):
                 text = text[1:].strip()
     elif mode == "Between Keywords" and stop_kw:
-        if stop_kw.lower() in text.lower():
+        if "=" not in stop_kw and stop_kw.lower() in text.lower():
             text = text.lower().split(stop_kw.lower())[0].strip()
     elif mode == "Exact Word":
         parts = text.split()
@@ -32,15 +59,21 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt):
 
     if flt == "Container Number (ISO Format)":
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
-        return cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
+        text = cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
     elif flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
-        return nums[0].strip() if nums else ""
+        text = nums[0].strip() if nums else ""
     elif flt == "Letters Only":
-        return re.sub(r'[^A-Za-z\s]', '', text).strip()
+        text = re.sub(r'[^A-Za-z\s]', '', text).strip()
     elif flt == "Clean Date (DD/MM/YYYY)":
         d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
-        return d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
+        text = d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
+
+    # 🎯 APPLY MULTI-CONDITION VALUE REPLACEMENT IF SYNTAX (FIND=REPLACE) IS PRESENT IN STOP_KW OR FILTER
+    if stop_kw and "=" in stop_kw:
+        text = apply_value_replacement(text, stop_kw)
+    if flt and "=" in flt:
+        text = apply_value_replacement(text, flt)
 
     return text.strip()
 
