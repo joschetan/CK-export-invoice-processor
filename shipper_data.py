@@ -47,12 +47,11 @@ def ensure_default_shipper():
         
     s_name = "WELSPUN GLOBAL BRANDS LIMITED"
     if s_name not in st.session_state["shipper_database"]:
-        initial_rules = dict(st.session_state.get("master_rules_template", {}))
         st.session_state["shipper_database"][s_name] = {
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
-            "mapping_rules": initial_rules,
-            "item_table_rules": get_default_item_rules(),
+            "mapping_rules": {},       # 🎯 Khaali rakha taaki Google Sheet ka data override na ho
+            "item_table_rules": {},    # 🎯 Khaali rakha taaki purane deleted rules wapas na aayein
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                 "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -122,12 +121,10 @@ def fetch_data_from_google_sheet(show_toast=False):
                                     "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
                                 }
 
-                # Populate Item rules safely without making Section 4 blank
+                # Populate Item rules strictly from Google Sheet data
                 for s_key, s_data in st.session_state["shipper_database"].items():
-                    if s_key in fetched_item_rules and fetched_item_rules[s_key]:
+                    if s_key in fetched_item_rules:
                         s_data["item_table_rules"] = fetched_item_rules[s_key]
-                    elif not s_data.get("item_table_rules"):
-                        s_data["item_table_rules"] = get_default_item_rules()
 
             # 2. Fetch Files (From Shipper_Files)
             files_list = data.get("files", []) if isinstance(data, dict) else []
@@ -412,7 +409,7 @@ def render_shipper_data():
                 if st.button("➕ Add Item Column", use_container_width=True):
                     add_item_col_dialog(selected_shipper)
             
-            item_rules = shipper_info.setdefault("item_table_rules", get_default_item_rules())
+            item_rules = shipper_info.get("item_table_rules", {})
             updated_item_rules = {}
             
             ic1, ic2, ic3, ic4, ic5 = st.columns([3, 2, 3, 3, 1])
