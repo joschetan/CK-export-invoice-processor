@@ -5,7 +5,7 @@ import base64
 import pdfplumber
 import time
 import os
-import re  # 👈 यह मिसिंग था, इसे जोड़ दिया है
+import re
 from io import BytesIO
 
 # Import core extraction logic from separated engine module
@@ -15,10 +15,6 @@ from pdf_engine import extract_header_value, detect_igst_status
 from test_suite import render_universal_test_suite
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
-
-TEMPLATE_DIR = "uploaded_templates"
-DEFAULT_TEMPLATE = "default_template.xlsx"
-os.makedirs(TEMPLATE_DIR, exist_ok=True)
 
 def get_val_case_insensitive(d, *keys, default=""):
     if not isinstance(d, dict):
@@ -133,7 +129,25 @@ def fetch_data_from_google_sheet(show_toast=False):
                     elif not s_data.get("item_table_rules"):
                         s_data["item_table_rules"] = get_default_item_rules()
 
-            if show_toast: st.toast("✅ गूगल शीट से रूल्स लोड हो गए!")
+            # 2. Fetch Files (From Shipper_Files)
+            files_list = data.get("files", []) if isinstance(data, dict) else []
+            if isinstance(files_list, list):
+                for f_row in files_list:
+                    if isinstance(f_row, dict):
+                        s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
+                        b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
+                        target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
+                        if target_key in st.session_state["shipper_database"]:
+                            if b64_str and len(b64_str.strip()) > 0:
+                                try:
+                                    decoded_bytes = base64.b64decode(b64_str)
+                                    st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = decoded_bytes
+                                except Exception as e: pass
+                            else:
+                                # 🎯 Sheet mein khali hai toh session se bhi uda do
+                                st.session_state["shipper_database"][target_key]["uploaded_files"]["Full Job Excel Format File"] = b""
+
+                if show_toast: st.toast(f"✅ गूगल शीट से रूल्स लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -160,7 +174,7 @@ def show_field_test_dialog(field_name, rule_data, result_val):
     if "❌" in result_val or not result_val.strip():
         st.error(f"❌ **Not Found!** Value: `{result_val}`")
     else:
-        st.success("🎉 **SUCCESS! Extracted Value:**")
+        st.success(f"🎉 **SUCCESS! Extracted Value:**")
         st.code(result_val, language="text")
 
 @st.dialog("⚠️ Urgent: Verify IGST Status for Column V")
@@ -228,26 +242,21 @@ def render_shipper_data():
             # --- SECTION 1: TEMPLATE UPLOAD ---
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड")
             
-            clean_s_name = re.sub(r'[^A-Za-z0-9]', '_', selected_shipper)
-            local_tpl_path = os.path.join(TEMPLATE_DIR, f"{clean_s_name}.xlsx")
-            
-            # Check either shipper-specific temp file OR project root file
-            has_file = (os.path.exists(local_tpl_path) and os.path.getsize(local_tpl_path) > 100) or os.path.exists(DEFAULT_TEMPLATE)
+            uploaded_files_dict = shipper_info.get("uploaded_files", {})
+            has_file = "Full Job Excel Format File" in uploaded_files_dict and len(uploaded_files_dict["Full Job Excel Format File"]) > 0
             
             if has_file:
-                st.success("✅ Blank Full Job Excel Format File (Template) उपलब्ध है और सुरक्षित है।")
+                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है।")
                 if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
-                    if os.path.exists(local_tpl_path):
-                        os.remove(local_tpl_path)
+                    shipper_info["uploaded_files"]["Full Job Excel Format File"] = b""
                     st.rerun()
             else:
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
                 if f_upload is not None:
                     file_bytes = f_upload.getvalue()
-                    if len(file_bytes) > 100:
-                        with open(local_tpl_path, "wb") as f:
-                            f.write(file_bytes)
-                        st.success("🎉 टेम्पलेट परमानेंट सेव हो गया!")
+                    if file_bytes and len(file_bytes) > 0:
+                        shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = file_bytes
+                        st.success("टेम्पलेट लोड हो गया! नीचे 'Save All Rules' दबाकर गूगल शीट में सेव करें।")
                         st.rerun()
                     
             st.write("---")
@@ -447,6 +456,7 @@ def render_shipper_data():
             # SAVE BUTTON
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
+                files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
                     # 1. Header Rules
@@ -467,14 +477,29 @@ def render_shipper_data():
                             "Filter": "None", "Logic": "None",
                             "RuleKind": "item"
                         })
+                        
+                    # 3. Template File payload
+                    tpl_bytes = s_data.get("uploaded_files", {}).get("Full Job Excel Format File", b"")
+                    if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 0:
+                        b64_str = base64.b64encode(tpl_bytes).decode('utf-8')
+                        files_payload.append({
+                            "ShipperName": s_name,
+                            "FileBase64": b64_str
+                        })
+                    else:
+                        # 🎯 FORCE GOOGLE SHEET TO CLEAR FILE ROW IF DELETED
+                        files_payload.append({
+                            "ShipperName": s_name,
+                            "FileBase64": ""
+                        })
                 
                 full_post_data = {
                     "action": "save_all",
                     "rules": rules_payload,
-                    "files": []
+                    "files": files_payload
                 }
                 
-                with st.spinner("⏳ गूगल शीट में रूल्स सुरक्षित सेव हो रहे हैं..."):
+                with st.spinner("⏳ गूगल शीट (Shipper_Rules + Shipper_Files) में सुरक्षित सेव हो रहा है..."):
                     try:
                         requests.post(WEB_APP_URL, data=json.dumps(full_post_data), timeout=30)
                         st.success("🎉 आपके सभी रूल्स गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
