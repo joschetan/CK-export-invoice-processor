@@ -105,19 +105,19 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 TEMPLATE LOADING DIRECTLY FROM GOOGLE SHEET DATA
+                    # 🎯 ROBUST TEMPLATE LOADING FROM GOOGLE SHEET / SESSION MEMORY
                     wb = None
                     uploaded_files = shipper_info.get("uploaded_files", {})
+                    tpl_bytes = uploaded_files.get("Full Job Excel Format File", b"")
                     
-                    if "Full Job Excel Format File" in uploaded_files:
-                        tpl_bytes = uploaded_files["Full Job Excel Format File"]
-                        if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 100 and tpl_bytes.startswith(b'PK'):
-                            try:
-                                wb = openpyxl.load_workbook(BytesIO(tpl_bytes))
-                            except Exception:
-                                wb = None
+                    if isinstance(tpl_bytes, bytes) and len(tpl_bytes) > 100 and tpl_bytes.startswith(b'PK'):
+                        try:
+                            wb = openpyxl.load_workbook(BytesIO(tpl_bytes))
+                        except Exception as e:
+                            st.warning(f"⚠️ टेम्पलेट लोड करने में वार्निंग: {e}")
+                            wb = None
 
-                    # Fallback to new workbook if no template found
+                    # Fallback to new workbook if template bytes are missing
                     if wb is None:
                         wb = openpyxl.Workbook()
                         
