@@ -1,7 +1,7 @@
 import streamlit as st
 import pdfplumber
 import re
-from pdf_engine import extract_header_value
+from pdf_engine import extract_header_value, apply_value_replacement
 
 def render_universal_test_suite(selected_shipper):
     st.markdown("---")
@@ -95,7 +95,7 @@ def render_universal_test_suite(selected_shipper):
                 
                 # Sample Extraction logic display
                 if rule_type == "Constant Text":
-                    sample_res = rule_val
+                    sample_res = apply_value_replacement(rule_val, rule_val)
                 elif rule_type == "Excel Cell Reference":
                     sample_res = f"={rule_val}"
                 elif rule_type == "Smart Detection":
@@ -120,6 +120,8 @@ def render_universal_test_suite(selected_shipper):
                             sample_res = rule_val if rule_val else "SET"
                 else:
                     sample_res = f"Mapped via {rule_type} ({rule_val})"
+                    if "=" in rule_val:
+                        sample_res = apply_value_replacement(sample_res, rule_val)
 
                 st.success(f"✅ **Simulated First Cell Output ({col_letter}2):** `{sample_res}`")
             else:
