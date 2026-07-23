@@ -5,52 +5,36 @@ def extract_item_table_rows(pdf_lines):
     
     for line in pdf_lines:
         line_str = line.strip()
-        # 8-digit HS Code se shuru hone wali line
+        # 8-digit HS Code se shuru hone wali line pehchano
         if re.match(r'^\d{8}\b', line_str):
             parts = [p.strip() for p in line_str.split() if p.strip()]
             if len(parts) >= 3:
+                # Fully Dynamic Dictionary - No Fixed Keys
                 item_dict = {
-                    "hs_code": parts[0],
                     "raw_parts": parts,
-                    "description": "",
-                    "net_weight": "",
-                    "dbk_sr": "",
-                    "quantity": "",
-                    "rate": "",
-                    "amount_usd": "",
-                    "amount_inr": "",
-                    "igst_rate": "",
-                    "igst_amt": ""
+                    "hs_code": parts[0]
                 }
                 
-                # Extract Floats/Numbers accurately from row
-                # Line format: 63026090 Set Towel 133.272 630201 180.000 5.08 914.40 87279.48 5.00 4363.97
+                # Extract all floating point numbers (Amounts, Qty, Rates, Weights)
                 nums = re.findall(r'[\d,]+\.\d{2,3}', line_str)
                 
-                # Finding DBK Code (e.g. 630201 or 9807630201B)
-                dbk_match = re.search(r'\b\d{6}[A-Za-z]?\b|\b\d{10}[A-Za-z]?\b', line_str)
-                if dbk_match:
-                    item_dict["dbk_sr"] = dbk_match.group(0)
-
-                if len(nums) >= 5:
-                    item_dict["net_weight"] = nums[0]
-                    item_dict["quantity"] = nums[1]
-                    item_dict["rate"] = nums[2]
-                    item_dict["amount_usd"] = nums[3]
-                    item_dict["amount_inr"] = nums[4]
-                    if len(nums) >= 6: item_dict["igst_rate"] = nums[5]
-                    if len(nums) >= 7: item_dict["igst_amt"] = nums[6]
+                # Dynamic positional list of numbers extracted from PDF line
+                item_dict["nums"] = nums
                 
-                # Extract Description safely (Text between HS Code and first float number)
+                # Finding DBK Code if present (6-digit or 10-digit with suffix)
+                dbk_match = re.search(r'\b\d{6}[A-Za-z]?\b|\b\d{10}[A-Za-z]?\b', line_str)
+                item_dict["dbk_found"] = dbk_match.group(0) if dbk_match else ""
+
+                # Dynamic Description (Text between HS Code and First Number)
                 if len(nums) > 0:
                     first_num = nums[0]
                     start_pos = len(parts[0])
                     end_pos = line_str.find(first_num)
                     if end_pos > start_pos:
                         desc_text = line_str[start_pos:end_pos].strip()
-                        if item_dict["dbk_sr"]:
-                            desc_text = desc_text.replace(item_dict["dbk_sr"], "").strip()
-                        item_dict["description"] = desc_text
+                        if item_dict["dbk_found"]:
+                            desc_text = desc_text.replace(item_dict["dbk_found"], "").strip()
+                        item_dict["description_text"] = desc_text
                         
                 parsed_items.append(item_dict)
                 
@@ -68,30 +52,18 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     elif default_invoice_date and len(str(default_invoice_date)) >= 8 and not str(default_invoice_date).lower().startswith("inv"):
         clean_date = str(default_invoice_date)
 
-    # UI Rule Detail / Field Name Exact Mapping Dictionary
-    value_map = {
-        "hs code": "hs_code", "hs": "hs_code", "ritc": "hs_code", "ritc / hs code": "hs_code",
-        "description": "description", "description of goods": "description",
-        "net weight": "net_weight", "net wt": "net_weight", "nt.wt(kgs)": "net_weight", "weight": "net_weight",
-        "dbk sr (+b suffix)": "dbk_sr", "dbk sr": "dbk_sr", "dbk": "dbk_sr", "drawback sr code": "dbk_sr", "drawback": "dbk_sr",
-        "qty number": "quantity", "qty": "quantity", "quantity": "quantity",
-        "rate": "rate", "rate in": "rate",
-        "amount usd": "amount_usd", "goods value": "amount_usd", "amount": "amount_usd",
-        "taxable amt": "amount_inr", "taxable": "amount_inr", "taxable value (inr)": "amount_inr", "amount inr": "amount_inr",
-        "igst %": "igst_rate", "igst rate": "igst_rate", "igst rate (%)": "igst_rate",
-        "igst amt": "igst_amt", "igst amount": "igst_amt", "igst amount (inr)": "igst_amt"
-    }
-
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
         
-        # 🎯 STRICTLY ONLY G, H, I, J ARE FILLED BY SYSTEM CODE:
+        # 🎯 STRICTLY SYSTEM COLUMNS ONLY (G, H, I, J)
         ws[f"G{curr_row}"] = inv_sr_no                    # G = Inv Sr No
         ws[f"H{curr_row}"] = item_sr_no                   # H = Item Sr No
         ws[f"I{curr_row}"] = default_invoice_no           # I = Invoice No
         ws[f"J{curr_row}"] = clean_date                   # J = Clean Date (DD/MM/YYYY)
         
-        # 🎯 DIRECT UI MAPPING CONTROLLED BY SECTION 4 DYNAMIC BUILDER
+        nums = item.get("nums", [])
+        
+        # 🎯 100% DYNAMIC UI MAPPING (Section 4 Dynamic Builder Drives Everything)
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type = r_info.get("type", "PDF Row Item")
@@ -110,7 +82,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 else:
                     ws[cell_ref] = rule_val
             elif rule_type == "Smart Detection":
-                desc = item.get("description", "").upper()
+                desc = item.get("description_text", "").upper()
                 if "PCS" in desc or "PC" in desc:
                     ws[cell_ref] = "PCS"
                 else:
@@ -119,22 +91,36 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 r_val_lower = rule_val.lower().strip()
                 f_name_lower = field_name.lower().strip()
                 
-                # Check value_map via rule_val first, then field_name
-                dict_key = value_map.get(r_val_lower, value_map.get(f_name_lower, ""))
+                raw_val = ""
                 
-                raw_val = item.get(dict_key, "") if dict_key else ""
-                
-                # Special Suffix for DBK SR
-                if dict_key == "dbk_sr" or col_letter == "S":
+                # Flexible Rule Detection
+                if "hs" in r_val_lower or "ritc" in f_name_lower or "hs code" in r_val_lower:
+                    raw_val = item.get("hs_code", "")
+                elif "description" in r_val_lower or "description" in f_name_lower:
+                    raw_val = item.get("description_text", "")
+                elif "dbk" in r_val_lower or "drawback" in f_name_lower:
+                    raw_val = item.get("dbk_found", "")
                     if raw_val and not str(raw_val).endswith("B"):
-                        ws[cell_ref] = f"{raw_val}B"
-                    else:
-                        ws[cell_ref] = raw_val
-                else:
-                    try:
-                        ws[cell_ref] = float(str(raw_val).replace(",", ""))
-                    except:
-                        ws[cell_ref] = raw_val
+                        raw_val = f"{raw_val}B"
+                elif "weight" in r_val_lower or "net wt" in f_name_lower:
+                    raw_val = nums[0] if len(nums) > 0 else ""
+                elif "qty" in r_val_lower or "quantity" in f_name_lower:
+                    raw_val = nums[1] if len(nums) > 1 else ""
+                elif "rate" in r_val_lower or "rate" in f_name_lower:
+                    raw_val = nums[2] if len(nums) > 2 else ""
+                elif "amount usd" in r_val_lower or "goods value" in f_name_lower or "amount" in r_val_lower:
+                    raw_val = nums[3] if len(nums) > 3 else ""
+                elif "taxable" in r_val_lower or "taxable" in f_name_lower:
+                    raw_val = nums[4] if len(nums) > 4 else ""
+                elif "igst %" in r_val_lower or "igst rate" in f_name_lower:
+                    raw_val = nums[5] if len(nums) > 5 else ""
+                elif "igst amt" in r_val_lower or "igst amount" in f_name_lower:
+                    raw_val = nums[6] if len(nums) > 6 else ""
+                
+                try:
+                    ws[cell_ref] = float(str(raw_val).replace(",", ""))
+                except:
+                    ws[cell_ref] = raw_val
                     
         curr_row += 1
         overall_sr += 1
