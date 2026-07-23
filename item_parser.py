@@ -14,6 +14,7 @@ def extract_item_table_rows(pdf_lines):
                     "raw_parts": parts
                 }
                 
+                # Welspun Row Items Extraction (HS Code, Description, Net Wt, DBK, Qty, Rate, Amt USD, Amt INR, IGST %, IGST Amt)
                 if len(parts) >= 8:
                     item_dict["description"] = parts[1]
                     item_dict["net_weight"] = parts[2]
@@ -46,6 +47,20 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     elif default_invoice_date and not str(default_invoice_date).lower().startswith("inv"):
         clean_date = str(default_invoice_date)
 
+    # Standard Dictionary Mapping for Rule Details
+    value_map = {
+        "hs code": "hs_code", "hs": "hs_code", "ritc": "hs_code",
+        "description": "description",
+        "net weight": "net_weight", "net wt": "net_weight", "weight": "net_weight",
+        "dbk sr (+b suffix)": "dbk_sr", "dbk sr": "dbk_sr", "dbk": "dbk_sr", "drawback": "dbk_sr",
+        "qty number": "quantity", "qty": "quantity", "quantity": "quantity",
+        "rate": "rate",
+        "amount usd": "amount_usd", "goods value": "amount_usd", "amount": "amount_usd",
+        "taxable amt": "amount_inr", "taxable": "amount_inr", "amount inr": "amount_inr",
+        "igst %": "igst_rate", "igst rate": "igst_rate",
+        "igst amt": "igst_amt", "igst amount": "igst_amt"
+    }
+
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
         
@@ -55,7 +70,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         ws[f"I{curr_row}"] = default_invoice_no           # I = Invoice No
         ws[f"J{curr_row}"] = clean_date                   # J = Clean Date (DD/MM/YYYY)
         
-        # 🎯 ALL OTHER COLUMNS DRIVEN 100% BY SECTION 4 UI MAPPING SETTINGS
+        # 🎯 DIRECT UI MAPPING (Section 4 Dynamic Builder)
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type = r_info.get("type", "PDF Row Item")
@@ -80,48 +95,22 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 else:
                     ws[cell_ref] = rule_val if rule_val else "SET"
             elif rule_type == "PDF Row Item":
-                r_val_lower = rule_val.lower()
+                r_val_lower = rule_val.lower().strip()
+                dict_key = value_map.get(r_val_lower, "")
                 
-                # Simple Direct Mapping based on UI Rule Value
-                if "qty" in r_val_lower:
-                    val = item.get("quantity", "")
-                    try: ws[cell_ref] = float(str(val).replace(",", ""))
-                    except: ws[cell_ref] = val
-                elif "dbk" in r_val_lower or "drawback" in r_val_lower:
-                    # 🎯 DBK SR '+B' Suffix Special Logic
-                    raw_dbk = item.get("dbk_sr", "")
-                    if raw_dbk and not str(raw_dbk).endswith("B"):
-                        ws[cell_ref] = f"{raw_dbk}B"
+                raw_val = item.get(dict_key, "") if dict_key else ""
+                
+                # 🎯 ONLY SPECIAL LOGIC: S Column / DBK SR '+B' Suffix
+                if dict_key == "dbk_sr" or col_letter == "S":
+                    if raw_val and not str(raw_val).endswith("B"):
+                        ws[cell_ref] = f"{raw_val}B"
                     else:
-                        ws[cell_ref] = raw_dbk
-                elif "hs" in r_val_lower or "ritc" in r_val_lower:
-                    ws[cell_ref] = item.get("hs_code", "")
-                elif "description" in r_val_lower:
-                    ws[cell_ref] = item.get("description", "")
-                elif "rate" in r_val_lower:
-                    val = item.get("rate", "")
-                    try: ws[cell_ref] = float(str(val).replace(",", ""))
-                    except: ws[cell_ref] = val
-                elif "amount usd" in r_val_lower or "amount" in r_val_lower:
-                    val = item.get("amount_usd", "")
-                    try: ws[cell_ref] = float(str(val).replace(",", ""))
-                    except: ws[cell_ref] = val
-                elif "taxable" in r_val_lower or "inr" in r_val_lower:
-                    val = item.get("amount_inr", "")
-                    try: ws[cell_ref] = float(str(val).replace(",", ""))
-                    except: ws[cell_ref] = val
-                elif "igst %" in r_val_lower:
-                    val = item.get("igst_rate", "")
-                    try: ws[cell_ref] = float(str(val).replace(",", ""))
-                    except: ws[cell_ref] = val
-                elif "igst amt" in r_val_lower:
-                    val = item.get("igst_amt", "")
-                    try: ws[cell_ref] = float(str(val).replace(",", ""))
-                    except: ws[cell_ref] = val
-                elif "weight" in r_val_lower or "net wt" in r_val_lower:
-                    val = item.get("net_weight", "")
-                    try: ws[cell_ref] = float(str(val).replace(",", ""))
-                    except: ws[cell_ref] = val
+                        ws[cell_ref] = raw_val
+                else:
+                    try:
+                        ws[cell_ref] = float(str(raw_val).replace(",", ""))
+                    except:
+                        ws[cell_ref] = raw_val
                     
         curr_row += 1
         overall_sr += 1
