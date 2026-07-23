@@ -45,7 +45,6 @@ def ensure_default_shipper():
                 "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
                 "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
                 "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
-                "IGST Status": {"col": "V", "type": "Excel Cell Reference", "rule": "B19"},
                 "Taxable Value (INR)": {"col": "W", "type": "PDF Row Item", "rule": "Taxable Amt"},
                 "IGST Rate (%)": {"col": "X", "type": "PDF Row Item", "rule": "IGST %"},
                 "IGST Amount (INR)": {"col": "Y", "type": "PDF Row Item", "rule": "IGST Amt"},
@@ -77,7 +76,12 @@ def fetch_data_from_google_sheet(show_toast=False):
                         s_name = get_val_case_insensitive(row, "ShipperName", "shipper", "shippername")
                         f_name = get_val_case_insensitive(row, "FieldName", "field", "fieldname")
                         rule_kind = get_val_case_insensitive(row, "RuleKind", "kind", default="header").lower()
+                        cell_val = get_val_case_insensitive(row, "Cell", "cell", "col").strip().upper()
                         
+                        # Guard: Filter out legacy IGST Status / B19 / V Column Rules from Sheet
+                        if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
+                            continue
+
                         if s_name and f_name:
                             target_key = s_name
                             if "welspun" in s_name.lower():
@@ -97,7 +101,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                             
                             if "item" in rule_kind:
                                 st.session_state["shipper_database"][target_key]["item_table_rules"][f_name] = {
-                                    "col": get_val_case_insensitive(row, "Cell", "cell", "col"),
+                                    "col": cell_val,
                                     "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
                                     "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
                                 }
@@ -105,7 +109,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 st.session_state["shipper_database"][target_key]["mapping_rules"][f_name] = {
                                     "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
                                     "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
-                                    "cell": get_val_case_insensitive(row, "Cell", "cell"),
+                                    "cell": cell_val,
                                     "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
                                     "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
                                     "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
@@ -291,6 +295,10 @@ def render_shipper_data():
             curr_pdf_text = st.session_state.get("cached_pdf_text", "")
 
             for field in list(current_rules.keys()):
+                # Filter out legacy IGST Mode / B19 / V cell rules from UI
+                if field.lower() in ["igst status", "igst mode"] or current_rules[field].get("cell", "").strip().upper() in ["V", "B19"]:
+                    continue
+
                 s_val = current_rules[field]
                 c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.8, 0.8, 1.2])
                 
@@ -385,6 +393,10 @@ def render_shipper_data():
             rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
             
             for item_field in list(item_rules.keys()):
+                # Filter out legacy IGST Status / B19 / V column rule from Item Rules
+                if item_field.lower() in ["igst status", "igst mode"] or item_rules[item_field].get("col", "").strip().upper() in ["V", "B19"]:
+                    continue
+
                 ir = item_rules[item_field]
                 ic1, ic2, ic3, ic4, ic5 = st.columns([3, 2, 3, 3, 1])
                 
