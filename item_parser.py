@@ -43,13 +43,13 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
-    # Clean Date Formatting (DD/MM/YYYY)
-    clean_date = ""
-    d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', str(default_invoice_date))
-    if d_match:
-        clean_date = d_match.group(0).replace(".", "/").replace("-", "/")
-    elif default_invoice_date and len(str(default_invoice_date)) >= 8 and not str(default_invoice_date).lower().startswith("inv"):
-        clean_date = str(default_invoice_date)
+    # 🎯 TEST LOGIC FOR J COLUMN:
+    # Pehle dekhenge ki processor se kya aa raha hai, agar wo khali hai to direct '18/07/2026' likhenge
+    raw_dt = str(default_invoice_date).strip()
+    if raw_dt and raw_dt.lower() != "none" and raw_dt != "T":
+        clean_date = raw_dt
+    else:
+        clean_date = "18/07/2026"
 
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
@@ -58,7 +58,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         ws[f"G{curr_row}"] = inv_sr_no                    # G = Inv Sr No
         ws[f"H{curr_row}"] = item_sr_no                   # H = Item Sr No
         ws[f"I{curr_row}"] = default_invoice_no           # I = Invoice No
-        ws[f"J{curr_row}"] = clean_date                   # J = Clean Date (DD/MM/YYYY)
+        ws[f"J{curr_row}"] = clean_date                   # J = Clean Date (TEST PRINT)
         
         nums = item.get("nums", [])
         
