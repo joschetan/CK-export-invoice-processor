@@ -38,7 +38,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
-    # 🎯 Date Cleaning (Failsafe for DD/MM/YYYY)
     clean_date = ""
     d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', str(default_invoice_date))
     if d_match:
@@ -49,34 +48,19 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
         
-        # 🎯 STRICT FIXED COLUMN MAPPING ACCORDING TO YOUR 7 POINTS
-        ws[f"G{curr_row}"] = inv_sr_no                    # Point 1: G me Inv Sr No
-        ws[f"H{curr_row}"] = overall_sr                   # Point 1: H me Overall Sr No
-        ws[f"I{curr_row}"] = item_sr_no                   # Point 2: I me Item Sr No
-        ws[f"J{curr_row}"] = default_invoice_no           # Point 2: J me Invoice No
-        ws[f"K{curr_row}"] = clean_date                   # Point 3: K me Clean Date (DD/MM/YYYY)
+        # Standard Fixed System Columns (G, H, I, J, K)
+        ws[f"G{curr_row}"] = inv_sr_no                    
+        ws[f"H{curr_row}"] = overall_sr                   
+        ws[f"I{curr_row}"] = item_sr_no                   
+        ws[f"J{curr_row}"] = default_invoice_no           
+        ws[f"K{curr_row}"] = clean_date                   
         
-        # Section 4 Item Rules Execution with Updated Columns
+        # 🎯 FULLY CONTROLLED BY UI SETTINGS (Section 4 Dynamic Builder)
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type = r_info.get("type", "PDF Row Item")
             rule_val = r_info.get("rule", "").strip()
             
-            # Point 4, 5, 6, 7 Specific Column Overrides
-            r_val_lower = rule_val.lower()
-            f_name_lower = field_name.lower()
-
-            if "hs code" in r_val_lower or "ritc" in r_val_lower or "ritc" in f_name_lower:
-                col_letter = "L"                          # Point 4: K ka data L me
-            elif "qty" in r_val_lower or "quantity" in r_val_lower or "quantity" in f_name_lower:
-                col_letter = "S"                          # Point 5: S & N Interchange (Qty -> S)
-            elif "dbk" in r_val_lower or "drawback" in r_val_lower or "drawback" in f_name_lower:
-                col_letter = "N"                          # Point 5: S & N Interchange (DBK -> N)
-            elif "rate" in r_val_lower or "rate" in f_name_lower:
-                col_letter = "O"                          # Point 6: P & Q ka data O me (Rate -> O)
-            elif "amount usd" in r_val_lower or "goods value" in r_val_lower or "amount" in r_val_lower or "goods" in f_name_lower:
-                col_letter = "Q"                          # Point 7: V ka data Q me (Goods Value -> Q)
-                
             if not col_letter:
                 continue
                 
@@ -96,19 +80,22 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 else:
                     ws[cell_ref] = rule_val if rule_val else "SET"
             elif rule_type == "PDF Row Item":
-                if col_letter == "L":
+                r_val_lower = rule_val.lower()
+                f_name_lower = field_name.lower()
+                
+                if "hs code" in r_val_lower or "ritc" in r_val_lower or "ritc" in f_name_lower or "hs" in r_val_lower:
                     ws[cell_ref] = item.get("hs_code", "")
                 elif "description" in r_val_lower or "product" in r_val_lower or "description" in f_name_lower:
                     ws[cell_ref] = item.get("description", "")
-                elif col_letter == "S":
+                elif "qty" in r_val_lower or "quantity" in r_val_lower or "quantity" in f_name_lower:
                     val = item.get("quantity", "")
                     try: ws[cell_ref] = float(val.replace(",", ""))
                     except: ws[cell_ref] = val
-                elif col_letter == "O":
+                elif "rate" in r_val_lower or "rate" in f_name_lower:
                     val = item.get("rate", "")
                     try: ws[cell_ref] = float(val.replace(",", ""))
                     except: ws[cell_ref] = val
-                elif col_letter == "Q":
+                elif "amount usd" in r_val_lower or "goods value" in r_val_lower or "amount" in r_val_lower or "goods" in f_name_lower or "usd" in r_val_lower:
                     val = item.get("amount_usd", "")
                     try: ws[cell_ref] = float(val.replace(",", ""))
                     except: ws[cell_ref] = val
@@ -124,7 +111,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     val = item.get("igst_amt", "")
                     try: ws[cell_ref] = float(val.replace(",", ""))
                     except: ws[cell_ref] = val
-                elif col_letter == "N":
+                elif "dbk" in r_val_lower or "drawback" in r_val_lower or "dbk" in f_name_lower:
                     raw_dbk = item.get("dbk_sr", "")
                     if raw_dbk and not raw_dbk.endswith("B"):
                         ws[cell_ref] = f"{raw_dbk}B"
@@ -134,6 +121,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     val = item.get("net_weight", "")
                     try: ws[cell_ref] = float(val.replace(",", ""))
                     except: ws[cell_ref] = val
+                else:
+                    ws[cell_ref] = item.get("description", "")
                     
         curr_row += 1
         overall_sr += 1
