@@ -296,7 +296,17 @@ def render_shipper_data():
             
             pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below", "Table Row Item", "Table Row Index"]
             mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
-            filter_options = ["None", "Numbers Only", "Letters Only", "Container Number (ISO Format)", "Container Size (20/40 Only)", "Clean Date (DD/MM/YYYY)"]
+            
+            # 🎯 ADDED 'Text Inside Parentheses ()' TO FILTER OPTIONS
+            filter_options = [
+                "None", 
+                "Text Inside Parentheses ()", 
+                "Numbers Only", 
+                "Letters Only", 
+                "Container Number (ISO Format)", 
+                "Container Size (20/40 Only)", 
+                "Clean Date (DD/MM/YYYY)"
+            ]
             
             c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.8, 0.8, 1.2])
             with c1: st.markdown("**Field Name**")
