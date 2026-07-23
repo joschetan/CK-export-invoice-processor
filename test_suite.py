@@ -46,17 +46,22 @@ def render_universal_test_suite(selected_shipper):
             rule_data = header_rules[target_field]
             ky = rule_data.get("keyword", "")
             pos = rule_data.get("position", "Right (आगे)")
-            cl = rule_data.get("cell", "")
+            cl = rule_data.get("cell", "").strip()
             m_mode = rule_data.get("match_mode", "Exact Word")
             stop_kw = rule_data.get("stop_kw", "")
             final_flt = rule_data.get("filter", "None")
 
             final_val = extract_header_value(pdf_lines, pdf_text, ky, pos, m_mode, stop_kw, final_flt)
 
+            # 🎯 DYNAMIC ROW DISPLAY SUPPORT FOR HEADER FIELDS
+            display_cell = cl if cl else 'Not Set'
+            if cl and cl.isalpha():
+                display_cell = f"{cl.upper()}2 (Dynamic Auto-Increment Row)"
+
             res_col1, res_col2 = st.columns(2)
             with res_col1:
                 st.markdown("#### 📋 Field Parameters")
-                st.write(f"* **Target Excel Cell:** `{cl if cl else 'Not Set'}`")
+                st.write(f"* **Target Excel Cell:** `{display_cell}`")
                 st.write(f"* **Keyword:** `{ky if ky else 'N/A'}`")
                 st.write(f"* **Match Mode:** `{m_mode}`")
                 st.write(f"* **Filter:** `{final_flt}`")
