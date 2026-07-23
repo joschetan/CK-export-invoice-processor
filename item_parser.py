@@ -6,7 +6,7 @@ def format_to_ddmmyyyy(raw_date_str):
     
     date_str = str(raw_date_str).strip()
     
-    # 1. Matches DD.MM.YYYY, DD/MM/YYYY, DD-MM-YYYY, YYYY.MM.DD etc.
+    # 1. Regex to extract clean DD.MM.YYYY or DD/MM/YYYY or DD-MM-YYYY
     d_match = re.search(r'\b(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})\b', date_str)
     if d_match:
         part1, part2, part3 = d_match.group(1), d_match.group(2), d_match.group(3)
@@ -21,7 +21,7 @@ def format_to_ddmmyyyy(raw_date_str):
                 
         return f"{dd}/{mm}/{yyyy}"
         
-    return date_str.replace(".", "/").replace("-", "/")
+    return ""
 
 def extract_item_table_rows(pdf_lines):
     parsed_items = []
@@ -66,7 +66,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
-    # 🎯 Clean Date Formatting (18.07.2026 -> 18/07/2026)
+    # Clean Date Formatting (DD/MM/YYYY)
     clean_date = format_to_ddmmyyyy(default_invoice_date)
 
     for item_idx, item in enumerate(parsed_items):
@@ -80,7 +80,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
         
-        # 🎯 100% DYNAMIC UI MAPPING (Section 4 Dynamic Builder Drives Everything)
+        # 🎯 100% DYNAMIC UI MAPPING
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type = r_info.get("type", "PDF Row Item")
@@ -110,7 +110,12 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 
                 raw_val = ""
                 
-                if "hs" in r_val_lower or "ritc" in f_name_lower or "hs code" in r_val_lower:
+                # 🎯 STRICT HIGHEST PRIORITY: IGST Fields Check BEFORE General Rate
+                if "igst %" in r_val_lower or "igst rate" in f_name_lower or ("igst" in f_name_lower and "%" in f_name_lower) or ("igst" in f_name_lower and "rate" in f_name_lower):
+                    raw_val = nums[5] if len(nums) > 5 else ""
+                elif "igst amt" in r_val_lower or "igst amount" in f_name_lower or ("igst" in f_name_lower and "amt" in f_name_lower):
+                    raw_val = nums[6] if len(nums) > 6 else ""
+                elif "hs" in r_val_lower or "ritc" in f_name_lower or "hs code" in r_val_lower:
                     raw_val = item.get("hs_code", "")
                 elif "description" in r_val_lower or "description" in f_name_lower:
                     raw_val = item.get("description_text", "")
@@ -122,16 +127,12 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     raw_val = nums[0] if len(nums) > 0 else ""
                 elif "qty" in r_val_lower or "quantity" in f_name_lower:
                     raw_val = nums[1] if len(nums) > 1 else ""
-                elif "rate" in r_val_lower or "rate" in f_name_lower:
-                    raw_val = nums[2] if len(nums) > 2 else ""
                 elif "amount usd" in r_val_lower or "goods value" in f_name_lower or "amount" in r_val_lower:
                     raw_val = nums[3] if len(nums) > 3 else ""
                 elif "taxable" in r_val_lower or "taxable" in f_name_lower:
                     raw_val = nums[4] if len(nums) > 4 else ""
-                elif "igst %" in r_val_lower or "igst rate" in f_name_lower:
-                    raw_val = nums[5] if len(nums) > 5 else ""
-                elif "igst amt" in r_val_lower or "igst amount" in f_name_lower:
-                    raw_val = nums[6] if len(nums) > 6 else ""
+                elif "rate" in r_val_lower or "rate" in f_name_lower:
+                    raw_val = nums[2] if len(nums) > 2 else ""
                 
                 try:
                     ws[cell_ref] = float(str(raw_val).replace(",", ""))
