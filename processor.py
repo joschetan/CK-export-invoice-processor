@@ -56,7 +56,7 @@ def render_processor():
     ensure_default_shipper()
     
     st.header("📤 Invoice Processing Zone")
-    st.caption("100% UI Rules Driven डेटा एक्सट्रैक्शन और प्रोसेसिंग।")
+    st.caption("UI रूल्स और ग्लोबल सेटिंग्स के आधार पर 100% सटीक डेटा एक्सट्रैक्शन।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -103,7 +103,6 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 LOAD TEMPLATE DIRECTLY FROM GOOGLE SHEET
                     wb = load_template_from_sheet(selected_shipper)
                     
                     if wb is None:
@@ -126,7 +125,7 @@ def render_processor():
                                     pdf_lines.extend(t.split("\n"))
                         
                         current_inv_number = f"INV_{inv_sr_number}"
-                        current_inv_date = global_cfg.get("fallback_date", "")
+                        current_inv_date = ""
                         inv_data_dict = {}
                         
                         for field, r_info in rules.items():
