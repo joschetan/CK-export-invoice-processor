@@ -36,23 +36,19 @@ def extract_item_table_rows(pdf_lines):
                 
     return parsed_items
 
-def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws="", global_cfg=None):
+def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws=""):
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
-    if global_cfg is None:
-        global_cfg = {}
-    
-    # 🎯 UI CONTROLLED FALLBACK DATE FROM GLOBAL CONFIG
     raw_dt = str(default_invoice_date).strip()
     if raw_dt and raw_dt.lower() != "none" and raw_dt != "T":
         clean_date = raw_dt
     else:
-        clean_date = global_cfg.get("fallback_date", "")
+        clean_date = "18/07/2026"
 
     detected_v_status = detect_igst_status(pdf_text, lut_keywords=lut_kws, paid_keywords=paid_kws)
     if detected_v_status not in ["LUT", "P"]:
-        v_column_value = global_cfg.get("fallback_igst", "LUT")
+        v_column_value = "LUT"
     else:
         v_column_value = detected_v_status
 
