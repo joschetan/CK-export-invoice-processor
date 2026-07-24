@@ -6,7 +6,6 @@ def extract_item_table_rows(pdf_lines):
     
     for line in pdf_lines:
         line_str = line.strip()
-        # 8-digit HS Code se shuru hone wali line pehchano
         if re.match(r'^\d{8}\b', line_str):
             parts = [p.strip() for p in line_str.split() if p.strip()]
             if len(parts) >= 3:
@@ -15,15 +14,12 @@ def extract_item_table_rows(pdf_lines):
                     "hs_code": parts[0]
                 }
                 
-                # Extract all floating point/decimal numbers dynamically
                 nums = re.findall(r'[\d,]+\.\d{2,3}', line_str)
                 item_dict["nums"] = nums
                 
-                # Dynamic DBK Code Match (6-10 digits with optional letter suffix)
                 dbk_match = re.search(r'\b\d{6}[A-Za-z]?\b|\b\d{10}[A-Za-z]?\b', line_str)
                 item_dict["dbk_found"] = dbk_match.group(0) if dbk_match else ""
 
-                # Universal Description Extraction (Text between HS Code and First Numeric Value)
                 if len(nums) > 0:
                     first_num = nums[0]
                     start_pos = len(parts[0])
@@ -40,51 +36,48 @@ def extract_item_table_rows(pdf_lines):
                 
     return parsed_items
 
-def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws=""):
+def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws="", global_cfg=None):
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
-    # 🎯 TEST LOGIC FOR J COLUMN:
+    if global_cfg is None:
+        global_cfg = {}
+    
+    # 🎯 UI DRIVEN FALLBACK DATE FROM GLOBAL CONFIG
     raw_dt = str(default_invoice_date).strip()
     if raw_dt and raw_dt.lower() != "none" and raw_dt != "T":
         clean_date = raw_dt
     else:
-        clean_date = "18/07/2026"
+        clean_date = global_cfg.get("fallback_date", "")
 
-    # 🛡️ 0% RISK LOGIC FOR V COLUMN (IGST STATUS: LUT / P)
     detected_v_status = detect_igst_status(pdf_text, lut_keywords=lut_kws, paid_keywords=paid_kws)
     if detected_v_status not in ["LUT", "P"]:
-        # Fallback to LUT if undetermined to prevent blank/garbage values
-        v_column_value = "LUT"
+        v_column_value = global_cfg.get("fallback_igst", "LUT")
     else:
         v_column_value = detected_v_status
 
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
         
-        # 🎯 STRICTLY SYSTEM COLUMNS ONLY (G, H, I, J, V)
-        ws[f"G{curr_row}"] = inv_sr_no                    # G = Inv Sr No
-        ws[f"H{curr_row}"] = item_sr_no                   # H = Item Sr No
-        ws[f"I{curr_row}"] = default_invoice_no           # I = Invoice No
-        ws[f"J{curr_row}"] = clean_date                   # J = Clean Date
-        ws[f"V{curr_row}"] = v_column_value               # V = IGST Status (LUT / P Only)
+        ws[f"G{curr_row}"] = inv_sr_no                    
+        ws[f"H{curr_row}"] = item_sr_no                   
+        ws[f"I{curr_row}"] = default_invoice_no           
+        ws[f"J{curr_row}"] = clean_date                   
+        ws[f"V{curr_row}"] = v_column_value               
         
         nums = item.get("nums", [])
         
-        # 🎯 100% DYNAMIC UI MAPPING
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type_raw = str(r_info.get("type", "PDF Row Item")).strip()
             rule_val = str(r_info.get("rule", "")).strip()
             
-            # Skip if target is column V as it is strictly handled above by system logic
             if not col_letter or col_letter == "V":
                 continue
                 
             cell_ref = f"{col_letter}{curr_row}"
             
             if rule_type_raw.lower() == "constant text":
-                # Check for FIND=REPLACE mapping inside Constant Text or raw rule
                 ws[cell_ref] = apply_value_replacement(rule_val, rule_val)
             elif rule_type_raw.lower() == "excel cell reference":
                 if rule_val and len(rule_val) >= 2 and rule_val[1].isdigit():
@@ -92,7 +85,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 else:
                     ws[cell_ref] = rule_val
             elif "smart" in rule_type_raw.lower():
-                # Check for dynamic syntax format like "ROSCTL:60:19"
                 if ":" in rule_val:
                     smart_parts = [p.strip() for p in rule_val.split(":")]
                     if len(smart_parts) == 3:
@@ -100,7 +92,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                         match_val = smart_parts[1]
                         fallback_val = smart_parts[2]
                         
-                        # Clean PDF text spaces for 100% reliable matching
                         clean_pdf_upper = re.sub(r'\s+', '', str(pdf_text).upper())
                         
                         if search_kw in clean_pdf_upper:
@@ -110,7 +101,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     else:
                         ws[cell_ref] = rule_val
                 else:
-                    # Legacy Unit Detection
                     desc = item.get("description_text", "").upper()
                     if "PCS" in desc or "PC" in desc:
                         ws[cell_ref] = "PCS"
@@ -122,7 +112,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 
                 raw_val = ""
                 
-                # 🎯 FIXED PRIORITY: Check IGST % First BEFORE checking normal "rate"
                 if "igst %" in r_val_lower or "igst rate" in f_name_lower or ("igst" in f_name_lower and "%" in f_name_lower) or ("igst" in f_name_lower and "rate" in f_name_lower):
                     raw_val = nums[5] if len(nums) > 5 else ""
                 elif "igst amt" in r_val_lower or "igst amount" in f_name_lower or ("igst" in f_name_lower and "amt" in f_name_lower):
@@ -146,7 +135,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 elif "taxable" in r_val_lower or "taxable" in f_name_lower:
                     raw_val = nums[4] if len(nums) > 4 else ""
                 
-                # Apply FIND=REPLACE Mapping if specified in rule_val
                 if "=" in rule_val:
                     raw_val = apply_value_replacement(raw_val, rule_val)
 
