@@ -43,7 +43,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     if global_cfg is None:
         global_cfg = {}
     
-    # 🎯 UI DRIVEN FALLBACK DATE FROM GLOBAL CONFIG
+    # 🎯 UI CONTROLLED FALLBACK DATE FROM GLOBAL CONFIG
     raw_dt = str(default_invoice_date).strip()
     if raw_dt and raw_dt.lower() != "none" and raw_dt != "T":
         clean_date = raw_dt
