@@ -37,8 +37,7 @@ def ensure_default_shipper():
             "item_table_rules": get_default_item_rules(),
             "global_fallbacks": {
                 "Currency": "USD",
-                "Port of Loading": "MUNDRA",
-                "Incoterms": "FOB"
+                "Port of Loading": "MUNDRA"
             },
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
@@ -348,12 +347,12 @@ def render_shipper_data():
                 
             st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
             
-            # --- NEW UI: MULTI-FIELD FALLBACKS & DEFAULTS CONFIGURATOR ---
+            # --- NEW UI: MULTI-FIELD FALLBACKS & DEFAULTS TABLE ---
             st.write("---")
             col_fb_title, col_fb_btn = st.columns([7, 3])
             with col_fb_title:
                 st.subheader("⚙️ Multi-Field Fallbacks & Defaults Configurator")
-                st.caption("यदि PDF से कोई वैल्यू न मिले, तो नीचे दिए गए डिफ़ॉल्ट (Fallback) मान स्वतः उपयोग किए जाएंगे:")
+                st.caption("यदि PDF से कोई वैल्यू न मिले, तो नीचे दिए गए डिफ़ॉल्ट मान स्वतः उपयोग किए जाएंगे:")
             with col_fb_btn:
                 if st.button("➕ Add Fallback Field", use_container_width=True):
                     add_fallback_field_dialog(selected_shipper)
