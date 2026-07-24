@@ -35,6 +35,10 @@ def ensure_default_shipper():
             "uploaded_files": {},
             "mapping_rules": {},
             "item_table_rules": get_default_item_rules(),
+            "global_config": {
+                "fallback_date": "18/07/2026",
+                "fallback_igst": "LUT"
+            },
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                 "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -72,6 +76,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "uploaded_files": {},
                                 "mapping_rules": {},
                                 "item_table_rules": {},
+                                "global_config": {"fallback_date": "18/07/2026", "fallback_igst": "LUT"},
                                 "igst_config": {
                                     "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                                     "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -101,7 +106,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                 elif not s_data.get("item_table_rules"):
                     s_data["item_table_rules"] = get_default_item_rules()
 
-        # 🎯 RESTORE TEMPLATE FILE BYTES FROM GOOGLE SHEET INTO SESSION STATE AFTER REFRESH
         for s_key in st.session_state["shipper_database"].keys():
             t_bytes = load_template_bytes_from_sheet(s_key)
             if t_bytes:
@@ -329,6 +333,35 @@ def render_shipper_data():
                 
             st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
             
+            # --- NEW UI: GLOBAL DEFAULTS CONFIGURATOR (FULL USER CONTROL) ---
+            st.write("---")
+            st.subheader("⚙️ Global Defaults & Fallbacks Configurator (UI Control)")
+            st.caption("यहाँ से आप डिफ़ॉल्ट तारीख या फॉלबैक वैल्यू खुद सेट कर सकते हैं, अब कोड में कुछ भी फिक्स नहीं है:")
+            
+            global_cfg = shipper_info.setdefault("global_config", {
+                "fallback_date": "18/07/2026",
+                "fallback_igst": "LUT"
+            })
+            
+            g_col1, g_col2 = st.columns(2)
+            with g_col1:
+                updated_fb_date = st.text_input(
+                    "📅 Default Fallback Date (अगर PDF में डेट न मिले):",
+                    value=global_cfg.get("fallback_date", "18/07/2026"),
+                    help="यह तारीख कॉलम J में जाएगी यदि PDF से डेट नहीं उठ पाई।"
+                )
+            with g_col2:
+                updated_fb_igst = st.selectbox(
+                    "🛡️ Default Fallback IGST Status (Column V):",
+                    ["LUT", "P"],
+                    index=0 if global_cfg.get("fallback_igst", "LUT") == "LUT" else 1
+                )
+                
+            shipper_info["global_config"] = {
+                "fallback_date": updated_fb_date,
+                "fallback_igst": updated_fb_igst
+            }
+
             # --- SECTION 3.1: SHIPPER-WISE IGST STATUS (COLUMN V) CONFIGURATOR ---
             st.write("---")
             st.subheader("🛡️ Column V Auto-Detection Configurator (LUT vs Paid 'P')")
