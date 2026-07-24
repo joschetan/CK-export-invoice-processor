@@ -56,7 +56,7 @@ def render_processor():
     ensure_default_shipper()
     
     st.header("📤 Invoice Processing Zone")
-    st.caption("UI रूल्स और मल्टी-फील्ड फॉलबैक के आधार पर 100% सटीक डेटा एक्सट्रैक्शन।")
+    st.caption("रूल्स और हेडर-वाइज फॉलबैक के आधार पर 100% सटीक डेटा एक्सट्रैक्शन।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -97,7 +97,6 @@ def render_processor():
                 with st.spinner(f"कुल {len(uploaded_pdf_files)} इनवॉइस प्रोसेस हो रहे हैं..."):
                     rules = shipper_info.get("mapping_rules", {})
                     item_table_rules = shipper_info.get("item_table_rules", {})
-                    global_fallbacks = shipper_info.get("global_fallbacks", {})
                     
                     igst_cfg = shipper_info.get("igst_config", {})
                     lut_kws = igst_cfg.get("lut_keywords", "")
@@ -135,6 +134,7 @@ def render_processor():
                             mode = r_info.get("match_mode", "Exact Word")
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
+                            fallback_val = r_info.get("fallback", "").strip()
                             
                             raw_text = ""
                             if kw:
@@ -154,13 +154,11 @@ def render_processor():
                                 
                             found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
                             
-                            # 🎯 APPLY MULTI-FIELD FALLBACK IF FOUND VALUE IS EMPTY
+                            # 🎯 APPLY HEADER-WISE FALLBACK IF EXTRACTED VALUE IS BLANK
                             if not found_val or not found_val.strip():
-                                for fb_k, fb_v in global_fallbacks.items():
-                                    if fb_k.lower() in field.lower() or field.lower() in fb_k.lower():
-                                        found_val = fb_v
-                                        break
-                                        
+                                if fallback_val:
+                                    found_val = fallback_val
+                                    
                             inv_data_dict[field.lower()] = found_val
                             
                             if target_cell:
@@ -200,14 +198,6 @@ def render_processor():
                             elif "deduction" in fk or "other" in fk: ws[f"AR{summary_row}"] = f_val
                             elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
                             elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
-
-                        # Fallback check for AJ (Invoice Date) if blank
-                        if not current_inv_date:
-                            for fb_k, fb_v in global_fallbacks.items():
-                                if "date" in fb_k.lower() or "dt" in fb_k.lower():
-                                    current_inv_date = fb_v
-                                    ws[f"AJ{summary_row}"] = current_inv_date
-                                    break
 
                         parsed_items = extract_item_table_rows(pdf_lines)
                         ws, overall_item_sr, excel_write_row = map_items_to_excel_dynamic(
