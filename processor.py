@@ -56,7 +56,7 @@ def render_processor():
     ensure_default_shipper()
     
     st.header("📤 Invoice Processing Zone")
-    st.caption("रूल्स के आधार पर 100% सटीक डेटा एक्सट्रैक्शन (Multi-Invoice Enabled)।")
+    st.caption("100% UI Rules Driven डेटा एक्सट्रैक्शन और प्रोसेसिंग।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -97,12 +97,13 @@ def render_processor():
                 with st.spinner(f"कुल {len(uploaded_pdf_files)} इनवॉइस प्रोसेस हो रहे हैं..."):
                     rules = shipper_info.get("mapping_rules", {})
                     item_table_rules = shipper_info.get("item_table_rules", {})
+                    global_cfg = shipper_info.get("global_config", {})
                     
                     igst_cfg = shipper_info.get("igst_config", {})
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 LOAD TEMPLATE DIRECTLY FROM GOOGLE SHEET VIA SYNC MODULE
+                    # 🎯 LOAD TEMPLATE DIRECTLY FROM GOOGLE SHEET
                     wb = load_template_from_sheet(selected_shipper)
                     
                     if wb is None:
@@ -125,7 +126,7 @@ def render_processor():
                                     pdf_lines.extend(t.split("\n"))
                         
                         current_inv_number = f"INV_{inv_sr_number}"
-                        current_inv_date = ""
+                        current_inv_date = global_cfg.get("fallback_date", "")
                         inv_data_dict = {}
                         
                         for field, r_info in rules.items():
@@ -203,7 +204,8 @@ def render_processor():
                             default_invoice_date=current_inv_date,
                             pdf_text=pdf_text,
                             lut_kws=lut_kws,
-                            paid_kws=paid_kws
+                            paid_kws=paid_kws,
+                            global_cfg=global_cfg
                         )
 
                     output = BytesIO()
