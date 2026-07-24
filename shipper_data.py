@@ -35,9 +35,10 @@ def ensure_default_shipper():
             "uploaded_files": {},
             "mapping_rules": {},
             "item_table_rules": get_default_item_rules(),
-            "global_config": {
-                "fallback_date": "18/07/2026",
-                "fallback_igst": "LUT"
+            "global_fallbacks": {
+                "Currency": "USD",
+                "Port of Loading": "MUNDRA",
+                "Incoterms": "FOB"
             },
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
@@ -76,7 +77,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "uploaded_files": {},
                                 "mapping_rules": {},
                                 "item_table_rules": {},
-                                "global_config": {"fallback_date": "18/07/2026", "fallback_igst": "LUT"},
+                                "global_fallbacks": {"Currency": "USD", "Port of Loading": "MUNDRA"},
                                 "igst_config": {
                                     "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                                     "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -184,6 +185,20 @@ def add_item_col_dialog(selected_shipper):
             item_rules = st.session_state["shipper_database"][selected_shipper].setdefault("item_table_rules", {})
             item_rules[c_name] = {"col": c_col, "type": c_type, "rule": c_rule}
             st.success(f"🎉 कॉलम '{c_name}' जुड़ गया!")
+            st.rerun()
+
+@st.dialog("➕ Add Fallback Field Rule")
+def add_fallback_field_dialog(selected_shipper):
+    st.write("यहाँ नया फील्ड और उसकी डिफ़ॉल्ट (Fallback) वैल्यू जोड़ें:")
+    f_name = st.text_input("Field / Column Name (उदा: Currency, Port, Terms):")
+    f_val = st.text_input("Default Fallback Value (उदा: USD, MUNDRA, FOB):")
+    if st.button("Confirm & Add Fallback", type="primary"):
+        if not f_name.strip():
+            st.error("Field Name खाली नहीं हो सकता!")
+        else:
+            fb_dict = st.session_state["shipper_database"][selected_shipper].setdefault("global_fallbacks", {})
+            fb_dict[f_name.strip()] = f_val.strip()
+            st.success(f"🎉 Fallback '{f_name}' जुड़ गया!")
             st.rerun()
 
 def render_shipper_data():
@@ -333,34 +348,40 @@ def render_shipper_data():
                 
             st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
             
-            # --- NEW UI: GLOBAL DEFAULTS CONFIGURATOR (FULL USER CONTROL) ---
+            # --- NEW UI: MULTI-FIELD FALLBACKS & DEFAULTS CONFIGURATOR ---
             st.write("---")
-            st.subheader("⚙️ Global Defaults & Fallbacks Configurator (UI Control)")
-            st.caption("यहाँ से आप डिफ़ॉल्ट तारीख या फॉलबैक वैल्यू खुद सेट कर सकते हैं, अब कोड में कुछ भी फिक्स नहीं है:")
+            col_fb_title, col_fb_btn = st.columns([7, 3])
+            with col_fb_title:
+                st.subheader("⚙️ Multi-Field Fallbacks & Defaults Configurator")
+                st.caption("यदि PDF से कोई वैल्यू न मिले, तो नीचे दिए गए डिफ़ॉल्ट (Fallback) मान स्वतः उपयोग किए जाएंगे:")
+            with col_fb_btn:
+                if st.button("➕ Add Fallback Field", use_container_width=True):
+                    add_fallback_field_dialog(selected_shipper)
             
-            global_cfg = shipper_info.setdefault("global_config", {
-                "fallback_date": "18/07/2026",
-                "fallback_igst": "LUT"
+            global_fallbacks = shipper_info.setdefault("global_fallbacks", {
+                "Currency": "USD",
+                "Port of Loading": "MUNDRA"
             })
             
-            g_col1, g_col2 = st.columns(2)
-            with g_col1:
-                updated_fb_date = st.text_input(
-                    "📅 Default Fallback Date (अगर PDF में डेट न मिले):",
-                    value=global_cfg.get("fallback_date", "18/07/2026"),
-                    help="यह तारीख कॉलम J में जाएगी यदि PDF से डेट नहीं उठ पाई।"
-                )
-            with g_col2:
-                updated_fb_igst = st.selectbox(
-                    "🛡️ Default Fallback IGST Status (Column V):",
-                    ["LUT", "P"],
-                    index=0 if global_cfg.get("fallback_igst", "LUT") == "LUT" else 1
-                )
+            updated_fallbacks = {}
+            if global_fallbacks:
+                fc1, fc2, fc3 = st.columns([4, 5, 1])
+                with fc1: st.markdown("**Field Name**")
+                with fc2: st.markdown("**Default Fallback Value**")
+                with fc3: st.markdown("**Del**")
+                st.write("---")
                 
-            shipper_info["global_config"] = {
-                "fallback_date": updated_fb_date,
-                "fallback_igst": updated_fb_igst
-            }
+                for fb_field, fb_val in list(global_fallbacks.items()):
+                    fc1, fc2, fc3 = st.columns([4, 5, 1])
+                    with fc1: e_fname = st.text_input(f"fb_name_{fb_field}", value=fb_field, label_visibility="collapsed")
+                    with fc2: e_fval = st.text_input(f"fb_val_{fb_field}", value=fb_val, label_visibility="collapsed")
+                    with fc3:
+                        if st.button("🗑️", key=f"del_fb_{fb_field}"):
+                            del global_fallbacks[fb_field]
+                            st.rerun()
+                    if e_fname.strip():
+                        updated_fallbacks[e_fname.strip()] = e_fval.strip()
+                shipper_info["global_fallbacks"] = updated_fallbacks
 
             # --- SECTION 3.1: SHIPPER-WISE IGST STATUS (COLUMN V) CONFIGURATOR ---
             st.write("---")
