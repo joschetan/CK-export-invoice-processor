@@ -154,7 +154,6 @@ def render_processor():
                                 
                             found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
                             
-                            # 🎯 APPLY HEADER-WISE FALLBACK IF EXTRACTED VALUE IS BLANK
                             if not found_val or not found_val.strip():
                                 if fallback_val:
                                     found_val = fallback_val
@@ -184,7 +183,10 @@ def render_processor():
                         summary_row = 1 + inv_sr_number
                         ws[f"AH{summary_row}"] = inv_sr_number
                         ws[f"AI{summary_row}"] = current_inv_number
-                        ws[f"AJ{summary_row}"] = current_inv_date
+                        
+                        # 🎯 कल्पित तारीख को समरी रो (AJ) में भेजने वाला कोड यहाँ से पूरी तरह हटा दिया गया है।
+                        if current_inv_date:
+                            ws[f"AJ{summary_row}"] = current_inv_date
                         
                         for f_key, f_val in inv_data_dict.items():
                             fk = f_key.lower()
