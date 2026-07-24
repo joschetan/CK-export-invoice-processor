@@ -19,7 +19,7 @@ def get_val_case_insensitive(d, *keys, default=""):
     return default
 
 def fetch_all_from_sheet():
-    """गूगल शीट से सारे रूल्स और एक्सेल टेम्पलेट बाइट्स खींचकर लाता है"""
+    """गूगल शीट से सारे रूल्स और सिंगल कॉलम Base64 टेम्पलेट खींचकर लाता है"""
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
         if response.status_code == 200:
@@ -32,7 +32,7 @@ def fetch_all_from_sheet():
     return None
 
 def push_all_to_sheet(rules_payload, files_payload):
-    """सारे रूल्स और एक्सेल बेस64 चंक्स को गूगल शीट पर सेव करता है"""
+    """सारे रूल्स और सिंगल-कॉलम Base64 डेटा को गूगल शीट पर सेव करता है"""
     try:
         payload = {
             "action": "save_all",
@@ -45,7 +45,7 @@ def push_all_to_sheet(rules_payload, files_payload):
         return False
 
 def load_template_bytes_from_sheet(shipper_name):
-    """गूगल शीट से शिपर की बेस64 फाइल को डिकोड करके सीधे कच्ची बाइट्स (bytes) लौटाता है"""
+    """गूगल शीट से शिपर की सिंगल-कॉलम Base64 फाइल को डिकोड करके बाइट्स लौटाता है"""
     data = fetch_all_from_sheet()
     if not data:
         return None
@@ -72,7 +72,7 @@ def load_template_bytes_from_sheet(shipper_name):
     return None
 
 def load_template_from_sheet(shipper_name):
-    """गूगल शीट से शिपर की बेस64 फाइल को वापस सही openpyxl Workbook में बदलता है"""
+    """गूगल शीट से शिपर की फाइल को openpyxl Workbook में बदलता है"""
     raw_bytes = load_template_bytes_from_sheet(shipper_name)
     if raw_bytes:
         try:
