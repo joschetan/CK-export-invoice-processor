@@ -7,7 +7,7 @@ from io import BytesIO
 
 from pdf_engine import extract_header_value, detect_igst_status
 from test_suite import render_universal_test_suite
-from google_sheet_sync import fetch_all_from_sheet, push_all_to_sheet, get_val_case_insensitive
+from google_sheet_sync import fetch_all_from_sheet, push_all_to_sheet, get_val_case_insensitive, load_template_bytes_from_sheet
 
 def get_default_item_rules():
     return {
@@ -101,7 +101,13 @@ def fetch_data_from_google_sheet(show_toast=False):
                 elif not s_data.get("item_table_rules"):
                     s_data["item_table_rules"] = get_default_item_rules()
 
-        if show_toast: st.toast("✅ गूगल शीट से रूल्स लोड हो गए!")
+        # 🎯 RESTORE TEMPLATE FILE BYTES FROM GOOGLE SHEET INTO SESSION STATE AFTER REFRESH
+        for s_key in st.session_state["shipper_database"].keys():
+            t_bytes = load_template_bytes_from_sheet(s_key)
+            if t_bytes:
+                st.session_state["shipper_database"][s_key].setdefault("uploaded_files", {})["Full Job Excel Format File"] = t_bytes
+
+        if show_toast: st.toast("✅ गूगल शीट से रूल्स और टेम्पलेट लोड हो गए!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
