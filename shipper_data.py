@@ -19,7 +19,7 @@ def ensure_default_shipper():
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
             "mapping_rules": {},
-            "item_table_rules": {}, # 🎯 100% Google Sheet Driven (No Hardcoded Backup)
+            "item_table_rules": {},
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                 "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -34,8 +34,6 @@ def fetch_data_from_google_sheet(show_toast=False):
             if show_toast: st.error("⚠️ गूगल शीट से डेटा नहीं मिला।")
             return
 
-        fetched_item_rules = {}
-        fetched_mapping_rules = {}
         rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
         
         if isinstance(rules_list, list) and len(rules_list) > 0:
@@ -391,7 +389,7 @@ def render_shipper_data():
             st.write("---")
             
             # SAVE BUTTON
-            if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_keyword_width=True if 'use_keyword_width' in globals() else False, use_container_width=True):
+            if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 files_payload = []
                 
