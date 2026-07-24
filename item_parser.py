@@ -40,11 +40,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
-    raw_dt = str(default_invoice_date).strip()
-    if raw_dt and raw_dt.lower() != "none" and raw_dt != "T":
-        clean_date = raw_dt
-    else:
-        clean_date = "18/07/2026"
+    # 🎯 यहाँ से पुरानी फिक्स तारीख ('18/07/2026') और इनवॉइस नंबर वाला हार्डकोडेड लॉजिक हटा दिया गया है।
+    # अब कॉलम I और J पूरी तरह से आपके हेडर रूल्स (UI) के हवाले हैं।
 
     detected_v_status = detect_igst_status(pdf_text, lut_keywords=lut_kws, paid_keywords=paid_kws)
     if detected_v_status not in ["LUT", "P"]:
@@ -55,10 +52,9 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
         
+        # केवल जरूरी सिस्टम कॉलम्स (G = Inv Sr No, H = Item Sr No, V = IGST Status)
         ws[f"G{curr_row}"] = inv_sr_no                    
-        ws[f"H{curr_row}"] = item_sr_no                   
-        ws[f"I{curr_row}"] = default_invoice_no           
-        ws[f"J{curr_row}"] = clean_date                   
+        ws[f"H{curr_row}"] = item_sr_no                                      
         ws[f"V{curr_row}"] = v_column_value               
         
         nums = item.get("nums", [])
