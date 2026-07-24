@@ -9,21 +9,6 @@ from pdf_engine import extract_header_value, detect_igst_status
 from test_suite import render_universal_test_suite
 from google_sheet_sync import fetch_all_from_sheet, push_all_to_sheet, get_val_case_insensitive, load_template_bytes_from_sheet
 
-def get_default_item_rules():
-    return {
-        "RITC / HS Code": {"col": "K", "type": "PDF Row Item", "rule": "HS Code"},
-        "Description of Goods": {"col": "M", "type": "PDF Row Item", "rule": "Description"},
-        "Quantity": {"col": "N", "type": "PDF Row Item", "rule": "Qty Number"},
-        "Unit (UNIT)": {"col": "O", "type": "Smart Detection", "rule": "SET"},
-        "Rate in": {"col": "P", "type": "PDF Row Item", "rule": "Rate"},
-        "Amount": {"col": "Q", "type": "PDF Row Item", "rule": "Amount USD"},
-        "Drawback SR Code": {"col": "S", "type": "PDF Row Item", "rule": "DBK SR (+B Suffix)"},
-        "Taxable Value (INR)": {"col": "W", "type": "PDF Row Item", "rule": "Taxable Amt"},
-        "IGST Rate (%)": {"col": "X", "type": "PDF Row Item", "rule": "IGST %"},
-        "IGST Amount (INR)": {"col": "Y", "type": "PDF Row Item", "rule": "IGST Amt"},
-        "Nt.Wt(KGS)": {"col": "AB", "type": "PDF Row Item", "rule": "Net Weight"}
-    }
-
 def ensure_default_shipper():
     if "shipper_database" not in st.session_state:
         st.session_state["shipper_database"] = {}
@@ -34,7 +19,7 @@ def ensure_default_shipper():
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
             "mapping_rules": {},
-            "item_table_rules": get_default_item_rules(),
+            "item_table_rules": {}, # 🎯 100% Google Sheet Driven (No Hardcoded Backup)
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                 "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -50,6 +35,7 @@ def fetch_data_from_google_sheet(show_toast=False):
             return
 
         fetched_item_rules = {}
+        fetched_mapping_rules = {}
         rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
         
         if isinstance(rules_list, list) and len(rules_list) > 0:
@@ -79,13 +65,13 @@ def fetch_data_from_google_sheet(show_toast=False):
                             }
                         
                         if "item" in rule_kind:
-                            fetched_item_rules.setdefault(target_key, {})[f_name] = {
+                            st.session_state["shipper_database"][target_key].setdefault("item_table_rules", {})[f_name] = {
                                 "col": cell_val,
                                 "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
                                 "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
                             }
                         else:
-                            st.session_state["shipper_database"][target_key]["mapping_rules"][f_name] = {
+                            st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
                                 "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
                                 "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
                                 "cell": cell_val,
@@ -95,12 +81,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None"),
                                 "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
                             }
-
-            for s_key, s_data in st.session_state["shipper_database"].items():
-                if s_key in fetched_item_rules and fetched_item_rules[s_key]:
-                    s_data["item_table_rules"] = fetched_item_rules[s_key]
-                elif not s_data.get("item_table_rules"):
-                    s_data["item_table_rules"] = get_default_item_rules()
 
         for s_key in st.session_state["shipper_database"].keys():
             t_bytes = load_template_bytes_from_sheet(s_key)
@@ -321,7 +301,7 @@ def render_shipper_data():
                         else:
                             res_val = extract_header_value(curr_pdf_lines, curr_pdf_text, ky, pos, m_mode, stop_kw, final_flt)
                             if not res_val or not res_val.strip():
-                                res_val = fb_val # Test dialog me bhi fallback dikhega agar blank raha
+                                res_val = fb_val
                             
                             rule_summary = {
                                 "keyword": ky, "position": pos, "cell": cl,
@@ -373,9 +353,6 @@ def render_shipper_data():
                     add_item_col_dialog(selected_shipper)
             
             item_rules = shipper_info.get("item_table_rules", {})
-            if not item_rules:
-                item_rules = get_default_item_rules()
-                shipper_info["item_table_rules"] = item_rules
 
             updated_item_rules = {}
             
@@ -414,7 +391,7 @@ def render_shipper_data():
             st.write("---")
             
             # SAVE BUTTON
-            if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
+            if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_keyword_width=True if 'use_keyword_width' in globals() else False, use_container_width=True):
                 rules_payload = []
                 files_payload = []
                 
