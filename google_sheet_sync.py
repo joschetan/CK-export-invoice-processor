@@ -25,7 +25,7 @@ def fetch_all_from_sheet():
         if response.status_code == 200:
             res_text = response.text.strip()
             if res_text.startswith("<"):
-                return None, None
+                return None
             return response.json()
     except Exception:
         pass
@@ -44,8 +44,8 @@ def push_all_to_sheet(rules_payload, files_payload):
     except Exception:
         return False
 
-def load_template_from_sheet(shipper_name):
-    """गूगल शीट से शिपर की बेस64 फाइल को वापस सही openpyxl Workbook में बदलता है"""
+def load_template_bytes_from_sheet(shipper_name):
+    """गूगल शीट से शिपर की बेस64 फाइल को डिकोड करके सीधे कच्ची बाइट्स (bytes) लौटाता है"""
     data = fetch_all_from_sheet()
     if not data:
         return None
@@ -66,7 +66,17 @@ def load_template_from_sheet(shipper_name):
                     
                     decoded_bytes = base64.b64decode(clean_b64)
                     if decoded_bytes.startswith(b'PK'):
-                        return openpyxl.load_workbook(BytesIO(decoded_bytes))
+                        return decoded_bytes
                 except Exception:
                     pass
+    return None
+
+def load_template_from_sheet(shipper_name):
+    """गूगल शीट से शिपर की बेस64 फाइल को वापस सही openpyxl Workbook में बदलता है"""
+    raw_bytes = load_template_bytes_from_sheet(shipper_name)
+    if raw_bytes:
+        try:
+            return openpyxl.load_workbook(BytesIO(raw_bytes))
+        except Exception:
+            pass
     return None
