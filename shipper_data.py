@@ -35,10 +35,6 @@ def ensure_default_shipper():
             "uploaded_files": {},
             "mapping_rules": {},
             "item_table_rules": get_default_item_rules(),
-            "global_fallbacks": {
-                "Currency": "USD",
-                "Port of Loading": "MUNDRA"
-            },
             "igst_config": {
                 "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                 "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -76,7 +72,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "uploaded_files": {},
                                 "mapping_rules": {},
                                 "item_table_rules": {},
-                                "global_fallbacks": {"Currency": "USD", "Port of Loading": "MUNDRA"},
                                 "igst_config": {
                                     "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
                                     "paid_keywords": "on payment of integrated tax, with payment of integrated tax"
@@ -97,7 +92,8 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
                                 "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
                                 "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
-                                "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None")
+                                "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None"),
+                                "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
                             }
 
             for s_key, s_data in st.session_state["shipper_database"].items():
@@ -164,7 +160,7 @@ def add_custom_header_field_dialog(selected_shipper):
             rules = st.session_state["shipper_database"][selected_shipper].setdefault("mapping_rules", {})
             rules[new_field.strip()] = {
                 "keyword": "", "position": "Right (आगे)", "cell": "",
-                "match_mode": "Exact Word", "stop_kw": "", "filter": "None", "logic": "None"
+                "match_mode": "Exact Word", "stop_kw": "", "filter": "None", "logic": "None", "fallback": ""
             }
             st.success(f"🎉 फ़ील्ड '{new_field}' जुड़ गया!")
             st.rerun()
@@ -184,20 +180,6 @@ def add_item_col_dialog(selected_shipper):
             item_rules = st.session_state["shipper_database"][selected_shipper].setdefault("item_table_rules", {})
             item_rules[c_name] = {"col": c_col, "type": c_type, "rule": c_rule}
             st.success(f"🎉 कॉलम '{c_name}' जुड़ गया!")
-            st.rerun()
-
-@st.dialog("➕ Add Fallback Field Rule")
-def add_fallback_field_dialog(selected_shipper):
-    st.write("यहाँ नया फील्ड और उसकी डिफ़ॉल्ट (Fallback) वैल्यू जोड़ें:")
-    f_name = st.text_input("Field / Column Name (उदा: Currency, Port, Terms):")
-    f_val = st.text_input("Default Fallback Value (उदा: USD, MUNDRA, FOB):")
-    if st.button("Confirm & Add Fallback", type="primary"):
-        if not f_name.strip():
-            st.error("Field Name खाली नहीं हो सकता!")
-        else:
-            fb_dict = st.session_state["shipper_database"][selected_shipper].setdefault("global_fallbacks", {})
-            fb_dict[f_name.strip()] = f_val.strip()
-            st.success(f"🎉 Fallback '{f_name}' जुड़ गया!")
             st.rerun()
 
 def render_shipper_data():
@@ -285,16 +267,17 @@ def render_shipper_data():
                 "Clean Date (DD/MM/YYYY)"
             ]
             
-            c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.8, 0.8, 1.2])
+            c1, c2, c3, c4, c5, c6, c7, c8, c9, c10 = st.columns([1.8, 2.2, 1.3, 0.7, 1.5, 1.3, 1.5, 1.5, 0.7, 1.0])
             with c1: st.markdown("**Field Name**")
             with c2: st.markdown("**Keyword**")
             with c3: st.markdown("**Position**")
             with c4: st.markdown("**Cell**")
             with c5: st.markdown("**Match Mode**")
-            with c6: st.markdown("**Stop / Word No.**")
+            with c6: st.markdown("**Stop / Word**")
             with c7: st.markdown("**Filter/Logic**")
-            with c8: st.markdown("**Del**")
-            with c9: st.markdown("**⚡ Live Test**")
+            with c8: st.markdown("**Fallback Value**")
+            with c9: st.markdown("**Del**")
+            with c10: st.markdown("**⚡ Test**")
             st.write("---")
             
             curr_pdf_lines = st.session_state.get("cached_pdf_lines", [])
@@ -305,7 +288,7 @@ def render_shipper_data():
                     continue
 
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([2, 2.5, 1.5, 0.8, 1.8, 1.5, 1.8, 0.8, 1.2])
+                c1, c2, c3, c4, c5, c6, c7, c8, c9, c10 = st.columns([1.8, 2.2, 1.3, 0.7, 1.5, 1.3, 1.5, 1.5, 0.7, 1.0])
                 
                 saved_pos = s_val.get("position", "Right (आगे)")
                 pos_idx = pos_options.index(saved_pos) if saved_pos in pos_options else 0
@@ -326,16 +309,19 @@ def render_shipper_data():
                 with c5: m_mode = st.selectbox(f"mm_{field}", mode_options, index=mode_idx, label_visibility="collapsed")
                 with c6: stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), label_visibility="collapsed")
                 with c7: final_flt = st.selectbox(f"flt_{field}", filter_options, index=flt_idx, label_visibility="collapsed")
-                with c8:
+                with c8: fb_val = st.text_input(f"fb_{field}", value=s_val.get("fallback", ""), label_visibility="collapsed", placeholder="अगर ब्लैंक हो")
+                with c9:
                     if st.button("🗑️", key=f"del_h_{field}"):
                         del st.session_state["shipper_database"][selected_shipper]["mapping_rules"][field]
                         st.rerun()
-                with c9:
+                with c10:
                     if st.button("⚡ Test", key=f"test_btn_{field}"):
                         if not curr_pdf_lines:
                             st.toast("⚠️ पहले Section 2 में PDF अपलोड करें!")
                         else:
                             res_val = extract_header_value(curr_pdf_lines, curr_pdf_text, ky, pos, m_mode, stop_kw, final_flt)
+                            if not res_val or not res_val.strip():
+                                res_val = fb_val # Test dialog me bhi fallback dikhega agar blank raha
                             
                             rule_summary = {
                                 "keyword": ky, "position": pos, "cell": cl,
@@ -343,44 +329,9 @@ def render_shipper_data():
                             }
                             show_field_test_dialog(edited_name, rule_summary, res_val if res_val else "❌ (Not Found)")
                 
-                updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": "None"}
+                updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": "None", "fallback": fb_val}
                 
             st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
-            
-            # --- NEW UI: MULTI-FIELD FALLBACKS & DEFAULTS TABLE ---
-            st.write("---")
-            col_fb_title, col_fb_btn = st.columns([7, 3])
-            with col_fb_title:
-                st.subheader("⚙️ Multi-Field Fallbacks & Defaults Configurator")
-                st.caption("यदि PDF से कोई वैल्यू न मिले, तो नीचे दिए गए डिफ़ॉल्ट मान स्वतः उपयोग किए जाएंगे:")
-            with col_fb_btn:
-                if st.button("➕ Add Fallback Field", use_container_width=True):
-                    add_fallback_field_dialog(selected_shipper)
-            
-            global_fallbacks = shipper_info.setdefault("global_fallbacks", {
-                "Currency": "USD",
-                "Port of Loading": "MUNDRA"
-            })
-            
-            updated_fallbacks = {}
-            if global_fallbacks:
-                fc1, fc2, fc3 = st.columns([4, 5, 1])
-                with fc1: st.markdown("**Field Name**")
-                with fc2: st.markdown("**Default Fallback Value**")
-                with fc3: st.markdown("**Del**")
-                st.write("---")
-                
-                for fb_field, fb_val in list(global_fallbacks.items()):
-                    fc1, fc2, fc3 = st.columns([4, 5, 1])
-                    with fc1: e_fname = st.text_input(f"fb_name_{fb_field}", value=fb_field, label_visibility="collapsed")
-                    with fc2: e_fval = st.text_input(f"fb_val_{fb_field}", value=fb_val, label_visibility="collapsed")
-                    with fc3:
-                        if st.button("🗑️", key=f"del_fb_{fb_field}"):
-                            del global_fallbacks[fb_field]
-                            st.rerun()
-                    if e_fname.strip():
-                        updated_fallbacks[e_fname.strip()] = e_fval.strip()
-                shipper_info["global_fallbacks"] = updated_fallbacks
 
             # --- SECTION 3.1: SHIPPER-WISE IGST STATUS (COLUMN V) CONFIGURATOR ---
             st.write("---")
@@ -474,6 +425,7 @@ def render_shipper_data():
                             "Position": r_info.get("position", "Right (आगे)"), "Cell": r_info.get("cell", ""),
                             "MatchMode": r_info.get("match_mode", "Exact Word"), "StopKw": r_info.get("stop_kw", ""),
                             "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None"),
+                            "Fallback": r_info.get("fallback", ""),
                             "RuleKind": "header"
                         })
                     for i_field, i_info in s_data.get("item_table_rules", {}).items():
@@ -481,7 +433,7 @@ def render_shipper_data():
                             "ShipperName": s_name, "FieldName": i_field, "Keyword": i_info.get("rule", ""),
                             "Position": "Right (आगे)", "Cell": i_info.get("col", "K"),
                             "MatchMode": i_info.get("type", "PDF Row Item"), "StopKw": "",
-                            "Filter": "None", "Logic": "None",
+                            "Filter": "None", "Logic": "None", "Fallback": "",
                             "RuleKind": "item"
                         })
                         
