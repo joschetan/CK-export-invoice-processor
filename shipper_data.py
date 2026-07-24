@@ -336,7 +336,7 @@ def render_shipper_data():
             # --- NEW UI: GLOBAL DEFAULTS CONFIGURATOR (FULL USER CONTROL) ---
             st.write("---")
             st.subheader("⚙️ Global Defaults & Fallbacks Configurator (UI Control)")
-            st.caption("यहाँ से आप डिफ़ॉल्ट तारीख या फॉלबैक वैल्यू खुद सेट कर सकते हैं, अब कोड में कुछ भी फिक्स नहीं है:")
+            st.caption("यहाँ से आप डिफ़ॉल्ट तारीख या फॉलबैक वैल्यू खुद सेट कर सकते हैं, अब कोड में कुछ भी फिक्स नहीं है:")
             
             global_cfg = shipper_info.setdefault("global_config", {
                 "fallback_date": "18/07/2026",
