@@ -1,5 +1,6 @@
 import re
-from pdf_engine import detect_igst_status, apply_value_replacement
+import streamlit as st
+from pdf_engine import apply_value_replacement
 
 def extract_item_table_rows(pdf_lines):
     parsed_items = []
@@ -36,23 +37,54 @@ def extract_item_table_rows(pdf_lines):
                 
     return parsed_items
 
+# 🎯 सुरक्षित पॉप-अप डायलॉग जब कन्फ्यूजन हो (Rule 3)
+@st.dialog("⚠️ Urgent: Manual IGST Status Required")
+def get_manual_igst_choice(invoice_identifier):
+    st.warning(f"⚠️ इनवॉइस **`{invoice_identifier}`** में स्पष्ट रूप से LUT या Paid (P) का टेक्स्ट नहीं मिला!")
+    st.write("कस्टम्स पेनाल्टी से बचने के लिए कृपया सही विकल्प चुनें:")
+    
+    selected_choice = st.selectbox("Column V के लिए सही स्टेटस चुनें:", ["LUT", "P"], index=0)
+    
+    if st.button("Confirm & Apply", type="primary"):
+        st.session_state[f"resolved_igst_{invoice_identifier}"] = selected_choice
+        st.rerun()
+
 def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws=""):
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
-    # 🎯 यहाँ से पुरानी फिक्स तारीख ('18/07/2026') और इनवॉइस नंबर वाला हार्डकोडेड लॉजिक हटा दिया गया है।
-    # अब कॉलम I और J पूरी तरह से आपके हेडर रूल्स (UI) के हवाले हैं।
-
-    detected_v_status = detect_igst_status(pdf_text, lut_keywords=lut_kws, paid_keywords=paid_kws)
-    if detected_v_status not in ["LUT", "P"]:
+    # 🔍 100% फुल-प्रूफ IGST स्टेटस डिटेक्शन लॉजिक
+    pdf_text_upper = str(pdf_text).upper()
+    
+    has_lut_arn = "LUT ARN NO" in pdf_text_upper or bool(re.search(r'LUT\s*ARN', pdf_text_upper))
+    has_wo_payment = "W/O PAYMENT" in pdf_text_upper or "WITHOUT PAYMENT" in pdf_text_upper or "UNDER BOND" in pdf_text_upper or "LETTER OF UNDERTAKING" in pdf_text_upper
+    has_with_payment = "WITH PAYMENT" in pdf_text_upper or "ON PAYMENT OF INTEGRATED TAX" in pdf_text_upper
+    
+    v_column_value = ""
+    
+    # Rule 1 Check: LUT मिल गया तो "LUT"
+    if has_lut_arn or has_wo_payment:
         v_column_value = "LUT"
+    # Rule 2 Check: Paid मिल गया तो "P"
+    elif has_with_payment:
+        v_column_value = "P"
     else:
-        v_column_value = detected_v_status
+        # Rule 3 Check: दोनों में से कुछ नहीं मिला, तो सेशन या पॉप-अप से पूछो!
+        inv_key = default_invoice_no if default_invoice_no else f"INV_{inv_sr_no}"
+        session_key = f"resolved_igst_{inv_key}"
+        
+        if session_key in st.session_state:
+            v_column_value = st.session_state[session_key]
+        else:
+            # पॉप-अप ट्रिगर करें
+            get_manual_igst_choice(inv_key)
+            # जब तक यूजर सेलेक्ट नहीं करेगा, तब तक रोक कर रखेगा
+            st.stop()
 
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
         
-        # केवल जरूरी सिस्टम कॉलम्स (G = Inv Sr No, H = Item Sr No, V = IGST Status)
+        # सिस्टम कॉलम्स सेट करें
         ws[f"G{curr_row}"] = inv_sr_no                    
         ws[f"H{curr_row}"] = item_sr_no                                      
         ws[f"V{curr_row}"] = v_column_value               
