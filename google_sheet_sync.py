@@ -19,7 +19,7 @@ def get_val_case_insensitive(d, *keys, default=""):
     return default
 
 def fetch_all_from_sheet():
-    """गूगल शीट से सारे रूल्स और सिंगल कॉलम Base64 टेम्पलेट खींचकर लाता है"""
+    """गूगल शीट से सारे रूल्स, IGST कॉन्फिग और Base64 टेम्पलेट खींचकर लाता है"""
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
         if response.status_code == 200:
@@ -32,7 +32,7 @@ def fetch_all_from_sheet():
     return None
 
 def push_all_to_sheet(rules_payload, files_payload):
-    """सारे रूल्स और सिंगल-कॉलम Base64 डेटा को गूगल शीट पर सेव करता है"""
+    """सारे रूल्स, IGST कॉन्फिग और Base64 डेटा को गूगल शीट पर सेव करता है"""
     try:
         payload = {
             "action": "save_all",
