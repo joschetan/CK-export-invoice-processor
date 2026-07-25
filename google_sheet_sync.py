@@ -19,7 +19,7 @@ def get_val_case_insensitive(d, *keys, default=""):
     return default
 
 def fetch_all_from_sheet():
-    """गूगल शीट से सारे रूल्स, IGST कॉन्फिग और Base64 टेम्पलेट खींचकर लाता है"""
+    """गूगल शीट से सारे रूल्स और सिंगल कॉलम Base64 टेम्पलेट खींचकर लाता है"""
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
         if response.status_code == 200:
@@ -32,7 +32,7 @@ def fetch_all_from_sheet():
     return None
 
 def push_all_to_sheet(rules_payload, files_payload):
-    """सारे रूल्स, IGST कॉन्फिग और Base64 डेटा को गूगल शीट पर सेव करता है"""
+    """सारे रूल्स और सिंगल-कॉलम Base64 डेटा को गूगल शीट पर सेव करता है"""
     try:
         payload = {
             "action": "save_all",
@@ -50,25 +50,30 @@ def load_template_bytes_from_sheet(shipper_name):
     if not data:
         return None
     
-    files_list = data.get("files", [])
+    files_list = data.get("files", data.get("file_list", []))
+    if not files_list and isinstance(data, dict):
+        # सुरक्षित फॉलबैक यदि डेटा किसी दूसरे फॉर्मेट में हो
+        files_list = data.get("data", [])
+
     for f_row in files_list:
-        s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
-        target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
-        
-        if target_key.lower() == shipper_name.lower():
-            b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
-            if b64_str and len(b64_str.strip()) > 0:
-                try:
-                    clean_b64 = b64_str.lstrip("'").strip().replace(" ", "+")
-                    missing_padding = len(clean_b64) % 4
-                    if missing_padding:
-                        clean_b64 += '=' * (4 - missing_padding)
-                    
-                    decoded_bytes = base64.b64decode(clean_b64)
-                    if decoded_bytes.startswith(b'PK'):
-                        return decoded_bytes
-                except Exception:
-                    pass
+        if isinstance(f_row, dict):
+            s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
+            target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
+            
+            if target_key.lower() == shipper_name.lower():
+                b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
+                if b64_str and len(b64_str.strip()) > 0:
+                    try:
+                        clean_b64 = b64_str.lstrip("'").strip().replace(" ", "+")
+                        missing_padding = len(clean_b64) % 4
+                        if missing_padding:
+                            clean_b64 += '=' * (4 - missing_padding)
+                        
+                        decoded_bytes = base64.b64decode(clean_b64)
+                        if decoded_bytes.startswith(b'PK'):
+                            return decoded_bytes
+                    except Exception:
+                        pass
     return None
 
 def load_template_from_sheet(shipper_name):
