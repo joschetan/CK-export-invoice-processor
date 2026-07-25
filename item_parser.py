@@ -37,7 +37,6 @@ def extract_item_table_rows(pdf_lines):
                 
     return parsed_items
 
-# 🎯 सुरक्षित पॉप-अप डायलॉग जब कन्फ्यूजन हो (Rule 3)
 @st.dialog("⚠️ Urgent: Manual IGST Status Required")
 def get_manual_igst_choice(invoice_identifier):
     st.warning(f"⚠️ इनवॉइस **`{invoice_identifier}`** में स्पष्ट रूप से LUT या Paid (P) का टेक्स्ट नहीं मिला!")
@@ -53,38 +52,47 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     curr_row = start_excel_row
     overall_sr = start_overall_sr
     
-    # 🔍 100% फुल-प्रूफ IGST स्टेटस डिटेक्शन लॉजिक
     pdf_text_upper = str(pdf_text).upper()
     
-    has_lut_arn = "LUT ARN NO" in pdf_text_upper or bool(re.search(r'LUT\s*ARN', pdf_text_upper))
-    has_wo_payment = "W/O PAYMENT" in pdf_text_upper or "WITHOUT PAYMENT" in pdf_text_upper or "UNDER BOND" in pdf_text_upper or "LETTER OF UNDERTAKING" in pdf_text_upper
-    has_with_payment = "WITH PAYMENT" in pdf_text_upper or "ON PAYMENT OF INTEGRATED TAX" in pdf_text_upper
+    # 🎯 अब यह सीधे UI Configurator वाले बॉक्स (lut_kws और paid_kws) से कीवर्ड्स पढ़ेगा!
+    l_keywords = [k.strip().upper() for k in str(lut_kws).split(",") if k.strip()]
+    p_keywords = [k.strip().upper() for k in str(paid_kws).split(",") if k.strip()]
     
+    matched_lut = False
+    for kw in l_keywords:
+        # अगर कीवर्ड का मुख्य हिस्सा (जैसे 'LUT ARN' या 'WITHOUT PAYMENT') PDF में मिल जाए
+        clean_kw = kw.replace("NO.", "").replace(".", "").strip()
+        if clean_kw and clean_kw in pdf_text_upper:
+            matched_lut = True
+            break
+            
+    matched_paid = False
+    for kw in p_keywords:
+        clean_kw = kw.replace(".", "").strip()
+        if clean_kw and clean_kw in pdf_text_upper:
+            matched_paid = True
+            break
+
     v_column_value = ""
     
-    # Rule 1 Check: LUT मिल गया तो "LUT"
-    if has_lut_arn or has_wo_payment:
+    if matched_lut:
         v_column_value = "LUT"
-    # Rule 2 Check: Paid मिल गया तो "P"
-    elif has_with_payment:
+    elif matched_paid:
         v_column_value = "P"
     else:
-        # Rule 3 Check: दोनों में से कुछ नहीं मिला, तो सेशन या पॉप-अप से पूछो!
+        # अगर दोनों में से एक भी मैच नहीं हुआ, तब पॉप-अप खुलेगा
         inv_key = default_invoice_no if default_invoice_no else f"INV_{inv_sr_no}"
         session_key = f"resolved_igst_{inv_key}"
         
         if session_key in st.session_state:
             v_column_value = st.session_state[session_key]
         else:
-            # पॉप-अप ट्रिगर करें
             get_manual_igst_choice(inv_key)
-            # जब तक यूजर सेलेक्ट नहीं करेगा, तब तक रोक कर रखेगा
             st.stop()
 
     for item_idx, item in enumerate(parsed_items):
         item_sr_no = item_idx + 1
         
-        # सिस्टम कॉलम्स सेट करें
         ws[f"G{curr_row}"] = inv_sr_no                    
         ws[f"H{curr_row}"] = item_sr_no                                      
         ws[f"V{curr_row}"] = v_column_value               
@@ -165,7 +173,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 try:
                     ws[cell_ref] = float(str(raw_val).replace(",", ""))
                 except:
-                    ws[cell_ref] = raw_val
+                    ws[cell_ref] = rule_val
                     
         curr_row += 1
         overall_sr += 1
