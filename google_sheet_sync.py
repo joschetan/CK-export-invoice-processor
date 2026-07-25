@@ -50,30 +50,25 @@ def load_template_bytes_from_sheet(shipper_name):
     if not data:
         return None
     
-    files_list = data.get("files", data.get("file_list", []))
-    if not files_list and isinstance(data, dict):
-        # सुरक्षित फॉलबैक यदि डेटा किसी दूसरे फॉर्मेट में हो
-        files_list = data.get("data", [])
-
+    files_list = data.get("files", [])
     for f_row in files_list:
-        if isinstance(f_row, dict):
-            s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
-            target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
-            
-            if target_key.lower() == shipper_name.lower():
-                b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
-                if b64_str and len(b64_str.strip()) > 0:
-                    try:
-                        clean_b64 = b64_str.lstrip("'").strip().replace(" ", "+")
-                        missing_padding = len(clean_b64) % 4
-                        if missing_padding:
-                            clean_b64 += '=' * (4 - missing_padding)
-                        
-                        decoded_bytes = base64.b64decode(clean_b64)
-                        if decoded_bytes.startswith(b'PK'):
-                            return decoded_bytes
-                    except Exception:
-                        pass
+        s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
+        target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
+        
+        if target_key.lower() == shipper_name.lower():
+            b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
+            if b64_str and len(b64_str.strip()) > 0:
+                try:
+                    clean_b64 = b64_str.lstrip("'").strip().replace(" ", "+")
+                    missing_padding = len(clean_b64) % 4
+                    if missing_padding:
+                        clean_b64 += '=' * (4 - missing_padding)
+                    
+                    decoded_bytes = base64.b64decode(clean_b64)
+                    if decoded_bytes.startswith(b'PK'):
+                        return decoded_bytes
+                except Exception:
+                    pass
     return None
 
 def load_template_from_sheet(shipper_name):
