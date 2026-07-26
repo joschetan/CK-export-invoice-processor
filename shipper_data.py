@@ -20,11 +20,7 @@ def ensure_default_shipper():
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
             "mapping_rules": {},
-            "item_table_rules": {},
-            "igst_config": {
-                "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
-                "paid_keywords": "on payment of integrated tax, with payment of integrated tax, Supply meant for export with payment of integrated tax"
-            }
+            "item_table_rules": {}
         }
 
 def fetch_data_from_google_sheet(show_toast=False):
@@ -56,11 +52,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "allowed_uploads": ["Full Job Excel Format File"],
                                 "uploaded_files": {},
                                 "mapping_rules": {},
-                                "item_table_rules": {},
-                                "igst_config": {
-                                    "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
-                                    "paid_keywords": "on payment of integrated tax, with payment of integrated tax, Supply meant for export with payment of integrated tax"
-                                }
+                                "item_table_rules": {}
                             }
                         
                         if "item" in rule_kind:
@@ -81,11 +73,10 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
                             }
 
-        # गूगल शीट से IGST Config भी अलग से लोड करें
+        # गूगल शीट / अलग फाइल से IGST Config लोड करें
         for s_key in st.session_state["shipper_database"].keys():
             igst_fetched = fetch_igst_config_from_sheet(s_key)
-            if igst_fetched.get("lut_keywords") or igst_fetched.get("paid_keywords"):
-                st.session_state["shipper_database"][s_key]["igst_config"] = igst_fetched
+            st.session_state["shipper_database"][s_key]["igst_config"] = igst_fetched
 
             t_bytes = load_template_bytes_from_sheet(s_key)
             if t_bytes:
@@ -394,7 +385,7 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            # SAVE BUTTON (कंबाइंड पेलोड जिसमें Header, Item, Template और IGST Config सब एक साथ सेव होंगे)
+            # SAVE BUTTON (अब कंबाइंड पेलोड के साथ हेडर, आइटम, टेम्पलेट और IGST कॉन्फिग सब एक साथ सुरक्षित सेव होगा)
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 files_payload = []
