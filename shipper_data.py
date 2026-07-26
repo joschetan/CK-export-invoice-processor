@@ -8,6 +8,7 @@ from io import BytesIO
 from pdf_engine import extract_header_value, detect_igst_status
 from test_suite import render_universal_test_suite
 from google_sheet_sync import fetch_all_from_sheet, push_all_to_sheet, get_val_case_insensitive, load_template_bytes_from_sheet
+from igst_config_sync import fetch_igst_config_from_sheet, save_igst_config_to_sheet
 
 def ensure_default_shipper():
     if "shipper_database" not in st.session_state:
@@ -19,11 +20,7 @@ def ensure_default_shipper():
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
             "mapping_rules": {},
-            "item_table_rules": {},
-            "igst_config": {
-                "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
-                "paid_keywords": "on payment of integrated tax, with payment of integrated tax, Supply meant for export with payment of integrated tax"
-            }
+            "item_table_rules": {}
         }
 
 def fetch_data_from_google_sheet(show_toast=False):
@@ -55,11 +52,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "allowed_uploads": ["Full Job Excel Format File"],
                                 "uploaded_files": {},
                                 "mapping_rules": {},
-                                "item_table_rules": {},
-                                "igst_config": {
-                                    "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
-                                    "paid_keywords": "on payment of integrated tax, with payment of integrated tax, Supply meant for export with payment of integrated tax"
-                                }
+                                "item_table_rules": {}
                             }
                         
                         if "item" in rule_kind:
@@ -68,7 +61,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
                                 "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
                             }
-                        else:
+                        elif "igst_config" not in rule_kind and f_name.lower() not in ["lut_keywords", "paid_keywords"]:
                             st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
                                 "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
                                 "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
@@ -222,6 +215,7 @@ def render_shipper_data():
                 st.subheader("🛠️ 3. Header Fields Mapping Rules")
             with col_sync:
                 if st.button("🔄 Reload Saved Rules from Sheet", type="secondary", use_container_width=True):
+                    st.session_state["sheet_data_loaded"] = False
                     st.session_state["shipper_database"] = {}
                     fetch_data_from_google_sheet(show_toast=True)
                     st.rerun()
@@ -316,22 +310,22 @@ def render_shipper_data():
             st.subheader("🛡️ Column V Auto-Detection Configurator (LUT vs Paid 'P')")
             st.caption("कस्टम्स पेनाल्टी से बचने के लिए शिपर के हिसाब से LUT और Paid ढूँढने के कीवर्ड्स यहाँ तय करें:")
             
-            igst_cfg = shipper_info.setdefault("igst_config", {
-                "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
-                "paid_keywords": "on payment of integrated tax, with payment of integrated tax, Supply meant for export with payment of integrated tax"
-            })
+            # 🎯 अब यह सीधे गूगल शीट से आपका लाइव सेव किया हुआ डेटा पढ़ेगा
+            saved_igst_config = fetch_igst_config_from_sheet(selected_shipper)
             
             col_lut, col_paid = st.columns(2)
             with col_lut:
                 updated_lut_kws = st.text_area(
                     "📌 LUT Detection Keywords (कॉमा से अलग करें):",
-                    value=igst_cfg.get("lut_keywords", "LUT ARN NO., w/o payment of integrated tax, under bond"),
+                    value=saved_igst_config.get("lut_keywords", ""),
+                    key=f"lut_kw_input_{selected_shipper}",
                     help="अगर इनमें से कोई भी शब्द PDF में मिला तो V कॉलम में सीधे 'LUT' जाएगा।"
                 )
             with col_paid:
                 updated_paid_kws = st.text_area(
                     "📌 Paid (P) Detection Keywords (कॉमा से अलग करें):",
-                    value=igst_cfg.get("paid_keywords", "on payment of integrated tax, with payment of integrated tax, Supply meant for export with payment of integrated tax"),
+                    value=saved_igst_config.get("paid_keywords", ""),
+                    key=f"paid_kw_input_{selected_shipper}",
                     help="अगर LUT नहीं मिला और इनमें से कोई शब्द मिला तो V कॉलम में सीधे 'P' जाएगा।"
                 )
                 
@@ -388,12 +382,13 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            # SAVE BUTTON
+            # SAVE BUTTON (अब मुख्य रूल्स और अलग फाइल के जरिए IGST Config दोनों गूगल शीट में परमानेंट सेव होंगे)
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
+                    # 1. Header Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
@@ -403,6 +398,7 @@ def render_shipper_data():
                             "Fallback": r_info.get("fallback", ""),
                             "RuleKind": "header"
                         })
+                    # 2. Item Rules
                     for i_field, i_info in s_data.get("item_table_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": i_field, "Keyword": i_info.get("rule", ""),
@@ -421,9 +417,11 @@ def render_shipper_data():
                         })
                 
                 with st.spinner("⏳ गूगल शीट में सुरक्षित सेव हो रहा है..."):
-                    success = push_all_to_sheet(rules_payload, files_payload)
-                    if success:
-                        st.success("🎉 आपके सभी रूल्स और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
+                    success_main = push_all_to_sheet(rules_payload, files_payload)
+                    success_igst = save_igst_config_to_sheet(selected_shipper, updated_lut_kws, updated_paid_kws)
+                    
+                    if success_main and success_igst:
+                        st.success("🎉 आपके सभी रूल्स, IGST कॉन्फिग और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
                         st.balloons()
                     else:
                         st.error("❌ सेव करते समय एरर आया!")
