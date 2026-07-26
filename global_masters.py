@@ -8,8 +8,8 @@ WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqh
 def add_master_field_dialog():
     new_master_name = st.text_input("Master Field Name:", placeholder="यहाँ नाम लिखें...")
     if st.button("Confirm & Add to Master", type="primary"):
-        if new_master_name.strip() and new_master_name not in st.session_state["master_rules_template"]:
-            st.session_state["master_rules_template"][new_master_name] = {
+        if new_master_name.strip() and new_master_name not in st.session_state.get("master_rules_template", {}):
+            st.session_state.setdefault("master_rules_template", {})[new_master_name] = {
                 "keyword": "", "position": "Right (आगे)", "cell": "",
                 "match_mode": "Exact Word", "stop_kw": "", "filter": "None", "logic": "None"
             }
@@ -18,7 +18,7 @@ def add_master_field_dialog():
 
 def render_global_masters():
     st.header("🌍 Global Master Fields & 8-Column Rules Template")
-    st.caption("परमानेंट 8-कॉलम मास्टर टेम्पलेट बोर्ड।")
+    st.caption("परमानेंट 8-कॉलम मास्टर टेम्पलेट बोर्ड एवं कॉमन डिक्शनरीज़।")
     st.write("---")
     
     col_t, col_add = st.columns([8, 2])
@@ -79,10 +79,73 @@ def render_global_masters():
             "match_mode": m_mode, "stop_kw": stop_kw, "filter": sel_flt, "logic": cust_lg
         }
         
+    st.session_state["master_rules_template"] = updated_masters
     st.write("---")
-    if st.button("💾 Save Entire 8-Column Master Template to Google Sheet", type="primary", use_container_width=True):
-        st.session_state["master_rules_template"] = updated_masters
+
+    # =========================================================================
+    # 🛡️ GLOBAL SECTION: COLUMN V AUTO-DETECTION CONFIGURATOR (LUT vs Paid 'P')
+    # =========================================================================
+    st.subheader("🛡️ Global Column V Auto-Detection Configurator (LUT vs Paid 'P')")
+    st.caption("ग्लोबल लेवल पर LUT और Paid ढूँढने के डिफ़ॉल्ट कीवर्ड्स यहाँ तय करें:")
+    
+    global_igst = st.session_state.setdefault("global_igst_config", {
+        "lut_keywords": "LUT ARN NO., w/o payment of integrated tax, under bond",
+        "paid_keywords": "on payment of integrated tax, with payment of integrated tax, Supply meant for export with payment of integrated tax"
+    })
+    
+    g_lut, g_paid = st.columns(2)
+    with g_lut:
+        g_lut_val = st.text_area("📌 Global LUT Detection Keywords:", value=global_igst.get("lut_keywords", ""), key="global_lut_kw")
+    with g_paid:
+        g_paid_val = st.text_area("📌 Global Paid (P) Detection Keywords:", value=global_igst.get("paid_keywords", ""), key="global_paid_kw")
         
+    st.session_state["global_igst_config"] = {"lut_keywords": g_lut_val, "paid_keywords": g_paid_val}
+    st.write("---")
+
+    # =========================================================================
+    # 📦 GLOBAL SECTION: DYNAMIC ITEM TABLE COLUMN BUILDER
+    # =========================================================================
+    st.subheader("📦 Global Dynamic Item Table Column Builder")
+    st.caption("ग्लोबल आइटम टेबल कॉलम रूल्स यहाँ सेट करें:")
+    
+    global_item_rules = st.session_state.setdefault("global_item_rules", {})
+    updated_global_item_rules = {}
+    
+    gic1, gic2, gic3, gic4, gic5 = st.columns([3, 2, 3, 3, 1])
+    with gic1: st.markdown("**Item Field Name**")
+    with gic2: st.markdown("**Excel Column**")
+    with gic3: st.markdown("**Rule Type**")
+    with gic4: st.markdown("**Rule Detail / Value**")
+    with gic5: st.markdown("**Act**")
+    
+    rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
+    
+    for g_field in list(global_item_rules.keys()):
+        gir = global_item_rules[g_field]
+        gic1, gic2, gic3, gic4, gic5 = st.columns([3, 2, 3, 3, 1])
+        s_type = gir.get("type", "PDF Row Item")
+        s_idx = rule_type_options.index(s_type) if s_type in rule_type_options else 0
+        
+        with gic1: ge_field = st.text_input(f"g_if_{g_field}", value=g_field, label_visibility="collapsed")
+        with gic2: ge_col = st.text_input(f"g_ic_{g_field}", value=gir.get("col", "K"), label_visibility="collapsed").upper()
+        with gic3: ge_type = st.selectbox(f"g_it_{g_field}", rule_type_options, index=s_idx, label_visibility="collapsed")
+        with gic4: ge_rule = st.text_input(f"g_ir_{g_field}", value=gir.get("rule", ""), label_visibility="collapsed")
+        with gic5:
+            if st.button("🗑️", key=f"g_idel_{g_field}"):
+                del global_item_rules[g_field]
+                st.rerun()
+                
+        updated_global_item_rules[ge_field] = {"col": ge_col, "type": ge_type, "rule": ge_rule}
+        
+    st.session_state["global_item_rules"] = updated_global_item_rules
+    
+    if st.button("➕ Add Global Item Column", key="add_global_item_col_btn"):
+        st.session_state["global_item_rules"]["New Item Field"] = {"col": "K", "type": "PDF Row Item", "rule": ""}
+        st.rerun()
+        
+    st.write("---")
+    
+    if st.button("💾 Save Entire 8-Column Master Template to Google Sheet", type="primary", use_container_width=True):
         fields_payload = []
         for f_name, r_info in updated_masters.items():
             fields_payload.append({
