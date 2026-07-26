@@ -73,7 +73,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
                             }
 
-        # गूगल शीट / अलग फाइल से IGST Config लोड करें
         for s_key in st.session_state["shipper_database"].keys():
             igst_fetched = fetch_igst_config_from_sheet(s_key)
             st.session_state["shipper_database"][s_key]["igst_config"] = igst_fetched
@@ -214,18 +213,51 @@ def render_shipper_data():
             st.write("---")
             
             # --- SECTION 3: HEADER MAPPING RULES ---
-            col_title, col_sync, col_add_h = st.columns([5, 3, 2])
+            col_title, col_sync, col_add_h, col_import = st.columns([3.5, 2.5, 2, 2])
             with col_title:
                 st.subheader("🛠️ 3. Header Fields Mapping Rules")
             with col_sync:
-                if st.button("🔄 Reload Saved Rules from Sheet", type="secondary", use_container_width=True):
+                if st.button("🔄 Reload Saved Rules", type="secondary", use_container_width=True):
                     st.session_state["sheet_data_loaded"] = False
                     st.session_state["shipper_database"] = {}
                     fetch_data_from_google_sheet(show_toast=True)
                     st.rerun()
             with col_add_h:
-                if st.button("➕ Add Header Field", type="secondary", use_container_width=True):
+                if st.button("➕ Add Field", type="secondary", use_container_width=True):
                     add_custom_header_field_dialog(selected_shipper)
+            with col_import:
+                # 📥 ग्लोबल मास्टर से फॉर्मेट इम्पोर्ट करने वाला बटन
+                if st.button("📥 Import Master", type="primary", use_container_width=True, help="ग्लोबल मास्टर से डिफ़ॉल्ट रूल्स यहाँ इम्पोर्ट करें"):
+                    master_tpl = st.session_state.get("master_rules_template", {})
+                    if master_tpl:
+                        imported_rules = {}
+                        for m_key, m_val in master_tpl.items():
+                            imported_rules[m_key] = {
+                                "keyword": m_val.get("keyword", ""),
+                                "position": m_val.get("position", "Right (आगे)"),
+                                "cell": m_val.get("cell", ""),
+                                "match_mode": m_val.get("match_mode", "Exact Word"),
+                                "stop_kw": m_val.get("stop_kw", ""),
+                                "filter": m_val.get("filter", "None"),
+                                "logic": m_val.get("logic", "None"),
+                                "fallback": ""
+                            }
+                        shipper_info["mapping_rules"] = imported_rules
+                        
+                        # ग्लोबल आइटम रूल्स भी सिंक करें
+                        g_items = st.session_state.get("global_item_rules", {})
+                        if g_items:
+                            shipper_info["item_table_rules"] = dict(g_items)
+                            
+                        # ग्लोबल IGST कॉन्फिग भी सिंक करें
+                        g_igst = st.session_state.get("global_igst_config", {})
+                        if g_igst:
+                            shipper_info["igst_config"] = dict(g_igst)
+                            
+                        st.success("🎉 ग्लोबल मास्टर से फॉर्मेट सफलतापूर्वक इम्पोर्ट हो गया!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ ग्लोबल मास्टर टेम्पलेट खाली है!")
             
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
@@ -385,7 +417,7 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            # SAVE BUTTON (अब कंबाइंड पेलोड के साथ हेडर, आइटम, टेम्पलेट और IGST कॉन्फिग सब एक साथ सुरक्षित सेव होगा)
+            # SAVE BUTTON (कंबाइंड पेलोड के साथ हेडर, आइटम, टेम्पलेट और IGST कॉन्फिग सब एक साथ सुरक्षित सेव होगा)
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 files_payload = []
@@ -411,7 +443,7 @@ def render_shipper_data():
                             "RuleKind": "item"
                         })
                     
-                    # 3. IGST Config Keywords (कंबाइंड सेव ताकि यह कभी गायब न हो)
+                    # 3. IGST Config Keywords
                     igst_data = s_data.get("igst_config", {})
                     rules_payload.append({
                         "ShipperName": s_name, "FieldName": "lut_keywords", "Keyword": igst_data.get("lut_keywords", ""),
