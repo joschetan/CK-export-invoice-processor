@@ -87,10 +87,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             get_manual_igst_choice(inv_key)
             st.stop()
 
-    # 🎯 1. ब्रैकेट वाली कमोडिटीज़ (जैसे (1), (2), (3)...) को पीडीएफ से डायनेमिकली निकालने का लॉजिक
     extracted_commodities = []
     if pdf_text:
-        # 'Name of Commodity' के बाद आने वाले (1)... (2)... पैटर्न्स को ढूँढना
         comm_matches = re.findall(r'\((\d+)\)\s*([^\(]+)', pdf_text)
         if comm_matches:
             for c_no, c_desc in comm_matches:
@@ -99,7 +97,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     "desc": c_desc.strip()
                 })
 
-    max_rows = max(len(parsed_items), len(extracted_commodities)) if extracted_commodities else len(parsed_items)
+    # 🎯 यदि कमोडिटीज़ मिल गई हैं, तो केवल कमोडिटीज़ की संख्या के बराबर लूप चलाएँ ताकि डुप्लीकेशन न हो
+    max_rows = len(extracted_commodities) if extracted_commodities else len(parsed_items)
 
     for item_idx in range(max_rows):
         item_sr_no = item_idx + 1
@@ -111,7 +110,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
         
-        # 🎯 2. BP और BQ कॉलम के लिए स्पेशल कमोडिटी स्प्लिटर मैपिंग
         if extracted_commodities and item_idx < len(extracted_commodities):
             comm_data = extracted_commodities[item_idx]
             for field_name, r_info in item_rules.items():
