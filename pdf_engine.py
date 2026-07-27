@@ -117,8 +117,9 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                             break
                 elif position == "2 Lines Below":
                     if line_i + 2 < len(pdf_lines):
-                        raw_t = line_i + 2].strip() if hasattr(line_i, '__add__') else "" # safe fallback
-                        break
+                        raw_t = pdf_lines[line_i + 2].strip()
+                        if raw_t:
+                            break
     else:
         raw_t = pdf_text
 
