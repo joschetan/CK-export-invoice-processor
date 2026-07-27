@@ -45,19 +45,8 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     if mode == "Word Position":
         w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
-        
-        # 🛡️ स्मार्ट ऑटो-मर्ज लॉजिक: यदि यह सील नंबर है और पोजीशन आगे-पीछे हो रही है या टूट रही है
-        if keyword and "seal" in keyword.lower() and len(parts) >= 5:
-            # यदि 5वें और 6वें हिस्से में सील नंबर टूटा हुआ है तो उसे स्वतः जोड़ लें
-            if len(parts) >= 6 and (any(c.isalpha() for c in parts[4]) or any(c.isdigit() for c in parts[5])):
-                text = f"{parts[4]}{parts[5]}"
-            elif len(parts) >= 7 and w_num == 6:
-                text = f"{parts[5]}{parts[6]}"
-            else:
-                text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
-        else:
-            text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
-            
+        # 🎯 अब यह पूरी तरह आपके द्वारा चुनी गई Word Position (जैसे 5, 6 या 7) के हिसाब से काम करेगा
+        text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
         if "=" not in stop_kw and stop_kw.lower() in text.lower():
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
