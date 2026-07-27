@@ -180,11 +180,36 @@ def render_processor():
                                 elif found_val and not found_val.lower().startswith("inv"):
                                     current_inv_date = found_val
 
+                        # 🎯 "Header Field Mapping" के लिए निकाले गए हेडर डेटा को आइटम रूल्स में पास करने हेतु डिक्शनरी तैयार करना
+                        resolved_item_rules = {}
+                        for i_name, i_info in item_table_rules.items():
+                            i_type = i_info.get("type", "")
+                            i_rule = i_info.get("rule", "")
+                            i_col = i_info.get("col", "K")
+                            
+                            actual_rule_val = i_rule
+                            if i_type == "Header Field Mapping":
+                                # यदि यूजर ने हेडर फील्ड का नाम चुना है, तो उसकी एक्सट्रैक्टेड वैल्यू यहाँ निकाल लें
+                                matched_header_key = i_rule.lower()
+                                if matched_header_key in inv_data_dict:
+                                    actual_rule_val = inv_data_dict[matched_header_key]
+                                else:
+                                    # केस-इन्सेंसिटिव मैचिंग के लिए
+                                    for h_k, h_v in inv_data_dict.items():
+                                        if h_k.lower() == matched_header_key:
+                                            actual_rule_val = h_v
+                                            break
+                            
+                            resolved_item_rules[i_name] = {
+                                "col": i_col,
+                                "type": i_type if i_type != "Header Field Mapping" else "Constant Text",
+                                "rule": actual_rule_val
+                            }
+
                         summary_row = 1 + inv_sr_number
                         ws[f"AH{summary_row}"] = inv_sr_number
                         ws[f"AI{summary_row}"] = current_inv_number
                         
-                        # 🎯 कल्पित तारीख को समरी रो (AJ) में भेजने वाला कोड यहाँ से पूरी तरह हटा दिया गया है।
                         if current_inv_date:
                             ws[f"AJ{summary_row}"] = current_inv_date
                         
@@ -203,7 +228,7 @@ def render_processor():
 
                         parsed_items = extract_item_table_rows(pdf_lines)
                         ws, overall_item_sr, excel_write_row = map_items_to_excel_dynamic(
-                            ws, parsed_items, item_table_rules,
+                            ws, parsed_items, resolved_item_rules,
                             inv_sr_no=inv_sr_number, 
                             start_overall_sr=overall_item_sr, 
                             start_excel_row=excel_write_row, 
@@ -228,7 +253,7 @@ def render_processor():
                 st.download_button(
                     label=f"📥 {st.session_state['processed_file_ready']['filename']} डाउनलोड करें",
                     data=st.session_state["processed_file_ready"]["data"],
-                    file_name=st.session_state["processed_file_ready"]["filename"],
+                    file_name=st.session_state['processed_file_ready']['filename'],
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
                 st.session_state["processed_file_ready"] = None
