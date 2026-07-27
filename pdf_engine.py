@@ -24,7 +24,7 @@ def apply_value_replacement(extracted_text, mapping_str):
                 
     return text_clean
 
-def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
+def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword="", all_extracted_headers=None):
     """
     Core Extraction Engine: Filters raw PDF extracted text based on user rules
     """
@@ -35,6 +35,12 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
             return target_check
         return target_check if target_check else ""
 
+    # 🔗 डायनेमिक हेडर लिंकिंग: यदि stop_kw में किसी अन्य हेडर का नाम दिया गया है, तो उसकी वैल्यू यहाँ ले आएं
+    effective_stop_kw = stop_kw
+    if stop_kw and all_extracted_headers and isinstance(all_extracted_headers, dict):
+        if stop_kw.strip() in all_extracted_headers:
+            effective_stop_kw = str(all_extracted_headers[stop_kw.strip()])
+
     if not raw_text:
         return ""
         
@@ -43,19 +49,18 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
         text = text[1:].strip()
     
     if mode == "Word Position":
-        w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
+        w_num = int(effective_stop_kw.strip()) if effective_stop_kw and str(effective_stop_kw).strip().isdigit() else 1
         parts = text.split()
-        # 🎯 अब यह पूरी तरह आपके द्वारा चुनी गई Word Position (जैसे 5, 6 या 7) के हिसाब से काम करेगा
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
-    elif mode == "After Word" and stop_kw:
-        if "=" not in stop_kw and stop_kw.lower() in text.lower():
-            start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
+    elif mode == "After Word" and effective_stop_kw:
+        if "=" not in effective_stop_kw and effective_stop_kw.lower() in text.lower():
+            start_idx = text.lower().find(effective_stop_kw.lower()) + len(effective_stop_kw)
             text = text[start_idx:].strip()
             if text.startswith(":"):
                 text = text[1:].strip()
-    elif mode == "Between Keywords" and stop_kw:
-        if "=" not in stop_kw and stop_kw.lower() in text.lower():
-            text = text.lower().split(stop_kw.lower())[0].strip()
+    elif mode == "Between Keywords" and effective_stop_kw:
+        if "=" not in effective_stop_kw and effective_stop_kw.lower() in text.lower():
+            text = text.lower().split(effective_stop_kw.lower())[0].strip()
     elif mode == "Exact Word":
         parts = text.split()
         text = parts[0].strip() if parts else ""
@@ -87,7 +92,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 
     return text.strip()
 
-def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type):
+def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type, all_extracted_headers=None):
     """
     Extracts specific header keyword values from parsed PDF lines
     """
@@ -112,13 +117,12 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                             break
                 elif position == "2 Lines Below":
                     if line_i + 2 < len(pdf_lines):
-                        raw_t = pdf_lines[line_i + 2].strip()
-                        if raw_t:
-                            break
+                        raw_t = line_i + 2].strip() if hasattr(line_i, '__add__') else "" # safe fallback
+                        break
     else:
         raw_t = pdf_text
 
-    return apply_rule_filter(raw_t, mode, stop_kw, filter_type, keyword)
+    return apply_rule_filter(raw_t, mode, stop_kw, filter_type, keyword, all_extracted_headers)
 
 def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
     """
