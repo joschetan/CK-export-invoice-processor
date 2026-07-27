@@ -62,14 +62,18 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
                             }
                         elif "igst_config" not in rule_kind and f_name.lower() not in ["lut_keywords", "paid_keywords"]:
+                            # 🎯 यहाँ "Filter/Logic" और "Filter" दोनों को सुरक्षित रूप से रिकवर करने के लिए अपडेट किया गया है
+                            flt_val = get_val_case_insensitive(row, "Filter/Logic", "filter/logic", "Filter", "filter", "flt", default="None")
+                            if not flt_val or flt_val.strip() == "":
+                                flt_val = "None"
+                                
                             st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
                                 "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
                                 "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
                                 "cell": cell_val,
                                 "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
                                 "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
-                                # 🎯 यहाँ 'Filter' को सही तरीके से रिकवर करने के लिए अपडेट किया गया है
-                                "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
+                                "filter": flt_val,
                                 "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None"),
                                 "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
                             }
