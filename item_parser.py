@@ -54,13 +54,11 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     
     pdf_text_upper = str(pdf_text).upper()
     
-    # 🎯 अब यह सीधे UI Configurator वाले बॉक्स (lut_kws और paid_kws) से कीवर्ड्स पढ़ेगा!
     l_keywords = [k.strip().upper() for k in str(lut_kws).split(",") if k.strip()]
     p_keywords = [k.strip().upper() for k in str(paid_kws).split(",") if k.strip()]
     
     matched_lut = False
     for kw in l_keywords:
-        # अगर कीवर्ड का मुख्य हिस्सा (जैसे 'LUT ARN' या 'WITHOUT PAYMENT') PDF में मिल जाए
         clean_kw = kw.replace("NO.", "").replace(".", "").strip()
         if clean_kw and clean_kw in pdf_text_upper:
             matched_lut = True
@@ -80,7 +78,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
     elif matched_paid:
         v_column_value = "P"
     else:
-        # अगर दोनों में से एक भी मैच नहीं हुआ, तब पॉप-अप खुलेगा
         inv_key = default_invoice_no if default_invoice_no else f"INV_{inv_sr_no}"
         session_key = f"resolved_igst_{inv_key}"
         
@@ -154,7 +151,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     raw_val = item.get("description_text", "")
                 elif "dbk" in r_val_lower or "drawback" in f_name_lower or col_letter == "S":
                     raw_val = item.get("dbk_found", "")
-                    if raw_val and not str(raw_val).endswith("B"):
+                    # 🎯 ऑटोमैटिक 'B' सफिक्स चेकिंग लॉजिक
+                    if raw_val and not str(raw_val).upper().endswith("B"):
                         raw_val = f"{raw_val}B"
                 elif "weight" in r_val_lower or "net wt" in f_name_lower:
                     raw_val = nums[0] if len(nums) > 0 else ""
@@ -173,7 +171,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                 try:
                     ws[cell_ref] = float(str(raw_val).replace(",", ""))
                 except:
-                    ws[cell_ref] = rule_val
+                    ws[cell_ref] = raw_val
                     
         curr_row += 1
         overall_sr += 1
