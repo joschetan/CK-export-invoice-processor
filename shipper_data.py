@@ -28,7 +28,7 @@ def fetch_data_from_google_sheet(show_toast=False):
     try:
         data = fetch_all_from_sheet()
         if not data:
-            if show_toast: st.error("⚠️ गूगल शीट से डेटा नहीं मिला।")
+            if show_toast: st.error("⚠️ गूगल शीट से डेटा नहीं मिला[cite: 5].")
             return
 
         rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
@@ -66,7 +66,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                             if not flt_val or flt_val.strip() == "":
                                 flt_val = "None"
                                 
-                            # 🎯 यहाँ "StopKw", "Stop / Word", "stop_kw" सभी संभावित वेरिएशंस को जोड़ा गया है ताकि डेटा कभी डिलीट न हो
+                            # 🎯 यहाँ "StopKw", "Stop / Word", "stop_kw" सभी संभावित वेरिएशंस को जोड़ा गया है ताकि डेटा कभी डिलीट न हो[cite: 5]
                             stop_kw_val = get_val_case_insensitive(row, "StopKw", "stop / word", "stop_kw", "stopkw", "stop", default="")
                             if not stop_kw_val:
                                 stop_kw_val = ""
@@ -90,7 +90,7 @@ def fetch_data_from_google_sheet(show_toast=False):
             if t_bytes:
                 st.session_state["shipper_database"][s_key].setdefault("uploaded_files", {})["Full Job Excel Format File"] = t_bytes
 
-        if show_toast: st.toast("✅ गूगल शीट से रूल्स और टेम्पलेट लोड हो गए!")
+        if show_toast: st.toast("✅ गूगल शीट से रूल्स और टेम्पलेट लोड हो गए[cite: 5]!")
     except Exception as e:
         if show_toast: st.error(f"फ़ैच एरर: {str(e)}")
 
@@ -122,7 +122,7 @@ def show_field_test_dialog(field_name, rule_data, result_val):
 
 @st.dialog("⚠️ Urgent: Verify IGST Status for Column V")
 def show_igst_manual_prompt_dialog(invoice_no):
-    st.warning(f"⚠️ इन्वॉइस **`{invoice_no}`** पर LUT या Paid (P) का स्पष्ट टेक्स्ट नहीं मिला!")
+    st.warning(f"⚠️ इन्वॉइस **`{invoice_no}`** पर LUT या Paid (P) का स्पष्ट टेक्स्ट नहीं मिला[cite: 5]!")
     st.write("कस्टम्स पेनाल्टी से बचने के लिए कृपया खुद से कन्फर्म करें:")
     
     selected_status = st.selectbox("Column V के लिए सही मोड चुनें:", ["P", "LUT"], index=0)
@@ -145,7 +145,7 @@ def add_custom_header_field_dialog(selected_shipper):
                 "keyword": "", "position": "Right (आगे)", "cell": "",
                 "match_mode": "Exact Word", "stop_kw": "", "filter": "None", "logic": "None", "fallback": ""
             }
-            st.success(f"🎉 फ़ील्ड '{new_field}' जुड़ गया!")
+            st.success(f"🎉 फ़ील्ड '{new_field}' जुड़ गया[cite: 5]!")
             st.rerun()
 
 @st.dialog("➕ Add Item Column Rule")
@@ -162,7 +162,7 @@ def add_item_col_dialog(selected_shipper):
         else:
             item_rules = st.session_state["shipper_database"][selected_shipper].setdefault("item_table_rules", {})
             item_rules[c_name] = {"col": c_col, "type": c_type, "rule": c_rule}
-            st.success(f"🎉 कॉलम '{c_name}' जुड़ गया!")
+            st.success(f"🎉 कॉलम '{c_name}' जुड़ गया[cite: 5]!")
             st.rerun()
 
 def render_shipper_data():
@@ -171,7 +171,7 @@ def render_shipper_data():
         st.session_state["sheet_data_loaded"] = True
     
     st.header("🏢 Add Shipper Name & Live-Test AI Mapping Builder")
-    st.caption("सटीक डेटा एक्सट्रैक्शन और रो-बाय-रो लाइव टेस्ट इंजन।")
+    st.caption("सटीक डेटा एक्सट्रैक्शन और रो-बाय-रो लाइव टेस्ट इंजन[cite: 5].")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -187,7 +187,7 @@ def render_shipper_data():
             
             has_file = "Full Job Excel Format File" in shipper_info.get("uploaded_files", {})
             if has_file:
-                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है।")
+                st.success("✅ Blank Full Job Excel Format File अपलोडेड एवं सुरक्षित है[cite: 5].")
                 if st.button("🗑️ Delete & Replace Template", key=f"del_tpl_{selected_shipper}"):
                     del shipper_info["uploaded_files"]["Full Job Excel Format File"]
                     st.rerun()
@@ -195,14 +195,14 @@ def render_shipper_data():
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) अपलोड करें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
                 if f_upload:
                     shipper_info.setdefault("uploaded_files", {})["Full Job Excel Format File"] = f_upload.getvalue()
-                    st.success("टेम्पलेट सेव हो गया! अब नीचे 'Save All Rules' दबाकर गूगल शीट में लॉक करें।")
+                    st.success("टेम्पलेट सेव हो गया! अब नीचे 'Save All Rules' दबाकर गूगल शीट में लॉक करें[cite: 5].")
                     st.rerun()
                     
             st.write("---")
             
             # --- SECTION 2: LIVE TEST PDF ENGINE ---
             st.subheader("🧪 2. Instant PDF Upload & Live Data Test Engine")
-            st.caption("यहाँ टेस्ट इनवॉइस PDF अपलोड करें, फिर रूल्स के सामने ⚡ Test दबाकर पॉप-अप में लाइव डेटा देखें।")
+            st.caption("यहाँ टेस्ट इनवॉइस PDF अपलोड करें, फिर रूल्स के सामने ⚡ Test दबाकर पॉप-अप में लाइव डेटा देखें[cite: 5].")
             
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             
@@ -217,7 +217,7 @@ def render_shipper_data():
                             pdf_lines.extend(t.split("\n"))
                 st.session_state["cached_pdf_lines"] = pdf_lines
                 st.session_state["cached_pdf_text"] = pdf_text
-                st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)। अब नीचे ⚡ Test बटन दबाएँ!")
+                st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)। अब नीचे ⚡ Test बटन दबाएँ[cite: 5]!")
 
             st.write("---")
             
@@ -235,7 +235,7 @@ def render_shipper_data():
                 if st.button("➕ Add Field", type="secondary", use_container_width=True):
                     add_custom_header_field_dialog(selected_shipper)
             with col_import:
-                if st.button("📥 Import Master", type="primary", use_container_width=True, help="ग्लोबल मास्टर से डिफ़ॉल्ट रूल्स यहाँ इम्पोर्ट करें"):
+                if st.button("📥 Import Master", type="primary", use_container_width=True, help="ग्लोबल मास्टर से डिफ़ॉल्ट रूल्स यहाँ इम्पोर्ट करें[cite: 5]"):
                     master_tpl = st.session_state.get("master_rules_template", {})
                     if master_tpl:
                         imported_rules = {}
@@ -260,10 +260,10 @@ def render_shipper_data():
                         if g_igst:
                             shipper_info["igst_config"] = dict(g_igst)
                             
-                        st.success("🎉 ग्लोबल मास्टर से फॉर्मेट सफलतापूर्वक इम्पोर्ट हो गया!")
+                        st.success("🎉 ग्लोबल मास्टर से फॉर्मेट सफलतापूर्वक इम्पोर्ट हो गया[cite: 5]!")
                         st.rerun()
                     else:
-                        st.warning("⚠️ ग्लोबल मास्टर टेम्पलेट खाली है!")
+                        st.warning("⚠️ ग्लोबल मास्टर टेम्पलेट खाली है[cite: 5]!")
             
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
@@ -279,7 +279,8 @@ def render_shipper_data():
                 "Container Number (ISO Format)", 
                 "Container Size (20/40 Only)", 
                 "Clean Date (DD/MM/YYYY)",
-                "Exact Keyword Paste (If Found)"
+                "Exact Keyword Paste (If Found)",
+                "Remove All Spaces"
             ]
             
             c1, c2, c3, c4, c5, c6, c7, c8, c9, c10 = st.columns([1.8, 2.2, 1.3, 0.7, 1.5, 1.3, 1.5, 1.5, 0.7, 1.0])
@@ -332,7 +333,7 @@ def render_shipper_data():
                 with c10:
                     if st.button("⚡ Test", key=f"test_btn_{field}"):
                         if not curr_pdf_lines:
-                            st.toast("⚠️ पहले Section 2 में PDF अपलोड करें!")
+                            st.toast("⚠️ पहले Section 2 में PDF अपलोड करें[cite: 5]!")
                         else:
                             res_val = extract_header_value(curr_pdf_lines, curr_pdf_text, ky, pos, m_mode, stop_kw, final_flt)
                             if not res_val or not res_val.strip():
@@ -476,12 +477,12 @@ def render_shipper_data():
                             "FileBase64": b64_str
                         })
                 
-                with st.spinner("⏳ गूगल शीट में सुरक्षित सेव हो रहा है..."):
+                with st.spinner("⏳ गूगल शीट में सुरक्षित सेव हो रहा है[cite: 5]..."):
                     success = push_all_to_sheet(rules_payload, files_payload)
                     if success:
-                        st.success("🎉 आपके सभी रूल्स, IGST कॉन्फिग और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं!")
+                        st.success("🎉 आपके सभी रूल्स, IGST कॉन्फिग और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं[cite: 5]!")
                         st.balloons()
                     else:
-                        st.error("❌ सेव करते समय एरर आया!")
+                        st.error("❌ सेव करते समय एरर आया[cite: 5]!")
 
             render_universal_test_suite(selected_shipper)
