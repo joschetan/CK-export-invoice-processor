@@ -30,7 +30,6 @@ def render_global_masters():
     current_masters = st.session_state.get("master_rules_template", {})
     updated_masters = {}
     
-    # शिपर डेटा के लेवल के सभी विकल्प (Position, Match Mode, Filter आदि)
     pos_options = ["Right (आगे)", "Below (नीचे)", "2 Lines Below", "Table Row Item", "Table Row Index"]
     match_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
     filter_options = [
@@ -43,7 +42,6 @@ def render_global_masters():
         "Clean Date (DD/MM/YYYY)"
     ]
     
-    # 10 कॉलम का लेआउट जो शिपर डेटा से पूरी तरह मैच करता है
     c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([1.8, 2.2, 1.3, 0.7, 1.5, 1.3, 1.5, 1.5, 0.7])
     with c1: st.markdown("**Field Name**")
     with c2: st.markdown("**Keyword**")
@@ -97,7 +95,7 @@ def render_global_masters():
     st.write("---")
 
     # =========================================================================
-    # 🛡️ GLOBAL SECTION: COLUMN V AUTO-DETECTION CONFIGURATOR (LUT vs Paid 'P')
+    # 🛡️ GLOBAL SECTION: COLUMN V AUTO-DETECTION CONFIGURATOR
     # =========================================================================
     st.subheader("🛡️ Global Column V Auto-Detection Configurator (LUT vs Paid 'P')")
     st.caption("ग्लोबल लेवल पर LUT और Paid ढूँढने के डिफ़ॉल्ट कीवर्ड्स यहाँ तय करें:")
@@ -132,7 +130,8 @@ def render_global_masters():
     with gic4: st.markdown("**Rule Detail / Value**")
     with gic5: st.markdown("**Act**")
     
-    rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
+    rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection", "Header Field Mapping"]
+    available_header_fields = list(current_masters.keys())
     
     for g_field in list(global_item_rules.keys()):
         gir = global_item_rules[g_field]
@@ -143,7 +142,15 @@ def render_global_masters():
         with gic1: ge_field = st.text_input(f"g_if_{g_field}", value=g_field, label_visibility="collapsed")
         with gic2: ge_col = st.text_input(f"g_ic_{g_field}", value=gir.get("col", "K"), label_visibility="collapsed").upper()
         with gic3: ge_type = st.selectbox(f"g_it_{g_field}", rule_type_options, index=s_idx, label_visibility="collapsed")
-        with gic4: ge_rule = st.text_input(f"g_ir_{g_field}", value=gir.get("rule", ""), label_visibility="collapsed")
+        
+        with gic4:
+            if ge_type == "Header Field Mapping":
+                saved_rule = gir.get("rule", "")
+                h_idx = available_header_fields.index(saved_rule) if saved_rule in available_header_fields else 0
+                ge_rule = st.selectbox(f"g_ir_{g_field}", available_header_fields if available_header_fields else ["No Headers Found"], index=h_idx if available_header_fields else 0, label_visibility="collapsed")
+            else:
+                ge_rule = st.text_input(f"g_ir_{g_field}", value=gir.get("rule", ""), label_visibility="collapsed")
+                
         with gic5:
             if st.button("🗑️", key=f"g_idel_{g_field}"):
                 del global_item_rules[g_field]
