@@ -45,7 +45,8 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     if mode == "Word Position":
         w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
-        if len(parts) >= 6 and w_num == 5:
+        # 🛡️ सुरक्षित रूप से चेक करें ताकि कभी इंडेक्स एरर न आए
+        if w_num == 5 and len(parts) >= 6:
             text = f"{parts[4]}{parts[5]}"
         else:
             text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
@@ -150,4 +151,3 @@ def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
             return "P"
             
     return "UNKNOWN"
-```[cite: 6]
