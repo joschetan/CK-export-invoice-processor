@@ -114,7 +114,7 @@ def show_field_test_dialog(field_name, rule_data, result_val):
 @st.dialog("⚠️ Urgent: Verify IGST Status for Column V")
 def show_igst_manual_prompt_dialog(invoice_no):
     st.warning(f"⚠️ इन्वॉइस **`{invoice_no}`** पर LUT या Paid (P) का स्पष्ट टेक्स्ट नहीं मिला!")
-    st.write("कस्टम्स में भारी पेनाल्टी से बचने के लिए कृपया खुद से कन्फर्म करें:")
+    st.write("कस्टम्स पेनाल्टी से बचने के लिए कृपया खुद से कन्फर्म करें:")
     
     selected_status = st.selectbox("Column V के लिए सही मोड चुनें:", ["P", "LUT"], index=0)
     
