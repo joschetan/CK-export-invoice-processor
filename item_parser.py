@@ -87,20 +87,25 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             get_manual_igst_choice(inv_key)
             st.stop()
 
-    # 🎯 यूआई रूल्स के आधार पर कमोडिटी चेक करना
     has_commodity_ui_rule = any(str(r_info.get("col", "")).strip().upper() in ["BP", "BQ"] for r_info in item_rules.values())
 
     extracted_commodities = []
     if has_commodity_ui_rule and pdf_text:
         comm_matches = re.findall(r'\((\d+)\)\s*([^\(]+)', pdf_text)
         if comm_matches:
+            seen_srs = set()
             for c_no, c_desc in comm_matches:
-                extracted_commodities.append({
-                    "sr": c_no.strip(),
-                    "desc": c_desc.strip()
-                })
+                sr_clean = c_no.strip()
+                # 🎯 यह चेक सुनिश्चित करेगा कि यदि कोई सीरियल नंबर (जैसे 1, 2, 3...) पहले आ चुका है, तो वह दोबारा लिस्ट में न जुड़े (मल्टी-पेज डुप्लीकेशन ब्लॉक)
+                if sr_clean not in seen_srs:
+                    seen_srs.add(sr_clean)
+                    # फालतू व्हाइटस्पेस और लाइन ब्रेक साफ करना
+                    clean_desc = re.sub(r'\s+', ' ', c_desc).strip()
+                    extracted_commodities.append({
+                        "sr": sr_clean,
+                        "desc": clean_desc
+                    })
 
-    # मुख्य लूप हमेशा 16 आइटम्स पर चलेगा
     max_rows = len(parsed_items)
 
     for item_idx in range(max_rows):
@@ -113,8 +118,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
         
-        # 🎯 स्ट्रिक्ट चेक: कमोडिटी केवल तभी भरी जाएगी जब इंडेक्स उसकी कुल संख्या (जैसे 5) से कम हो।
-        # 5 के बाद के आइटम्स के लिए BP और BQ कॉलम में कुछ नहीं भरा जाएगा (वे पूरी तरह खाली रहेंगे, कोई रिपीटीशन नहीं होगी)।
+        # कमोडिटी सिर्फ एक बार (1 से 5) सही रो में आएंगी और उसके बाद बंद हो जाएंगी
         if has_commodity_ui_rule and extracted_commodities and item_idx < len(extracted_commodities):
             comm_data = extracted_commodities[item_idx]
             ws[f"BP{curr_row}"] = comm_data["sr"]
