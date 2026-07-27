@@ -26,10 +26,17 @@ def apply_value_replacement(extracted_text, mapping_str):
                 
     return text_clean
 
-def apply_rule_filter(raw_text, mode, stop_kw, flt):
+def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     """
     Core Extraction Engine: Filters raw PDF extracted text based on user rules
     """
+    # 🎯 NEW LOGIC: अगर यह खास फिल्टर चुना गया है, तो यदि बॉक्स या कीवर्ड मिल जाए, तो वही पेस्ट कर दो
+    if flt == "Exact Keyword Paste (If Found)":
+        target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else keyword.strip()
+        if target_check and target_check.lower() in str(raw_text).lower():
+            return target_check
+        return ""
+
     if not raw_text:
         return ""
         
@@ -87,29 +94,33 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
     """
     raw_t = ""
     if keyword:
-        for line_i, line in enumerate(pdf_lines):
-            if keyword.lower() in line.lower():
-                if position == "Right (आगे)":
-                    start_idx = line.lower().find(keyword.lower()) + len(keyword)
-                    raw_t = line[start_idx:].strip()
-                    if raw_t.startswith(":"):
-                        raw_t = raw_t[1:].strip()
-                    if raw_t:
-                        break
-                elif position == "Below (नीचे)":
-                    if line_i + 1 < len(pdf_lines):
-                        raw_t = pdf_lines[line_i + 1].strip()
+        # 🎯 अगर नया फिल्टर एक्टिव है, तो पूरी पीडीएफ/लाइनों में चेक करें कि क्या कीवर्ड मौजूद है
+        if filter_type == "Exact Keyword Paste (If Found)":
+            raw_t = pdf_text
+        else:
+            for line_i, line in enumerate(pdf_lines):
+                if keyword.lower() in line.lower():
+                    if position == "Right (आगे)":
+                        start_idx = line.lower().find(keyword.lower()) + len(keyword)
+                        raw_t = line[start_idx:].strip()
+                        if raw_t.startswith(":"):
+                            raw_t = raw_t[1:].strip()
                         if raw_t:
                             break
-                elif position == "2 Lines Below":
-                    if line_i + 2 < len(pdf_lines):
-                        raw_t = pdf_lines[line_i + 2].strip()
-                        if raw_t:
-                            break
+                    elif position == "Below (नीचे)":
+                        if line_i + 1 < len(pdf_lines):
+                            raw_t = pdf_lines[line_i + 1].strip()
+                            if raw_t:
+                                break
+                    elif position == "2 Lines Below":
+                        if line_i + 2 < len(pdf_lines):
+                            raw_t = pdf_lines[line_i + 2].strip()
+                            if raw_t:
+                                break
     else:
         raw_t = pdf_text
 
-    return apply_rule_filter(raw_t, mode, stop_kw, filter_type)
+    return apply_rule_filter(raw_t, mode, stop_kw, filter_type, keyword)
 
 def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
     """
