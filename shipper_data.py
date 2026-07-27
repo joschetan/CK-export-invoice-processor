@@ -68,6 +68,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "cell": cell_val,
                                 "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
                                 "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
+                                # 🎯 यहाँ 'Filter' को सही तरीके से रिकवर करने के लिए अपडेट किया गया है
                                 "filter": get_val_case_insensitive(row, "Filter", "filter", "flt", default="None"),
                                 "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None"),
                                 "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
