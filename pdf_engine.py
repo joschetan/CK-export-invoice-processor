@@ -16,11 +16,9 @@ def apply_value_replacement(extracted_text, mapping_str):
             find_kw = parts[0].strip()
             replace_kw = parts[1].strip()
             
-            # Case-insensitive full word or exact match check
             if text_clean.lower() == find_kw.lower():
                 return replace_kw
             elif find_kw.lower() in text_clean.lower():
-                # Replace matching substring cleanly
                 pattern = re.compile(re.escape(find_kw), re.IGNORECASE)
                 return pattern.sub(replace_kw, text_clean)
                 
@@ -30,12 +28,12 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     """
     Core Extraction Engine: Filters raw PDF extracted text based on user rules
     """
-    # 🎯 NEW LOGIC: अगर यह खास फिल्टर चुना गया है, तो यदि बॉक्स या कीवर्ड मिल जाए, तो वही पेस्ट कर दो
+    # 🎯 1. सबसे पहले चेक करें कि क्या नया 'Exact Keyword Paste' फिल्टर चुना गया है
     if flt == "Exact Keyword Paste (If Found)":
         target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else keyword.strip()
         if target_check and target_check.lower() in str(raw_text).lower():
             return target_check
-        return ""
+        return target_check if target_check else ""
 
     if not raw_text:
         return ""
@@ -49,7 +47,6 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
         parts = text.split()
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
-        # Check if stop_kw contains replacement dictionary like "CART=CTN"
         if "=" not in stop_kw and stop_kw.lower() in text.lower():
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
             text = text[start_idx:].strip()
@@ -80,7 +77,6 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
         d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
         text = d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
 
-    # 🎯 APPLY MULTI-CONDITION VALUE REPLACEMENT IF SYNTAX (FIND=REPLACE) IS PRESENT IN STOP_KW OR FILTER
     if stop_kw and "=" in stop_kw:
         text = apply_value_replacement(text, stop_kw)
     if flt and "=" in flt:
@@ -93,30 +89,30 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
     Extracts specific header keyword values from parsed PDF lines
     """
     raw_t = ""
-    if keyword:
-        # 🎯 अगर नया फिल्टर एक्टिव है, तो पूरी पीडीएफ/लाइनों में चेक करें कि क्या कीवर्ड मौजूद है
-        if filter_type == "Exact Keyword Paste (If Found)":
-            raw_t = pdf_text
-        else:
-            for line_i, line in enumerate(pdf_lines):
-                if keyword.lower() in line.lower():
-                    if position == "Right (आगे)":
-                        start_idx = line.lower().find(keyword.lower()) + len(keyword)
-                        raw_t = line[start_idx:].strip()
-                        if raw_t.startswith(":"):
-                            raw_t = raw_t[1:].strip()
+    
+    # 🎯 यदि यह नया फिल्टर है, तो सीधे पूरी पीडीएफ टेक्स्ट (pdf_text) को रॉ टेक्स्ट मान लें
+    if filter_type == "Exact Keyword Paste (If Found)":
+        raw_t = pdf_text
+    elif keyword:
+        for line_i, line in enumerate(pdf_lines):
+            if keyword.lower() in line.lower():
+                if position == "Right (आगे)":
+                    start_idx = line.lower().find(keyword.lower()) + len(keyword)
+                    raw_t = line[start_idx:].strip()
+                    if raw_t.startswith(":"):
+                        raw_t = raw_t[1:].strip()
+                    if raw_t:
+                        break
+                elif position == "Below (नीचे)":
+                    if line_i + 1 < len(pdf_lines):
+                        raw_t = pdf_lines[line_i + 1].strip()
                         if raw_t:
                             break
-                    elif position == "Below (नीचे)":
-                        if line_i + 1 < len(pdf_lines):
-                            raw_t = pdf_lines[line_i + 1].strip()
-                            if raw_t:
-                                break
-                    elif position == "2 Lines Below":
-                        if line_i + 2 < len(pdf_lines):
-                            raw_t = pdf_lines[line_i + 2].strip()
-                            if raw_t:
-                                break
+                elif position == "2 Lines Below":
+                    if line_i + 2 < len(pdf_lines):
+                        raw_t = pdf_lines[line_i + 2].strip()
+                        if raw_t:
+                            break
     else:
         raw_t = pdf_text
 
@@ -132,25 +128,20 @@ def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
         
     text_lower = pdf_text.lower()
     
-    # 1. Prepare default + custom LUT keywords
     default_lut_kws = ["lut arn no", "w/o payment", "without payment", "under bond", "letter of undertaking"]
     custom_lut_kws = [k.strip().lower() for k in lut_keywords.split(",") if k.strip()]
     all_lut_kws = list(set(default_lut_kws + custom_lut_kws))
     
-    # 2. Check for LUT Match
     for kw in all_lut_kws:
         if kw in text_lower:
             return "LUT"
             
-    # 3. Prepare default + custom Paid (P) keywords
     default_paid_kws = ["on payment of integrated tax", "with payment of integrated tax", "payment of integrated tax"]
     custom_paid_kws = [k.strip().lower() for k in paid_keywords.split(",") if k.strip()]
     all_paid_kws = list(set(default_paid_kws + custom_paid_kws))
     
-    # 4. Check for Paid Match
     for kw in all_paid_kws:
         if kw in text_lower:
             return "P"
             
-    # 5. If neither found, return UNKNOWN for Safety Prompt/Popup
     return "UNKNOWN"
