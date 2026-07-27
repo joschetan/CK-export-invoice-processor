@@ -44,7 +44,8 @@ def load_data_from_gsheet():
                         "match_mode": row["MatchMode"] if "MatchMode" in df_m.columns and pd.notna(row["MatchMode"]) else "Exact Word",
                         "stop_kw": row["StopKw"] if "StopKw" in df_m.columns and pd.notna(row["StopKw"]) else "",
                         "filter": row["Filter"] if "Filter" in df_m.columns and pd.notna(row["Filter"]) else "None",
-                        "logic": row["Logic"] if "Logic" in df_m.columns and pd.notna(row["Logic"]) else "None"
+                        "logic": row["Logic"] if "Logic" in df_m.columns and pd.notna(row["Logic"]) else "None",
+                        "fallback": row["Fallback"] if "Fallback" in df_m.columns and pd.notna(row["Fallback"]) else ""
                     }
     except Exception:
         pass
@@ -59,19 +60,34 @@ def load_data_from_gsheet():
                     s_name = str(row["ShipperName"]).strip()
                     if s_name and s_name.lower() != "nan":
                         if s_name not in shipper_db:
-                            shipper_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": {}}
+                            shipper_db[s_name] = {
+                                "allowed_uploads": ["Full Job Excel Format File"], 
+                                "uploaded_files": {}, 
+                                "mapping_rules": {},
+                                "item_table_rules": {}
+                            }
                         
                         field = str(row["FieldName"]).strip() if "FieldName" in df_rules.columns else None
+                        rule_kind = str(row["RuleKind"]).strip().lower() if "RuleKind" in df_rules.columns and pd.notna(row["RuleKind"]) else "header"
+                        
                         if field and pd.notna(row["FieldName"]):
-                            shipper_db[s_name]["mapping_rules"][field] = {
-                                "keyword": row["Keyword"] if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else "",
-                                "position": row["Position"] if "Position" in df_rules.columns and pd.notna(row["Position"]) else "Right (आगे)",
-                                "cell": row["Cell"] if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else "",
-                                "match_mode": row["MatchMode"] if "MatchMode" in df_rules.columns and pd.notna(row["MatchMode"]) else "Exact Word",
-                                "stop_kw": row["StopKw"] if "StopKw" in df_rules.columns and pd.notna(row["StopKw"]) else "",
-                                "filter": row["Filter"] if "Filter" in df_rules.columns and pd.notna(row["Filter"]) else "None",
-                                "logic": row["Logic"] if "Logic" in df_rules.columns and pd.notna(row["Logic"]) else "None"
-                            }
+                            if "item" in rule_kind:
+                                shipper_db[s_name].setdefault("item_table_rules", {})[field] = {
+                                    "col": str(row["Cell"]).strip().upper() if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else "K",
+                                    "type": str(row["MatchMode"]).strip() if "MatchMode" in df_rules.columns and pd.notna(row["MatchMode"]) else "PDF Row Item",
+                                    "rule": str(row["Keyword"]).strip() if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else ""
+                                }
+                            elif "igst_config" not in rule_kind and field.lower() not in ["lut_keywords", "paid_keywords"]:
+                                shipper_db[s_name].setdefault("mapping_rules", {})[field] = {
+                                    "keyword": row["Keyword"] if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else "",
+                                    "position": row["Position"] if "Position" in df_rules.columns and pd.notna(row["Position"]) else "Right (आगे)",
+                                    "cell": row["Cell"] if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else "",
+                                    "match_mode": row["MatchMode"] if "MatchMode" in df_rules.columns and pd.notna(row["MatchMode"]) else "Exact Word",
+                                    "stop_kw": row["StopKw"] if "StopKw" in df_rules.columns and pd.notna(row["StopKw"]) else "",
+                                    "filter": row["Filter"] if "Filter" in df_rules.columns and pd.notna(row["Filter"]) else "None",
+                                    "logic": row["Logic"] if "Logic" in df_rules.columns and pd.notna(row["Logic"]) else "None",
+                                    "fallback": row["Fallback"] if "Fallback" in df_rules.columns and pd.notna(row["Fallback"]) else ""
+                                }
     except Exception:
         pass
 
@@ -84,7 +100,12 @@ def load_data_from_gsheet():
                 if "ShipperName" in df_files.columns and pd.notna(row["ShipperName"]):
                     s_name = str(row["ShipperName"]).strip()
                     if s_name not in shipper_db:
-                        shipper_db[s_name] = {"allowed_uploads": ["Full Job Excel Format File"], "uploaded_files": {}, "mapping_rules": {}}
+                        shipper_db[s_name] = {
+                            "allowed_uploads": ["Full Job Excel Format File"], 
+                            "uploaded_files": {}, 
+                            "mapping_rules": {},
+                            "item_table_rules": {}
+                        }
                     if "FileBase64" in df_files.columns and pd.notna(row["FileBase64"]):
                         shipper_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = base64.b64decode(str(row["FileBase64"]).strip())
     except Exception:
@@ -106,7 +127,6 @@ if "processed_file_ready" not in st.session_state: st.session_state["processed_f
 # 🖥️ MAIN PAGE ROUTING DISPLAY
 # ==========================================
 if st.session_state["admin_authenticated"]:
-    # 🔓 एडमिन मोड एक्टिव: ऊपर नेविगेशन बार और मुख्य कंटेंट
     top_col1, top_col2 = st.columns([8, 2])
     with top_col1:
         st.title("🚢 CK Export Processor - Admin Mode")
@@ -133,7 +153,6 @@ if st.session_state["admin_authenticated"]:
         render_global_masters()
 
 else:
-    # 🔒 यूजर मोड: एकदम साफ़ और सुंदर स्क्रीन
     from processor import render_processor
     
     col_l, col_c, col_r = st.columns([1, 5, 1])
@@ -145,7 +164,6 @@ else:
         st.write("---")
         st.write("---")
         
-        # 🔑 सबसे नीचे गोपनीय एडमिन पैनल एक्सेस (Expander)
         with st.expander("🛠️ Admin Settings Access"):
             pwd = st.text_input("एडमिन पासवर्ड दर्ज करें:", type="password", key="main_admin_pwd")
             if st.button("लॉगिन करें"):
