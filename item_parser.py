@@ -87,6 +87,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             get_manual_igst_choice(inv_key)
             st.stop()
 
+    # 🎯 1. कमोडिटीज़ को अलग से निकालना
     extracted_commodities = []
     if pdf_text:
         comm_matches = re.findall(r'\((\d+)\)\s*([^\(]+)', pdf_text)
@@ -97,12 +98,12 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     "desc": c_desc.strip()
                 })
 
-    # 🎯 यदि कमोडिटीज़ मिल गई हैं, तो केवल कमोडिटीज़ की संख्या के बराबर लूप चलाएँ ताकि डुप्लीकेशन न हो
-    max_rows = len(extracted_commodities) if extracted_commodities else len(parsed_items)
+    # 🎯 2. मुख्य आइटम टेबल की लंबाई के आधार पर सही और सिंगल लूप चलाना
+    max_rows = len(parsed_items) if parsed_items else len(extracted_commodities)
 
     for item_idx in range(max_rows):
         item_sr_no = item_idx + 1
-        item = parsed_items[item_idx] if item_idx < len(parsed_items) else (parsed_items[-1] if parsed_items else {})
+        item = parsed_items[item_idx] if item_idx < len(parsed_items) else {}
         
         ws[f"G{curr_row}"] = inv_sr_no                    
         ws[f"H{curr_row}"] = item_sr_no                                      
@@ -110,14 +111,11 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
         
+        # 🎯 3. BP और BQ कॉलम में कमोडिटी डेटा केवल एक बार सही रो में भरना
         if extracted_commodities and item_idx < len(extracted_commodities):
             comm_data = extracted_commodities[item_idx]
-            for field_name, r_info in item_rules.items():
-                col_letter = r_info.get("col", "").strip().upper()
-                if col_letter == "BP":
-                    ws[f"BP{curr_row}"] = comm_data["sr"]
-                elif col_letter == "BQ":
-                    ws[f"BQ{curr_row}"] = comm_data["desc"]
+            ws[f"BP{curr_row}"] = comm_data["sr"]
+            ws[f"BQ{curr_row}"] = comm_data["desc"]
 
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
