@@ -144,7 +144,7 @@ def add_item_col_dialog(selected_shipper):
     st.write("यहाँ आइटम टेबल के लिए नया कॉलम हेडिंग और एक्सेल कॉलम जोड़ें:")
     c_name = st.text_input("Heading Name (उदा: Net Weight, Boxes, Size):")
     c_col = st.text_input("Excel Column Letter (उदा: L, M, N, Z):").upper()
-    c_type = st.selectbox("Rule Type:", ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"])
+    c_type = st.selectbox("Rule Type:", ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection", "Header Field Mapping"])
     c_rule = st.text_input("Rule Detail / Value (उदा: B19, SET, PCS, Numbers Only):")
     
     if st.button("Confirm & Add Item Column", type="primary"):
@@ -226,7 +226,6 @@ def render_shipper_data():
                 if st.button("➕ Add Field", type="secondary", use_container_width=True):
                     add_custom_header_field_dialog(selected_shipper)
             with col_import:
-                # 📥 ग्लोबल मास्टर से फॉर्मेट इम्पोर्ट करने वाला बटन
                 if st.button("📥 Import Master", type="primary", use_container_width=True, help="ग्लोबल मास्टर से डिफ़ॉल्ट रूल्स यहाँ इम्पोर्ट करें"):
                     master_tpl = st.session_state.get("master_rules_template", {})
                     if master_tpl:
@@ -244,12 +243,10 @@ def render_shipper_data():
                             }
                         shipper_info["mapping_rules"] = imported_rules
                         
-                        # ग्लोबल आइटम रूल्स भी सिंक करें
                         g_items = st.session_state.get("global_item_rules", {})
                         if g_items:
                             shipper_info["item_table_rules"] = dict(g_items)
                             
-                        # ग्लोबल IGST कॉन्फिग भी सिंक करें
                         g_igst = st.session_state.get("global_igst_config", {})
                         if g_igst:
                             shipper_info["igst_config"] = dict(g_igst)
@@ -391,7 +388,8 @@ def render_shipper_data():
             with ic5: st.markdown("**Del**")
             st.write("---")
             
-            rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection"]
+            rule_type_options = ["PDF Row Item", "Table Row Item", "Constant Text", "Excel Cell Reference", "Smart Detection", "Header Field Mapping"]
+            available_header_fields = list(current_rules.keys())
             
             for item_field in list(item_rules.keys()):
                 if item_field.lower() in ["igst status", "igst mode"] or item_rules[item_field].get("col", "").strip().upper() in ["V", "B19"]:
@@ -406,7 +404,15 @@ def render_shipper_data():
                 with ic1: e_ifield = st.text_input(f"if_{item_field}", value=item_field, label_visibility="collapsed")
                 with ic2: e_icol = st.text_input(f"ic_{item_field}", value=ir.get("col", "K"), label_visibility="collapsed").upper()
                 with ic3: e_itype = st.selectbox(f"it_{item_field}", rule_type_options, index=type_idx, label_visibility="collapsed")
-                with ic4: e_irule = st.text_input(f"ir_{item_field}", value=ir.get("rule", ""), label_visibility="collapsed")
+                
+                with ic4:
+                    if e_itype == "Header Field Mapping":
+                        saved_rule = ir.get("rule", "")
+                        h_idx = available_header_fields.index(saved_rule) if saved_rule in available_header_fields else 0
+                        e_irule = st.selectbox(f"ir_{item_field}", available_header_fields if available_header_fields else ["No Headers Found"], index=h_idx if available_header_fields else 0, label_visibility="collapsed")
+                    else:
+                        e_irule = st.text_input(f"ir_{item_field}", value=ir.get("rule", ""), label_visibility="collapsed")
+                        
                 with ic5:
                     if st.button("🗑️", key=f"idel_{item_field}"):
                         del item_rules[item_field]
@@ -417,13 +423,11 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            # SAVE BUTTON (कंबाइंड पेलोड के साथ हेडर, आइटम, टेम्पलेट और IGST कॉन्फिग सब एक साथ सुरक्षित सेव होगा)
             if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
                 rules_payload = []
                 files_payload = []
                 
                 for s_name, s_data in st.session_state["shipper_database"].items():
-                    # 1. Header Rules
                     for f_name, r_info in s_data.get("mapping_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
@@ -433,7 +437,6 @@ def render_shipper_data():
                             "Fallback": r_info.get("fallback", ""),
                             "RuleKind": "header"
                         })
-                    # 2. Item Rules
                     for i_field, i_info in s_data.get("item_table_rules", {}).items():
                         rules_payload.append({
                             "ShipperName": s_name, "FieldName": i_field, "Keyword": i_info.get("rule", ""),
@@ -443,7 +446,6 @@ def render_shipper_data():
                             "RuleKind": "item"
                         })
                     
-                    # 3. IGST Config Keywords
                     igst_data = s_data.get("igst_config", {})
                     rules_payload.append({
                         "ShipperName": s_name, "FieldName": "lut_keywords", "Keyword": igst_data.get("lut_keywords", ""),
