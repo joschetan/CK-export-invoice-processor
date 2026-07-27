@@ -87,7 +87,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             get_manual_igst_choice(inv_key)
             st.stop()
 
-    # 🎯 UI-Driven Check: चेक करें कि क्या यूजर ने UI में BP या BQ कॉलम कॉन्फ़िगर किया है या नहीं
+    # 🎯 कमोडिटीज़ को अलग से निकाल कर रखना
     has_commodity_ui_rule = any(str(r_info.get("col", "")).strip().upper() in ["BP", "BQ"] for r_info in item_rules.values())
 
     extracted_commodities = []
@@ -100,9 +100,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     "desc": c_desc.strip()
                 })
 
-    # यदि UI में कमोडिटी नियम है तो कमोडिटी की संख्या तक लूप चलेगा, वरना नॉर्मल 16 आइटम्स पर
-    target_rows = extracted_commodities if (has_commodity_ui_rule and extracted_commodities) else parsed_items
-    max_rows = len(target_rows)
+    # 🎯 मुख्य लूप अब हमेशा पूरे 16 (parsed_items) आइटम्स पर ही चलेगा, आइटम कम नहीं होंगे
+    max_rows = len(parsed_items)
 
     for item_idx in range(max_rows):
         item_sr_no = item_idx + 1
@@ -114,7 +113,8 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
         
-        # 🎯 यदि UI में नियम है, तो BP और BQ में डेटा भरें
+        # 🎯 यदि कमोडिटीज़ हैं और वर्तमान रो कमोडिटी लिस्ट की सीमा के अंदर है (जैसे 1 से 5), तो BP और BQ भरें
+        # 5 के बाद यह कॉलम अपने आप खाली रहेंगे और आइटम्स पर कोई असर नहीं पड़ेगा
         if has_commodity_ui_rule and extracted_commodities and item_idx < len(extracted_commodities):
             comm_data = extracted_commodities[item_idx]
             ws[f"BP{curr_row}"] = comm_data["sr"]
