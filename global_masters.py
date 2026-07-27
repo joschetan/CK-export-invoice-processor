@@ -40,7 +40,8 @@ def render_global_masters():
         "Container Number (ISO Format)", 
         "Container Size (20/40 Only)", 
         "Clean Date (DD/MM/YYYY)",
-        "Exact Keyword Paste (If Found)"
+        "Exact Keyword Paste (If Found)",
+        "Remove All Spaces"
     ]
     
     c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([1.8, 2.2, 1.3, 0.7, 1.5, 1.3, 1.5, 1.5, 0.7])
