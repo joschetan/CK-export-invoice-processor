@@ -39,7 +39,7 @@ def extract_item_table_rows(pdf_lines):
 
 @st.dialog("⚠️ Urgent: Manual IGST Status Required")
 def get_manual_igst_choice(invoice_identifier):
-    st.warning(f"⚠️ इनवॉइस **`{invoice_identifier}`** में स्पष्ट रूप से LUT या Paid (P) का टेक्स्ट नहीं मिला!")
+    st.warning(f"⚠️ इन्वॉइस **`{invoice_identifier}`** में स्पष्ट रूप से LUT या Paid (P) का टेक्स्ट नहीं मिला!")
     st.write("कस्टम्स पेनाल्टी से बचने के लिए कृपया सही विकल्प चुनें:")
     
     selected_choice = st.selectbox("Column V के लिए सही स्टेटस चुनें:", ["LUT", "P"], index=0)
@@ -87,8 +87,23 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             get_manual_igst_choice(inv_key)
             st.stop()
 
-    for item_idx, item in enumerate(parsed_items):
+    # 🎯 1. ब्रैकेट वाली कमोडिटीज़ (जैसे (1), (2), (3)...) को पीडीएफ से डायनेमिकली निकालने का लॉजिक
+    extracted_commodities = []
+    if pdf_text:
+        # 'Name of Commodity' के बाद आने वाले (1)... (2)... पैटर्न्स को ढूँढना
+        comm_matches = re.findall(r'\((\d+)\)\s*([^\(]+)', pdf_text)
+        if comm_matches:
+            for c_no, c_desc in comm_matches:
+                extracted_commodities.append({
+                    "sr": c_no.strip(),
+                    "desc": c_desc.strip()
+                })
+
+    max_rows = max(len(parsed_items), len(extracted_commodities)) if extracted_commodities else len(parsed_items)
+
+    for item_idx in range(max_rows):
         item_sr_no = item_idx + 1
+        item = parsed_items[item_idx] if item_idx < len(parsed_items) else (parsed_items[-1] if parsed_items else {})
         
         ws[f"G{curr_row}"] = inv_sr_no                    
         ws[f"H{curr_row}"] = item_sr_no                                      
@@ -96,12 +111,22 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
         
+        # 🎯 2. BP और BQ कॉलम के लिए स्पेशल कमोडिटी स्प्लिटर मैपिंग
+        if extracted_commodities and item_idx < len(extracted_commodities):
+            comm_data = extracted_commodities[item_idx]
+            for field_name, r_info in item_rules.items():
+                col_letter = r_info.get("col", "").strip().upper()
+                if col_letter == "BP":
+                    ws[f"BP{curr_row}"] = comm_data["sr"]
+                elif col_letter == "BQ":
+                    ws[f"BQ{curr_row}"] = comm_data["desc"]
+
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type_raw = str(r_info.get("type", "PDF Row Item")).strip()
             rule_val = str(r_info.get("rule", "")).strip()
             
-            if not col_letter or col_letter == "V":
+            if not col_letter or col_letter in ["V", "BP", "BQ"]:
                 continue
                 
             cell_ref = f"{col_letter}{curr_row}"
@@ -151,7 +176,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     raw_val = item.get("description_text", "")
                 elif "dbk" in r_val_lower or "drawback" in f_name_lower or col_letter == "S":
                     raw_val = item.get("dbk_found", "")
-                    # 🎯 ऑटोमैटिक 'B' सफिक्स चेकिंग लॉजिक
                     if raw_val and not str(raw_val).upper().endswith("B"):
                         raw_val = f"{raw_val}B"
                 elif "weight" in r_val_lower or "net wt" in f_name_lower:
