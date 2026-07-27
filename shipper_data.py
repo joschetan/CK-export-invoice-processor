@@ -62,7 +62,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
                             }
                         elif "igst_config" not in rule_kind and f_name.lower() not in ["lut_keywords", "paid_keywords"]:
-                            # 🎯 यहाँ "Filter/Logic" और "Filter" दोनों को सुरक्षित रूप से रिकवर करने के लिए अपडेट किया गया है
                             flt_val = get_val_case_insensitive(row, "Filter/Logic", "filter/logic", "Filter", "filter", "flt", default="None")
                             if not flt_val or flt_val.strip() == "":
                                 flt_val = "None"
@@ -274,7 +273,8 @@ def render_shipper_data():
                 "Letters Only", 
                 "Container Number (ISO Format)", 
                 "Container Size (20/40 Only)", 
-                "Clean Date (DD/MM/YYYY)"
+                "Clean Date (DD/MM/YYYY)",
+                "Exact Keyword Paste (If Found)"
             ]
             
             c1, c2, c3, c4, c5, c6, c7, c8, c9, c10 = st.columns([1.8, 2.2, 1.3, 0.7, 1.5, 1.3, 1.5, 1.5, 0.7, 1.0])
