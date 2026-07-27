@@ -68,6 +68,8 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     elif flt == "Container Number (ISO Format)":
         cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
         text = cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
+    elif flt == "Remove All Spaces":
+        text = text.replace(" ", "").strip()
     elif flt == "Numbers Only":
         nums = re.findall(r'[\d,.]+', text)
         text = nums[0].strip() if nums else ""
