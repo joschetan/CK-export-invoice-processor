@@ -10,6 +10,13 @@ from pdf_engine import apply_value_replacement
 from google_sheet_sync import load_template_from_sheet
 
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
+    # 🎯 यहाँ नया फिल्टर जोड़ दिया गया है ताकि फाइनल प्रोसेसिंग में भी यह सीधे कीवर्ड/टेक्स्ट पेस्ट कर सके
+    if flt == "Exact Keyword Paste (If Found)":
+        target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else kw.strip()
+        if target_check and target_check.lower() in str(raw_text).lower():
+            return target_check
+        return target_check if target_check else ""
+
     if not raw_text: return ""
     text = raw_text.strip()
     if text.startswith(":"): text = text[1:].strip()
@@ -137,7 +144,10 @@ def render_processor():
                             fallback_val = r_info.get("fallback", "").strip()
                             
                             raw_text = ""
-                            if kw:
+                            # 🎯 यदि नया फिल्टर एक्टिव है, तो पूरी पीडीएफ को रॉ टेक्स्ट मान लें
+                            if flt == "Exact Keyword Paste (If Found)":
+                                raw_text = pdf_text
+                            elif kw:
                                 for line_i, line in enumerate(pdf_lines):
                                     if kw.lower() in line.lower():
                                         if pos == "Right (आगे)":
@@ -180,7 +190,6 @@ def render_processor():
                                 elif found_val and not found_val.lower().startswith("inv"):
                                     current_inv_date = found_val
 
-                        # 🎯 "Header Field Mapping" के लिए निकाले गए हेडर डेटा को आइटम रूल्स में पास करने हेतु डिक्शनरी तैयार करना
                         resolved_item_rules = {}
                         for i_name, i_info in item_table_rules.items():
                             i_type = i_info.get("type", "")
@@ -189,12 +198,10 @@ def render_processor():
                             
                             actual_rule_val = i_rule
                             if i_type == "Header Field Mapping":
-                                # यदि यूजर ने हेडर फील्ड का नाम चुना है, तो उसकी एक्सट्रैक्टेड वैल्यू यहाँ निकाल लें
                                 matched_header_key = i_rule.lower()
                                 if matched_header_key in inv_data_dict:
                                     actual_rule_val = inv_data_dict[matched_header_key]
                                 else:
-                                    # केस-इन्सेंसिटिव मैचिंग के लिए
                                     for h_k, h_v in inv_data_dict.items():
                                         if h_k.lower() == matched_header_key:
                                             actual_rule_val = h_v
@@ -252,7 +259,7 @@ def render_processor():
             if st.session_state.get("processed_file_ready", None):
                 st.download_button(
                     label=f"📥 {st.session_state['processed_file_ready']['filename']} डाउनलोड करें",
-                    data=st.session_state["processed_file_ready"]["data"],
+                    data=st.session_state['processed_file_ready']['data'],
                     file_name=st.session_state['processed_file_ready']['filename'],
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
