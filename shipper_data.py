@@ -66,12 +66,17 @@ def fetch_data_from_google_sheet(show_toast=False):
                             if not flt_val or flt_val.strip() == "":
                                 flt_val = "None"
                                 
+                            # 🎯 यहाँ "StopKw", "Stop / Word", "stop_kw" सभी संभावित वेरिएशंस को जोड़ा गया है ताकि डेटा कभी डिलीट न हो
+                            stop_kw_val = get_val_case_insensitive(row, "StopKw", "stop / word", "stop_kw", "stopkw", "stop", default="")
+                            if not stop_kw_val:
+                                stop_kw_val = ""
+
                             st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
                                 "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
                                 "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
                                 "cell": cell_val,
                                 "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
-                                "stop_kw": get_val_case_insensitive(row, "StopKw", "stop_kw", "stopkw"),
+                                "stop_kw": stop_kw_val,
                                 "filter": flt_val,
                                 "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None"),
                                 "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
