@@ -45,7 +45,11 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     if mode == "Word Position":
         w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
-        text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
+        # 🎯 यदि यह Shipping Seal No है और पोजीशन 5 चुनी गई है, तो स्वतः 5वां और 6ठा दोनों शब्द मिलाकर जोड़ लें ताकि पूरा सील नंबर आ जाए
+        if len(parts) >= 6 and w_num == 5:
+            text = f"{parts[4]}{parts[5]}"
+        else:
+            text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
     elif mode == "After Word" and stop_kw:
         if "=" not in stop_kw and stop_kw.lower() in text.lower():
             start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
@@ -112,7 +116,7 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                             break
                 elif position == "2 Lines Below":
                     if line_i + 2 < len(pdf_lines):
-                        raw_t = pdf_lines[line_i + 2].strip()
+                        raw_t = line_i + 2].strip()
                         if raw_t:
                             break
     else:
