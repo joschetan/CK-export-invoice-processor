@@ -64,7 +64,8 @@ def load_data_from_gsheet():
                                 "allowed_uploads": ["Full Job Excel Format File"], 
                                 "uploaded_files": {}, 
                                 "mapping_rules": {},
-                                "item_table_rules": {}
+                                "item_table_rules": {},
+                                "igst_config": {"lut_keywords": "", "paid_keywords": ""}
                             }
                         
                         field = str(row["FieldName"]).strip() if "FieldName" in df_rules.columns else None
@@ -77,14 +78,15 @@ def load_data_from_gsheet():
                                     "type": str(row["MatchMode"]).strip() if "MatchMode" in df_rules.columns and pd.notna(row["MatchMode"]) else "PDF Row Item",
                                     "rule": str(row["Keyword"]).strip() if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else ""
                                 }
-                            elif "igst_config" not in rule_kind and field.lower() not in ["lut_keywords", "paid_keywords"]:
+                            elif "igst_config" in rule_kind or field.lower() in ["lut_keywords", "paid_keywords"]:
+                                shipper_db[s_name].setdefault("igst_config", {})[field] = str(row["Keyword"]).strip() if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else ""
+                            else:
                                 shipper_db[s_name].setdefault("mapping_rules", {})[field] = {
                                     "keyword": row["Keyword"] if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else "",
                                     "position": row["Position"] if "Position" in df_rules.columns and pd.notna(row["Position"]) else "Right (आगे)",
                                     "cell": row["Cell"] if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else "",
                                     "match_mode": row["MatchMode"] if "MatchMode" in df_rules.columns and pd.notna(row["MatchMode"]) else "Exact Word",
                                     "stop_kw": row["StopKw"] if "StopKw" in df_rules.columns and pd.notna(row["StopKw"]) else "",
-                                    # 🎯 यहाँ 'Filter' को गूगल शीट के कॉलम से रीड करने के लिए जोड़ दिया गया है
                                     "filter": row["Filter"] if "Filter" in df_rules.columns and pd.notna(row["Filter"]) else "None",
                                     "logic": row["Logic"] if "Logic" in df_rules.columns and pd.notna(row["Logic"]) else "None",
                                     "fallback": row["Fallback"] if "Fallback" in df_rules.columns and pd.notna(row["Fallback"]) else ""
@@ -105,7 +107,8 @@ def load_data_from_gsheet():
                             "allowed_uploads": ["Full Job Excel Format File"], 
                             "uploaded_files": {}, 
                             "mapping_rules": {},
-                            "item_table_rules": {}
+                            "item_table_rules": {},
+                            "igst_config": {"lut_keywords": "", "paid_keywords": ""}
                         }
                     if "FileBase64" in df_files.columns and pd.notna(row["FileBase64"]):
                         shipper_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = base64.b64decode(str(row["FileBase64"]).strip())
