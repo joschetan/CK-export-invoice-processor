@@ -1,4 +1,4 @@
-name: Build Desktop App Folder
+name: Build Portable App Folder
 on:
   push:
     branches: [ main, master ]
