@@ -96,15 +96,41 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             seen_srs = set()
             for c_no, c_desc in comm_matches:
                 sr_clean = c_no.strip()
-                # 🎯 यह चेक सुनिश्चित करेगा कि यदि कोई सीरियल नंबर (जैसे 1, 2, 3...) पहले आ चुका है, तो वह दोबारा लिस्ट में न जुड़े (मल्टी-पेज डुप्लीकेशन ब्लॉक)
                 if sr_clean not in seen_srs:
                     seen_srs.add(sr_clean)
-                    # फालतू व्हाइटस्पेस और लाइन ब्रेक साफ करना
                     clean_desc = re.sub(r'\s+', ' ', c_desc).strip()
                     extracted_commodities.append({
                         "sr": sr_clean,
                         "desc": clean_desc
                     })
+        
+        # 🎯 यदि सिंगल-आइटम इनवॉइस है (यानी ब्रैकेट (1), (2) फॉर्मेट नहीं मिला), तो कमोडिटी के लिए स्मार्ट क्लीनिंग लॉजिक लगाएं
+        if not extracted_commodities:
+            # उदाहरण के लिए कमोडिटी हेडर या उसके आसपास के टेक्स्ट को खोजना
+            comm_raw = ""
+            if "Name of Commodity" in pdf_text:
+                c_idx = pdf_text.find("Name of Commodity") + len("Name of Commodity")
+                comm_raw = pdf_text[c_idx:].strip()
+            elif "Description" in pdf_text:
+                c_idx = pdf_text.find("Description") + len("Description")
+                comm_raw = pdf_text[c_idx:].strip()
+            else:
+                comm_raw = pdf_text
+            
+            # फालतू कचरा टेक्स्ट (Freight Terms, LUT, Drawback आदि) से पहले ही टेक्स्ट काट दें
+            stop_markers = ["Freight Terms", "LUT ARN", "UNDER DRAWBACK", "Preferential Agreements", "SQC CODE", "I declare"]
+            for marker in stop_markers:
+                if marker.upper() in comm_raw.upper():
+                    m_idx = comm_raw.upper().find(marker.upper())
+                    comm_raw = comm_raw[:m_idx].strip()
+                    break
+            
+            clean_single_desc = re.sub(r'\s+', ' ', comm_raw).strip()
+            if clean_single_desc:
+                extracted_commodities.append({
+                    "sr": "1",
+                    "desc": clean_single_desc
+                })
 
     max_rows = len(parsed_items)
 
@@ -118,7 +144,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
         
-        # कमोडिटी सिर्फ एक बार (1 से 5) सही रो में आएंगी और उसके बाद बंद हो जाएंगी
         if has_commodity_ui_rule and extracted_commodities and item_idx < len(extracted_commodities):
             comm_data = extracted_commodities[item_idx]
             ws[f"BP{curr_row}"] = comm_data["sr"]
