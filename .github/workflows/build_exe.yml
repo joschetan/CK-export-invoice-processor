@@ -15,7 +15,7 @@ jobs:
         pip install streamlit pandas openpyxl pyinstaller
     - name: Create EXE
       run: |
-        pyinstaller --onefile app.py
+        pyinstaller --noconsole --onefile --collect-all streamlit --collect-all pandas --collect-all openpyxl app.py
     - uses: actions/upload-artifact@v4
       with:
         name: Desktop-EXE-Backup
