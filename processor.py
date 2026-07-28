@@ -6,57 +6,8 @@ from io import BytesIO
 
 from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
-from pdf_engine import apply_value_replacement
+from pdf_engine import apply_rule_filter
 from google_sheet_sync import load_template_from_sheet
-
-def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
-    # 🎯 यदि नया फिल्टर एक्टिव है, तो पूरी पीडीएफ को रॉ टेक्स्ट मान लें
-    if flt == "Exact Keyword Paste (If Found)":
-        target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else kw.strip()
-        if target_check and target_check.lower() in str(raw_text).lower():
-            return target_check
-        return target_check if target_check else ""
-
-    if not raw_text: return ""
-    text = raw_text.strip()
-    if text.startswith(":"): text = text[1:].strip()
-    
-    if mode == "Word Position" or mode.startswith("Word "):
-        w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
-        parts = text.split()
-        text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
-    elif mode == "After Word" and stop_kw:
-        if "=" not in stop_kw and stop_kw.lower() in text.lower():
-            start_idx = text.lower().find(stop_kw.lower()) + len(stop_kw)
-            text = text[start_idx:].strip()
-            if text.startswith(":"): text = text[1:].strip()
-    elif mode == "Exact Word":
-        parts = text.split()
-        text = parts[0].strip() if parts else ""
-    elif mode == "Full Line":
-        text = text.split("\n")[0].strip()
-
-    if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
-        bracket_match = re.search(r'\((.*?)\)', text)
-        text = bracket_match.group(1).strip() if bracket_match else text.strip()
-    elif flt == "Letters Only":
-        text = re.sub(r'[^A-Za-z\s]', '', text).strip()
-    elif flt == "Numbers Only":
-        nums = re.findall(r'[\d,.]+', text)
-        text = nums[0].strip() if nums else ""
-    elif flt == "Clean Date (DD/MM/YYYY)":
-        d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', text)
-        text = d_match.group(0).replace(".", "/").replace("-", "/") if d_match else text.strip()
-    elif flt == "Container Number (ISO Format)":
-        cntr_match = re.search(r'\b[A-Za-z]{4}\s*\d{7}\b', text)
-        text = cntr_match.group(0).replace(" ", "") if cntr_match else text.strip()
-
-    if stop_kw and "=" in stop_kw:
-        text = apply_value_replacement(text, stop_kw)
-    if flt and "=" in flt:
-        text = apply_value_replacement(text, flt)
-
-    return text.strip()
 
 def render_processor():
     fetch_data_from_google_sheet()
@@ -136,7 +87,6 @@ def render_processor():
                         
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
-                            # 🎯 ऑटो-क्लीनर: यदि गूगल शीट के सिंगल कोट्स (' ) आ जाएं, तो उन्हें अपने आप हटा दें
                             if kw.startswith("'") and len(kw) > 1:
                                 kw = kw[1:].strip()
                                 
@@ -165,7 +115,8 @@ def render_processor():
                             else:
                                 raw_text = pdf_text
                                 
-                            found_val = apply_strict_rule_filter(raw_text, mode, stop_kw, flt, "", kw)
+                            # 🎯 अब यहाँ सीधे pdf_engine का यूनिफाइड apply_rule_filter इस्तेमाल हो रहा है
+                            found_val = apply_rule_filter(raw_text, mode, stop_kw, flt, kw)
                             
                             if not found_val or not found_val.strip():
                                 if fallback_val:
@@ -197,7 +148,6 @@ def render_processor():
                         for i_name, i_info in item_table_rules.items():
                             i_type = i_info.get("type", "")
                             i_rule = i_info.get("rule", "")
-                            # 🎯 यहाँ भी आइटम रूल्स के लिए सिंगल कोट्स क्लीनर जोड़ दिया गया है
                             if i_rule.startswith("'") and len(i_rule) > 1:
                                 i_rule = i_rule[1:].strip()
                                 
