@@ -91,15 +91,15 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
 
     extracted_commodities = []
     if has_commodity_ui_rule and pdf_text:
-        comm_matches = re.findall(r'\((\d+)\)\s*([^\(]+)', pdf_text)
+        # 🎯 सुधरा हुआ लॉजिक: अब यह ब्रैकेट के अंदर की वैल्यू (जैसे 1, 2, 3) पकड़ेगा और अगले सीरियल या अंत तक का पूरा टेक्स्ट बिना काटे उठाएगा
+        comm_matches = re.findall(r'\((\d+)\)(.*?)(?=\(\d+\)|Freight Terms|$)', pdf_text, re.DOTALL)
         if comm_matches:
             seen_srs = set()
             for c_no, c_desc in comm_matches:
                 sr_clean = c_no.strip()
-                # 🎯 यह चेक सुनिश्चित करेगा कि यदि कोई सीरियल नंबर (जैसे 1, 2, 3...) पहले आ चुका है, तो वह दोबारा लिस्ट में न जुड़े (मल्टी-पेज डुप्लीकेशन ब्लॉक)
                 if sr_clean not in seen_srs:
                     seen_srs.add(sr_clean)
-                    # फालतू व्हाइटस्पेस और लाइन ब्रेक साफ करना
+                    # सभी एक्स्ट्रा स्पेसेस और लाइन ब्रेक्स को सिंगल स्पेस में बदलकर पूरा टेक्स्ट साफ़ करना
                     clean_desc = re.sub(r'\s+', ' ', c_desc).strip()
                     extracted_commodities.append({
                         "sr": sr_clean,
@@ -118,7 +118,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
         
-        # कमोडिटी सिर्फ एक बार (1 से 5) सही रो में आएंगी और उसके बाद बंद हो जाएंगी
         if has_commodity_ui_rule and extracted_commodities and item_idx < len(extracted_commodities):
             comm_data = extracted_commodities[item_idx]
             ws[f"BP{curr_row}"] = comm_data["sr"]
