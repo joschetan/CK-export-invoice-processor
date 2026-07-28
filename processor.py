@@ -10,7 +10,7 @@ from pdf_engine import apply_value_replacement
 from google_sheet_sync import load_template_from_sheet
 
 def apply_strict_rule_filter(raw_text, mode, stop_kw, flt, logic, kw=""):
-    # 🎯 यहाँ नया फिल्टर जोड़ दिया गया है ताकि फाइनल प्रोसेसिंग में भी यह सीधे कीवर्ड/टेक्स्ट पेस्ट कर सके
+    # 🎯 यदि नया फिल्टर एक्टिव है, तो पूरी पीडीएफ को रॉ टेक्स्ट मान लें
     if flt == "Exact Keyword Paste (If Found)":
         target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else kw.strip()
         if target_check and target_check.lower() in str(raw_text).lower():
@@ -63,7 +63,7 @@ def render_processor():
     ensure_default_shipper()
     
     st.header("📤 Invoice Processing Zone")
-    st.caption("रूल्स और हेडर-वाइज फॉलबैक के आधार पर 100% सटीक डेटा एक्सट्रैक्शन।")
+    st.caption("रूल्स और हेडर-वाइज फॉलबैक के आधार पर 100% सटीक डेटा एक्सट्रैक्शन[cite: 5].")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -136,6 +136,10 @@ def render_processor():
                         
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
+                            # 🎯 ऑटो-क्लीनर: यदि गूगल शीट के सिंगल कोट्स (' ) आ जाएं, तो उन्हें अपने आप हटा दें
+                            if kw.startswith("'") and len(kw) > 1:
+                                kw = kw[1:].strip()
+                                
                             pos = r_info.get("position", "Right (आगे)")
                             target_cell = r_info.get("cell", "").strip().upper()
                             mode = r_info.get("match_mode", "Exact Word")
@@ -144,7 +148,6 @@ def render_processor():
                             fallback_val = r_info.get("fallback", "").strip()
                             
                             raw_text = ""
-                            # 🎯 यदि नया फिल्टर एक्टिव है, तो पूरी पीडीएफ को रॉ टेक्स्ट मान लें
                             if flt == "Exact Keyword Paste (If Found)":
                                 raw_text = pdf_text
                             elif kw:
@@ -194,6 +197,10 @@ def render_processor():
                         for i_name, i_info in item_table_rules.items():
                             i_type = i_info.get("type", "")
                             i_rule = i_info.get("rule", "")
+                            # 🎯 यहाँ भी आइटम रूल्स के लिए सिंगल कोट्स क्लीनर जोड़ दिया गया है
+                            if i_rule.startswith("'") and len(i_rule) > 1:
+                                i_rule = i_rule[1:].strip()
+                                
                             i_col = i_info.get("col", "K")
                             
                             actual_rule_val = i_rule
@@ -254,7 +261,7 @@ def render_processor():
                     final_filename = f"{clean_inv}_{short_shipper}_MultiInv.xlsx"
                     
                     st.session_state["processed_file_ready"] = {"filename": final_filename, "data": output.getvalue()}
-                    st.success(f"🎉 सफलता! कुल {len(uploaded_pdf_files)} इनवॉइस की फ़ाइल '{final_filename}' तैयार है!")
+                    st.success(f"🎉 सफलता! कुल {len(uploaded_pdf_files)} इनवॉइस की फ़ाइल '{final_filename}' तैयार है[cite: 5]!")
             
             if st.session_state.get("processed_file_ready", None):
                 st.download_button(
