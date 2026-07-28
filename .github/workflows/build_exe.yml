@@ -1,4 +1,4 @@
-name: Build Desktop EXE Backup
+name: Build Desktop App Folder
 on:
   push:
     branches: [ main, master ]
@@ -13,10 +13,10 @@ jobs:
     - name: Install Dependencies
       run: |
         pip install streamlit pandas openpyxl requests pdfplumber pyinstaller
-    - name: Create EXE
+    - name: Create App Folder
       run: |
         pyinstaller --onedir --noconsole --collect-all streamlit --collect-all pandas --collect-all openpyxl --collect-all pdfplumber app.py
     - uses: actions/upload-artifact@v4
       with:
-        name: CK-Export-Processor-Folder
+        name: CK-Export-Processor-Portable
         path: dist/app/
