@@ -26,9 +26,9 @@ def apply_value_replacement(extracted_text, mapping_str):
 
 def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     """
-    Core Extraction Engine: Filters raw PDF extracted text based on user rules
+    Core Unified Extraction Engine: Filters raw PDF extracted text based on user rules
     """
-    # 🎯 1. सबसे पहले चेक करें कि क्या नया 'Exact Keyword Paste' फिल्टर चुना गया है
+    # 🎯 1. यदि नया 'Exact Keyword Paste' फिल्टर चुना गया है
     if flt == "Exact Keyword Paste (If Found)":
         target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else keyword.strip()
         if target_check and target_check.lower() in str(raw_text).lower():
@@ -42,7 +42,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     if text.startswith(":"):
         text = text[1:].strip()
     
-    if mode == "Word Position":
+    if mode == "Word Position" or mode.startswith("Word "):
         w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
         text = parts[w_num - 1].strip() if len(parts) >= w_num else ""
@@ -92,7 +92,6 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
     """
     raw_t = ""
     
-    # 🎯 यदि यह नया फिल्टर है, तो सीधे पूरी पीडीएफ टेक्स्ट (pdf_text) को रॉ टेक्स्ट मान लें
     if filter_type == "Exact Keyword Paste (If Found)":
         raw_t = pdf_text
     elif keyword:
