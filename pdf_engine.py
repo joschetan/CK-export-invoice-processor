@@ -59,7 +59,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
         parts = text.split()
         text = parts[0].strip() if parts else ""
     elif mode == "Full Line":
-        # 🎯 मल्टी-लाइन एड्रेस को सुरक्षित रखने के लिए इसे स्प्लिट नहीं किया जाएगा
+        # 🎯 मल्टी-लाइन एड्रेस को काटने के बजाय सुरक्षित रखा गया है
         text = text.strip()
 
     # 🎯 FILTERS IMPLEMENTATION
@@ -89,7 +89,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 
 def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type):
     """
-    Extracts specific header keyword values from parsed PDF lines with strict stop-boundary isolation
+    Extracts specific header keyword values from parsed PDF lines with side-by-side splitting logic
     """
     raw_t = ""
     
@@ -106,27 +106,37 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                     if raw_t:
                         break
                 elif position == "Below (नीचे)":
-                    # 🎯 सख्त स्टॉप-बाउंड्री के साथ मल्टी-लाइन एक्सट्रैक्शन (Consignee और Buyer आपस में मिक्स नहीं होंगे)
+                    # 🎯 साइड-बाय-साइड (Consignee और Buyer) की खिचड़ी रोकने के लिए स्पेशल स्प्लिट लॉजिक[cite: 7]
                     collected_lines = []
-                    for offset in range(1, 5):  # नीचे की 4 लाइनें
+                    is_consignee = "consignee" in keyword.lower()
+                    
+                    for offset in range(1, 5):  # नीचे की 4 लाइनें[cite: 7]
                         if line_i + offset < len(pdf_lines):
                             next_line = pdf_lines[line_i + offset].strip()
                             lower_next = next_line.lower()
-                            # यदि अगली लाइन में कोई दूसरा हेडिंग या स्टॉपवर्ड आ जाए, तो तुरंत रुक जाएं
-                            if not next_line or any(stop_word in lower_next for stop_word in [
-                                "buyer", "notify:", "pre-carriage", "vessel", "port of", 
-                                "place of", "terms of", "sales order", "invoice no", "consignee:"
+                            
+                            # यदि कोई दूसरा मुख्य सेक्शन शुरू हो जाए तो रुक जाएं[cite: 7]
+                            if not next_line or any(stop_lbl in lower_next for stop_lbl in [
+                                "notify:", "pre-carriage", "vessel", "port of", "place of", "terms of", "sales order", "invoice no"
                             ]):
                                 break
-                            collected_lines.append(next_line)
+                                
+                            # अगर एक ही लाइन में Consignee और Buyer दोनों आपस में चिपके हुए हैं[cite: 7]
+                            if " - " in next_line and "Welspun USA Inc" in next_line:
+                                parts = next_line.split("Welspun USA Inc")
+                                if is_consignee:
+                                    collected_lines.append(parts[0].strip())
+                                else:
+                                    collected_lines.append("Welspun USA Inc" + parts[1].strip())
+                            else:
+                                collected_lines.append(next_line)
                     if collected_lines:
                         raw_t = "\n".join(collected_lines)
                         break
                 elif position == "2 Lines Below":
                     if line_i + 2 < len(pdf_lines):
                         raw_t = pdf_lines[line_i + 2].strip()
-                        if raw_t:
-                            break
+                        break
     else:
         raw_t = pdf_text
 
