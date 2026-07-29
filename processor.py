@@ -6,7 +6,7 @@ from io import BytesIO
 
 from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
-from pdf_engine import apply_rule_filter, extract_header_value
+from pdf_engine import apply_rule_filter
 from google_sheet_sync import load_template_from_sheet
 
 def render_processor():
@@ -97,8 +97,26 @@ def render_processor():
                             flt = r_info.get("filter", "None")
                             fallback_val = r_info.get("fallback", "").strip()
                             
-                            # 🎯 यहाँ हमने extract_header_value को कॉल किया है और साथ में field नाम भेजा है
-                            found_val = extract_header_value(pdf_lines, pdf_text, kw, pos, mode, stop_kw, flt, field_label=field)
+                            raw_text = ""
+                            if flt == "Exact Keyword Paste (If Found)":
+                                raw_text = pdf_text
+                            elif kw:
+                                for line_i, line in enumerate(pdf_lines):
+                                    if kw.lower() in line.lower():
+                                        if pos == "Right (आगे)":
+                                            start_idx = line.lower().find(kw.lower()) + len(kw)
+                                            raw_text = line[start_idx:].strip()
+                                            if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
+                                            if raw_text: break
+                                        elif pos == "Below (नीचे)":
+                                            if line_i + 1 < len(pdf_lines):
+                                                raw_text = pdf_lines[line_i + 1].strip()
+                                                if raw_text: break
+                            else:
+                                raw_text = pdf_text
+                                
+                            # 🎯 अब यहाँ सीधे pdf_engine का यूनिफाइड apply_rule_filter इस्तेमाल हो रहा है
+                            found_val = apply_rule_filter(raw_text, mode, stop_kw, flt, kw)
                             
                             if not found_val or not found_val.strip():
                                 if fallback_val:
