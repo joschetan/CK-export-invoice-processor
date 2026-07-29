@@ -87,7 +87,7 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             get_manual_igst_choice(inv_key)
             st.stop()
 
-    has_commodity_ui_rule = any(str(r_info.get("col", "")).strip().upper() in ["BP", "BQ"] for r_info in item_rules.values())
+    has_commodity_ui_rule = any(str(r_info.get("col", "")).strip().upper() in ["BR", "BS"] for r_info in item_rules.values())
 
     extracted_commodities = []
     if has_commodity_ui_rule and pdf_text:
@@ -120,15 +120,15 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         if has_commodity_ui_rule and extracted_commodities and item_idx < len(extracted_commodities):
             comm_data = extracted_commodities[item_idx]
-            ws[f"BP{curr_row}"] = comm_data["sr"]
-            ws[f"BQ{curr_row}"] = comm_data["desc"]
+            ws[f"BR{curr_row}"] = comm_data["sr"]
+            ws[f"BS{curr_row}"] = comm_data["desc"]
 
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type_raw = str(r_info.get("type", "PDF Row Item")).strip()
             rule_val = str(r_info.get("rule", "")).strip()
             
-            if not col_letter or col_letter in ["V", "BP", "BQ"]:
+            if not col_letter or col_letter in ["V", "BR", "BS"]:
                 continue
                 
             cell_ref = f"{col_letter}{curr_row}"
