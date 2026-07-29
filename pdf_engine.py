@@ -28,7 +28,6 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     """
     Core Unified Extraction Engine: Filters raw PDF extracted text based on user rules
     """
-    # 🎯 1. यदि नया 'Exact Keyword Paste' फिल्टर चुना गया है
     if flt == "Exact Keyword Paste (If Found)":
         target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else keyword.strip()
         if target_check and target_check.lower() in str(raw_text).lower():
@@ -59,10 +58,8 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
         parts = text.split()
         text = parts[0].strip() if parts else ""
     elif mode == "Full Line":
-        # 🎯 मल्टी-लाइन एड्रेस को काटने के बजाय सुरक्षित रखा गया है
-        text = text.strip()
+        text = text.split("\n")[0].strip()
 
-    # 🎯 FILTERS IMPLEMENTATION
     if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
         bracket_match = re.search(r'\((.*?)\)', text)
         text = bracket_match.group(1).strip() if bracket_match else text.strip()
@@ -87,11 +84,13 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 
     return text.strip()
 
-def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type):
+def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type, field_label=""):
     """
-    Extracts specific header keyword values from parsed PDF lines with side-by-side splitting logic
+    Extracts specific header keyword values. Multi-line side-by-side split applies ONLY if field_label is Consignee or Buyer.
     """
     raw_t = ""
+    # 🎯 चेक करें कि क्या यूजर ने Field Name (यानी UI का पहला कॉलम) में Consignee या Buyer लिखा है
+    is_target_field = field_label and ("consignee" in field_label.lower() or "buyer" in field_label.lower())
     
     if filter_type == "Exact Keyword Paste (If Found)":
         raw_t = pdf_text
@@ -106,33 +105,37 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                     if raw_t:
                         break
                 elif position == "Below (नीचे)":
-                    # 🎯 साइड-बाय-साइड (Consignee और Buyer) की खिचड़ी रोकने के लिए स्पेशल स्प्लिट लॉजिक[cite: 7]
-                    collected_lines = []
-                    is_consignee = "consignee" in keyword.lower()
-                    
-                    for offset in range(1, 5):  # नीचे की 4 लाइनें[cite: 7]
-                        if line_i + offset < len(pdf_lines):
-                            next_line = pdf_lines[line_i + offset].strip()
-                            lower_next = next_line.lower()
-                            
-                            # यदि कोई दूसरा मुख्य सेक्शन शुरू हो जाए तो रुक जाएं[cite: 7]
-                            if not next_line or any(stop_lbl in lower_next for stop_lbl in [
-                                "notify:", "pre-carriage", "vessel", "port of", "place of", "terms of", "sales order", "invoice no"
-                            ]):
-                                break
+                    if is_target_field:
+                        # 🎯 यह स्पेशल लॉजिक सिर्फ Consignee और Buyer के लिए ही चलेगा
+                        collected_lines = []
+                        is_consignee = "consignee" in field_label.lower()
+                        
+                        for offset in range(1, 5):
+                            if line_i + offset < len(pdf_lines):
+                                next_line = pdf_lines[line_i + offset].strip()
+                                lower_next = next_line.lower()
                                 
-                            # अगर एक ही लाइन में Consignee और Buyer दोनों आपस में चिपके हुए हैं[cite: 7]
-                            if " - " in next_line and "Welspun USA Inc" in next_line:
-                                parts = next_line.split("Welspun USA Inc")
-                                if is_consignee:
-                                    collected_lines.append(parts[0].strip())
+                                if not next_line or any(stop_lbl in lower_next for stop_lbl in [
+                                    "notify:", "pre-carriage", "vessel", "port of", "place of", "terms of", "sales order", "invoice no"
+                                ]):
+                                    break
+                                    
+                                if " - " in next_line and "Welspun USA Inc" in next_line:
+                                    parts = next_line.split("Welspun USA Inc")
+                                    if is_consignee:
+                                        collected_lines.append(parts[0].strip())
+                                    else:
+                                        collected_lines.append("Welspun USA Inc" + parts[1].strip())
                                 else:
-                                    collected_lines.append("Welspun USA Inc" + parts[1].strip())
-                            else:
-                                collected_lines.append(next_line)
-                    if collected_lines:
-                        raw_t = "\n".join(collected_lines)
-                        break
+                                    collected_lines.append(next_line)
+                        if collected_lines:
+                            raw_t = "\n".join(collected_lines)
+                            break
+                    else:
+                        # 🎯 बाकी सभी दूसरी फील्ड्स के लिए एकदम पुराना और सुरक्षित सिंगल-लाइन लॉजिक
+                        if line_i + 1 < len(pdf_lines):
+                            raw_t = pdf_lines[line_i + 1].strip()
+                            break
                 elif position == "2 Lines Below":
                     if line_i + 2 < len(pdf_lines):
                         raw_t = pdf_lines[line_i + 2].strip()
@@ -140,6 +143,10 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
     else:
         raw_t = pdf_text
 
+    # यदि Consignee/Buyer है तो मल्टी-लाइन को बिना काटे पास करें, वरना नॉर्मल फिल्टर लगाएं
+    if is_target_field:
+        return raw_t.strip()
+        
     return apply_rule_filter(raw_t, mode, stop_kw, filter_type, keyword)
 
 def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
