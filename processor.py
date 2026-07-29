@@ -115,6 +115,7 @@ def render_processor():
                             else:
                                 raw_text = pdf_text
                                 
+                            # 🎯 अब यहाँ सीधे pdf_engine का यूनिफाइड apply_rule_filter इस्तेमाल हो रहा है
                             found_val = apply_rule_filter(raw_text, mode, stop_kw, flt, kw)
                             
                             if not found_val or not found_val.strip():
@@ -211,25 +212,12 @@ def render_processor():
                     
                     st.session_state["processed_file_ready"] = {"filename": final_filename, "data": output.getvalue()}
                     st.success(f"🎉 सफलता! कुल {len(uploaded_pdf_files)} इनवॉइस की फ़ाइल '{final_filename}' तैयार है[cite: 5]!")
-                    st.rerun()
             
             if st.session_state.get("processed_file_ready", None):
-                file_info = st.session_state["processed_file_ready"]
-                
-                clicked = st.download_button(
-                    label=f"📥 {file_info['filename']} डाउनलोड करें",
-                    data=file_info['data'],
-                    file_name=file_info['filename'],
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                st.download_button(
+                    label=f"📥 {st.session_state['processed_file_ready']['filename']} डाउनलोड करें",
+                    data=st.session_state['processed_file_ready']['data'],
+                    file_name=st.session_state['processed_file_ready']['filename'],
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-                
-                if clicked:
-                    st.session_state["processed_file_ready"] = None
-                    st.session_state[f"inv_count_{selected_shipper}"] = 1
-                    
-                    keys_to_del = [k for k in st.session_state.keys() if k.startswith(f"inv_pdf_{selected_shipper}_")]
-                    for k in keys_to_del:
-                        del st.session_state[k]
-                        
-                    st.rerun()
+                st.session_state["processed_file_ready"] = None
