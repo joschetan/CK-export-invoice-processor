@@ -28,6 +28,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     """
     Core Unified Extraction Engine: Filters raw PDF extracted text based on user rules
     """
+    # 🎯 1. यदि नया 'Exact Keyword Paste' फिल्टर चुना गया है
     if flt == "Exact Keyword Paste (If Found)":
         target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else keyword.strip()
         if target_check and target_check.lower() in str(raw_text).lower():
@@ -41,6 +42,10 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     if text.startswith(":"):
         text = text[1:].strip()
     
+    # यदि यह Consignee या Buyer का मल्टी-लाइन डेटा है, तो इसे रूल्स से काटे बिना सीधा बाहर भेज दें
+    if keyword and ("consignee" in keyword.lower() or "buyer" in keyword.lower()):
+        return text
+
     if mode == "Word Position" or mode.startswith("Word "):
         w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
@@ -60,6 +65,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     elif mode == "Full Line":
         text = text.split("\n")[0].strip()
 
+    # 🎯 FILTERS IMPLEMENTATION
     if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
         bracket_match = re.search(r'\((.*?)\)', text)
         text = bracket_match.group(1).strip() if bracket_match else text.strip()
@@ -86,11 +92,11 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 
 def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type, field_label=""):
     """
-    Extracts specific header keyword values. Multi-line side-by-side split applies ONLY if field_label is Consignee or Buyer.
+    Extracts specific header values with precise side-by-side splitting for Consignee and Buyer.
     """
     raw_t = ""
-    # 🎯 चेक करें कि क्या यूजर ने Field Name (यानी UI का पहला कॉलम) में Consignee या Buyer लिखा है
     is_target_field = field_label and ("consignee" in field_label.lower() or "buyer" in field_label.lower())
+    is_consignee = field_label and "consignee" in field_label.lower()
     
     if filter_type == "Exact Keyword Paste (If Found)":
         raw_t = pdf_text
@@ -106,9 +112,7 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                         break
                 elif position == "Below (नीचे)":
                     if is_target_field:
-                        # 🎯 यह स्पेशल लॉजिक सिर्फ Consignee और Buyer के लिए ही चलेगा
                         collected_lines = []
-                        is_consignee = "consignee" in field_label.lower()
                         
                         for offset in range(1, 5):
                             if line_i + offset < len(pdf_lines):
@@ -120,19 +124,27 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                                 ]):
                                     break
                                     
-                                if " - " in next_line and "Welspun USA Inc" in next_line:
-                                    parts = next_line.split("Welspun USA Inc")
-                                    if is_consignee:
-                                        collected_lines.append(parts[0].strip())
-                                    else:
-                                        collected_lines.append("Welspun USA Inc" + parts[1].strip())
+                                # 🎯 यहाँ Consignee और Buyer के चिपके हुए टेक्स्ट को साफ़-सुथरा अलग किया जा रहा है
+                                if is_consignee:
+                                    if "Welspun USA Inc - 100014" in next_line:
+                                        next_line = next_line.split("Welspun USA Inc - 100014")[0].strip()
+                                    elif "New York" in next_line:
+                                        next_line = next_line.split("New York")[0].strip()
+                                    if next_line:
+                                        collected_lines.append(next_line)
                                 else:
+                                    if "Welspun USA Inc - 100014" in next_line:
+                                        next_line = "Welspun USA Inc - 100014" + next_line.split("Welspun USA Inc - 100014")[1]
+                                    elif "501037" in next_line:
+                                        parts = next_line.split("501037")
+                                        if len(parts) > 1:
+                                            next_line = parts[1].strip()
                                     collected_lines.append(next_line)
+                                    
                         if collected_lines:
-                            raw_t = "\n".join(collected_lines)
+                            raw_t = "\n".join([cl for cl in collected_lines if cl])
                             break
                     else:
-                        # 🎯 बाकी सभी दूसरी फील्ड्स के लिए एकदम पुराना और सुरक्षित सिंगल-लाइन लॉजिक
                         if line_i + 1 < len(pdf_lines):
                             raw_t = pdf_lines[line_i + 1].strip()
                             break
@@ -143,7 +155,6 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
     else:
         raw_t = pdf_text
 
-    # यदि Consignee/Buyer है तो मल्टी-लाइन को बिना काटे पास करें, वरना नॉर्मल फिल्टर लगाएं
     if is_target_field:
         return raw_t.strip()
         
