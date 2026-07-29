@@ -59,7 +59,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
         parts = text.split()
         text = parts[0].strip() if parts else ""
     elif mode == "Full Line":
-        text = text.split("\n")[0].strip()
+        text = text.strip()  # मल्टी-लाइन एड्रेस को सुरक्षित रखने के लिए यहाँ मॉडिफाइड किया गया है
 
     # 🎯 FILTERS IMPLEMENTATION
     if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
@@ -88,13 +88,9 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 
 def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type):
     """
-    Extracts specific header keyword values from parsed PDF lines (Supports Multi-line address extraction)
+    Extracts specific header keyword values from parsed PDF lines with strict multi-line isolation
     """
     raw_t = ""
-    kw_lower = keyword.lower().strip()
-    
-    # 🎯 यदि कीवर्ड में Consignee या Buyer है, तो यह नीचे की लगातार लाइनों को जोड़कर पूरा एड्रेस उठाएगा
-    is_address_field = "consignee" in kw_lower or "buyer" in kw_lower or "notify" in kw_lower
     
     if filter_type == "Exact Keyword Paste (If Found)":
         raw_t = pdf_text
@@ -108,13 +104,14 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                         raw_t = raw_t[1:].strip()
                     if raw_t:
                         break
-                elif position == "Below (नीचे)" or is_address_field:
-                    # Consignee या Buyer होने पर नीचे की 4 लाइनें (नाम, एड्रेस और देश) एक साथ उठाएगा
+                elif position == "Below (नीचे)":
+                    # 🎯 सिर्फ उसी कीवर्ड के ठीक नीचे की लाइनें उठाएगा और मिक्स नहीं होने देगा
                     collected_lines = []
-                    for offset in range(1, 5):
+                    for offset in range(1, 5):  # नीचे की 4 लाइनें
                         if line_i + offset < len(pdf_lines):
                             next_line = pdf_lines[line_i + offset].strip()
-                            if next_line and not any(stop_lbl in next_line.lower() for stop_lbl in ["notify", "buyer", "invoice", "port", "terms", "sb no", "consignee"]):
+                            # यदि अगली लाइन में कोई दूसरा सेक्शन या हेडिंग आ जाए, तो रुक जाएं
+                            if next_line and not any(stop_lbl in next_line.lower() for stop_lbl in ["notify:", "buyer", "invoice no", "port of", "terms of", "sb no", "consignee:"]):
                                 collected_lines.append(next_line)
                     if collected_lines:
                         raw_t = "\n".join(collected_lines)
@@ -156,3 +153,4 @@ def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
             return "P"
             
     return "UNKNOWN"
+```[cite: 6]
