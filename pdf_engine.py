@@ -42,10 +42,6 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     if text.startswith(":"):
         text = text[1:].strip()
     
-    # यदि यह Consignee या Buyer का मल्टी-लाइन डेटा है, तो इसे रूल्स से काटे बिना सीधा बाहर भेज दें
-    if keyword and ("consignee" in keyword.lower() or "buyer" in keyword.lower()):
-        return text
-
     if mode == "Word Position" or mode.startswith("Word "):
         w_num = int(stop_kw.strip()) if stop_kw and str(stop_kw).strip().isdigit() else 1
         parts = text.split()
@@ -90,13 +86,11 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 
     return text.strip()
 
-def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type, field_label=""):
+def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type):
     """
-    Extracts specific header values with precise side-by-side splitting for Consignee and Buyer.
+    Extracts specific header keyword values from parsed PDF lines
     """
     raw_t = ""
-    is_target_field = field_label and ("consignee" in field_label.lower() or "buyer" in field_label.lower())
-    is_consignee = field_label and "consignee" in field_label.lower()
     
     if filter_type == "Exact Keyword Paste (If Found)":
         raw_t = pdf_text
@@ -111,53 +105,18 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                     if raw_t:
                         break
                 elif position == "Below (नीचे)":
-                    if is_target_field:
-                        collected_lines = []
-                        
-                        for offset in range(1, 5):
-                            if line_i + offset < len(pdf_lines):
-                                next_line = pdf_lines[line_i + offset].strip()
-                                lower_next = next_line.lower()
-                                
-                                if not next_line or any(stop_lbl in lower_next for stop_lbl in [
-                                    "notify:", "pre-carriage", "vessel", "port of", "place of", "terms of", "sales order", "invoice no"
-                                ]):
-                                    break
-                                    
-                                # 🎯 यहाँ Consignee और Buyer के चिपके हुए टेक्स्ट को साफ़-सुथरा अलग किया जा रहा है
-                                if is_consignee:
-                                    if "Welspun USA Inc - 100014" in next_line:
-                                        next_line = next_line.split("Welspun USA Inc - 100014")[0].strip()
-                                    elif "New York" in next_line:
-                                        next_line = next_line.split("New York")[0].strip()
-                                    if next_line:
-                                        collected_lines.append(next_line)
-                                else:
-                                    if "Welspun USA Inc - 100014" in next_line:
-                                        next_line = "Welspun USA Inc - 100014" + next_line.split("Welspun USA Inc - 100014")[1]
-                                    elif "501037" in next_line:
-                                        parts = next_line.split("501037")
-                                        if len(parts) > 1:
-                                            next_line = parts[1].strip()
-                                    collected_lines.append(next_line)
-                                    
-                        if collected_lines:
-                            raw_t = "\n".join([cl for cl in collected_lines if cl])
-                            break
-                    else:
-                        if line_i + 1 < len(pdf_lines):
-                            raw_t = pdf_lines[line_i + 1].strip()
+                    if line_i + 1 < len(pdf_lines):
+                        raw_t = pdf_lines[line_i + 1].strip()
+                        if raw_t:
                             break
                 elif position == "2 Lines Below":
                     if line_i + 2 < len(pdf_lines):
                         raw_t = pdf_lines[line_i + 2].strip()
-                        break
+                        if raw_t:
+                            break
     else:
         raw_t = pdf_text
 
-    if is_target_field:
-        return raw_t.strip()
-        
     return apply_rule_filter(raw_t, mode, stop_kw, filter_type, keyword)
 
 def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
