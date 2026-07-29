@@ -28,7 +28,6 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     """
     Core Unified Extraction Engine: Filters raw PDF extracted text based on user rules
     """
-    # 🎯 1. यदि नया 'Exact Keyword Paste' फिल्टर चुना गया है
     if flt == "Exact Keyword Paste (If Found)":
         target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else keyword.strip()
         if target_check and target_check.lower() in str(raw_text).lower():
@@ -59,9 +58,8 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
         parts = text.split()
         text = parts[0].strip() if parts else ""
     elif mode == "Full Line":
-        text = text.strip()  # मल्टी-लाइन एड्रेस को सुरक्षित रखने के लिए यहाँ मॉडिफाइड किया गया है
+        text = text.strip()
 
-    # 🎯 FILTERS IMPLEMENTATION
     if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
         bracket_match = re.search(r'\((.*?)\)', text)
         text = bracket_match.group(1).strip() if bracket_match else text.strip()
@@ -105,12 +103,10 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                     if raw_t:
                         break
                 elif position == "Below (नीचे)":
-                    # 🎯 सिर्फ उसी कीवर्ड के ठीक नीचे की लाइनें उठाएगा और मिक्स नहीं होने देगा
                     collected_lines = []
-                    for offset in range(1, 5):  # नीचे की 4 लाइनें
+                    for offset in range(1, 5):
                         if line_i + offset < len(pdf_lines):
                             next_line = pdf_lines[line_i + offset].strip()
-                            # यदि अगली लाइन में कोई दूसरा सेक्शन या हेडिंग आ जाए, तो रुक जाएं
                             if next_line and not any(stop_lbl in next_line.lower() for stop_lbl in ["notify:", "buyer", "invoice no", "port of", "terms of", "sb no", "consignee:"]):
                                 collected_lines.append(next_line)
                     if collected_lines:
@@ -153,4 +149,3 @@ def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
             return "P"
             
     return "UNKNOWN"
-```[cite: 6]
