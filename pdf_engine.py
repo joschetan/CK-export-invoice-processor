@@ -88,7 +88,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 
 def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type):
     """
-    Extracts specific header keyword values from parsed PDF lines
+    Extracts specific header keyword values from parsed PDF lines (Supports Multi-line address extraction)
     """
     raw_t = ""
     
@@ -105,10 +105,17 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                     if raw_t:
                         break
                 elif position == "Below (नीचे)":
-                    if line_i + 1 < len(pdf_lines):
-                        raw_t = pdf_lines[line_i + 1].strip()
-                        if raw_t:
-                            break
+                    # 🎯 UI से दिए गए कीवर्ड (जैसे Consignee / Buyer) के नीचे की 4 लगातार लाइनों को मिलाकर पूरा एड्रेस उठा रहा है[cite: 5]
+                    collected_lines = []
+                    for offset in range(1, 5):  # नीचे की 4 लाइनें (नाम, एड्रेस-1, एड्रेस-2, देश/पिन)[cite: 5]
+                        if line_i + offset < len(pdf_lines):
+                            next_line = pdf_lines[line_i + offset].strip()
+                            # यदि अगली लाइन खाली नहीं है या कोई दूसरा मुख्य सेक्शन शुरू नहीं हुआ, तो जोड़ लें[cite: 5]
+                            if next_line and not any(stop_lbl in next_line.lower() for stop_lbl in ["notify", "buyer", "invoice", "port", "terms", "sb no"]):
+                                collected_lines.append(next_line)
+                    if collected_lines:
+                        raw_t = "\n".join(collected_lines)
+                        break
                 elif position == "2 Lines Below":
                     if line_i + 2 < len(pdf_lines):
                         raw_t = pdf_lines[line_i + 2].strip()
@@ -146,3 +153,4 @@ def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
             return "P"
             
     return "UNKNOWN"
+```[cite: 5]
