@@ -28,6 +28,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
     """
     Core Unified Extraction Engine: Filters raw PDF extracted text based on user rules
     """
+    # 🎯 1. यदि नया 'Exact Keyword Paste' फिल्टर चुना गया है
     if flt == "Exact Keyword Paste (If Found)":
         target_check = stop_kw.strip() if stop_kw and str(stop_kw).strip() else keyword.strip()
         if target_check and target_check.lower() in str(raw_text).lower():
@@ -58,8 +59,10 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
         parts = text.split()
         text = parts[0].strip() if parts else ""
     elif mode == "Full Line":
+        # 🎯 मल्टी-लाइन एड्रेस को सुरक्षित रखने के लिए इसे स्प्लिट नहीं किया जाएगा
         text = text.strip()
 
+    # 🎯 FILTERS IMPLEMENTATION
     if flt in ["Text Inside Parentheses ()", "Inside Parentheses ()"]:
         bracket_match = re.search(r'\((.*?)\)', text)
         text = bracket_match.group(1).strip() if bracket_match else text.strip()
@@ -86,7 +89,7 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 
 def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type):
     """
-    Extracts specific header keyword values from parsed PDF lines with strict multi-line isolation
+    Extracts specific header keyword values from parsed PDF lines with strict stop-boundary isolation
     """
     raw_t = ""
     
@@ -103,12 +106,19 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                     if raw_t:
                         break
                 elif position == "Below (नीचे)":
+                    # 🎯 सख्त स्टॉप-बाउंड्री के साथ मल्टी-लाइन एक्सट्रैक्शन (Consignee और Buyer आपस में मिक्स नहीं होंगे)
                     collected_lines = []
-                    for offset in range(1, 5):
+                    for offset in range(1, 5):  # नीचे की 4 लाइनें
                         if line_i + offset < len(pdf_lines):
                             next_line = pdf_lines[line_i + offset].strip()
-                            if next_line and not any(stop_lbl in next_line.lower() for stop_lbl in ["notify:", "buyer", "invoice no", "port of", "terms of", "sb no", "consignee:"]):
-                                collected_lines.append(next_line)
+                            lower_next = next_line.lower()
+                            # यदि अगली लाइन में कोई दूसरा हेडिंग या स्टॉपवर्ड आ जाए, तो तुरंत रुक जाएं
+                            if not next_line or any(stop_word in lower_next for stop_word in [
+                                "buyer", "notify:", "pre-carriage", "vessel", "port of", 
+                                "place of", "terms of", "sales order", "invoice no", "consignee:"
+                            ]):
+                                break
+                            collected_lines.append(next_line)
                     if collected_lines:
                         raw_t = "\n".join(collected_lines)
                         break
