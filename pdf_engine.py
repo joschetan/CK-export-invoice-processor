@@ -91,6 +91,10 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
     Extracts specific header keyword values from parsed PDF lines (Supports Multi-line address extraction)
     """
     raw_t = ""
+    kw_lower = keyword.lower().strip()
+    
+    # 🎯 यदि कीवर्ड में Consignee या Buyer है, तो यह नीचे की लगातार लाइनों को जोड़कर पूरा एड्रेस उठाएगा
+    is_address_field = "consignee" in kw_lower or "buyer" in kw_lower or "notify" in kw_lower
     
     if filter_type == "Exact Keyword Paste (If Found)":
         raw_t = pdf_text
@@ -104,14 +108,13 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                         raw_t = raw_t[1:].strip()
                     if raw_t:
                         break
-                elif position == "Below (नीचे)":
-                    # 🎯 UI से दिए गए कीवर्ड (जैसे Consignee / Buyer) के नीचे की 4 लगातार लाइनों को मिलाकर पूरा एड्रेस उठा रहा है[cite: 5]
+                elif position == "Below (नीचे)" or is_address_field:
+                    # Consignee या Buyer होने पर नीचे की 4 लाइनें (नाम, एड्रेस और देश) एक साथ उठाएगा
                     collected_lines = []
-                    for offset in range(1, 5):  # नीचे की 4 लाइनें (नाम, एड्रेस-1, एड्रेस-2, देश/पिन)[cite: 5]
+                    for offset in range(1, 5):
                         if line_i + offset < len(pdf_lines):
                             next_line = pdf_lines[line_i + offset].strip()
-                            # यदि अगली लाइन खाली नहीं है या कोई दूसरा मुख्य सेक्शन शुरू नहीं हुआ, तो जोड़ लें[cite: 5]
-                            if next_line and not any(stop_lbl in next_line.lower() for stop_lbl in ["notify", "buyer", "invoice", "port", "terms", "sb no"]):
+                            if next_line and not any(stop_lbl in next_line.lower() for stop_lbl in ["notify", "buyer", "invoice", "port", "terms", "sb no", "consignee"]):
                                 collected_lines.append(next_line)
                     if collected_lines:
                         raw_t = "\n".join(collected_lines)
@@ -153,4 +156,3 @@ def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
             return "P"
             
     return "UNKNOWN"
-```[cite: 5]
