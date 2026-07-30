@@ -114,9 +114,8 @@ def render_processor():
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
                             fallback_val = r_info.get("fallback", "").strip()
-                            doc_source = r_info.get("logic", "Main Invoice (PDF)") # सोर्स चेक करें
+                            doc_source = r_info.get("logic", "Main Invoice (PDF)")
                             
-                            # सोर्स के हिसाब से सही टेक्स्ट और लाइन्स चुनें
                             target_lines, target_full_text = pdf_lines, pdf_text
                             if "gst" in doc_source.lower() and gst_file:
                                 target_lines = gst_text.split("\n")
@@ -133,8 +132,8 @@ def render_processor():
                                     
                             inv_data_dict[field.lower()] = found_val
                             
-                            # 🎯 यदि यूजर ने टारगेट सेल (जैसे B7) दिया है, तो सीधे उसी एक्सेल सेल में वैल्यू डालें (सुरक्षित ट्राई-कैच के साथ)
-                            if target_cell:
+                            # यदि पर्टिकुलर सेल (जैसे B7) दिया है
+                            if target_cell and "dynamic" not in target_cell.lower():
                                 try:
                                     ws[target_cell] = found_val
                                 except Exception:
@@ -158,6 +157,20 @@ def render_processor():
                         
                         if current_inv_date:
                             ws[f"AJ{summary_row}"] = current_inv_date
+
+                        # 🎯 कल वाला वर्किंग कॉलम मैपिंग लूप यहाँ वापस जोड़ दिया गया है (AK, AL, AM आदि के लिए)
+                        for f_key, f_val in inv_data_dict.items():
+                            fk = f_key.lower()
+                            if "terms" in fk or "cif" in fk or "fob" in fk or "incoterm" in fk: ws[f"AK{summary_row}"] = f_val
+                            elif "currency" in fk or "curr" in fk: ws[f"AL{summary_row}"] = f_val
+                            elif "freight" in fk: ws[f"AM{summary_row}"] = f_val
+                            elif "insurance" in fk: ws[f"AN{summary_row}"] = f_val
+                            elif "commission" in fk: ws[f"AO{summary_row}"] = f_val
+                            elif "discount" in fk: ws[f"AP{summary_row}"] = f_val
+                            elif "packaging" in fk or "misc" in fk: ws[f"AQ{summary_row}"] = f_val
+                            elif "deduction" in fk or "other" in fk: ws[f"AR{summary_row}"] = f_val
+                            elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
+                            elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
 
                         # आइटम टेबल मैपिंग
                         resolved_item_rules = {}
