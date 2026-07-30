@@ -15,7 +15,7 @@ def render_processor():
     ensure_default_shipper()
     
     st.header("📤 Invoice Processing Zone (Multi-Document)")
-    st.caption("इनवॉइस PDF के साथ-साथ GST Invoice और DEEC Declaration (PDF/Excel) अपलोड करने और पर्टिकुलर सेल/कॉलम में भेजने का ज़ोन।")
+    st.caption("इनवॉइस PDF या Excel के साथ-साथ GST Invoice और DEEC Declaration अपलोड करने और पर्टिकुलर सेल/कॉलम में भेजने का ज़ोन।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -38,7 +38,7 @@ def render_processor():
                 col_inv, col_gst, col_deec = st.columns(3)
                 
                 with col_inv:
-                    pdf_f = st.file_uploader(f" मुख्य इनवॉइस PDF #{i+1}", type=["pdf"], key=f"inv_pdf_{selected_shipper}_{i}")
+                    pdf_f = st.file_uploader(f" मुख्य इनवॉइस (PDF/Excel) #{i+1}", type=["pdf", "xlsx", "xls"], key=f"inv_pdf_{selected_shipper}_{i}")
                 with col_gst:
                     gst_f = st.file_uploader(f" GST Invoice #{i+1} (PDF/Excel)", type=["pdf", "xlsx", "xls"], key=f"gst_file_{selected_shipper}_{i}")
                 with col_deec:
@@ -84,17 +84,26 @@ def render_processor():
                     excel_write_row = 2
                     
                     for inv_sr_number, inv_file, gst_file, deec_file in valid_batches:
-                        # 1. मुख्य इनवॉइस PDF टेक्स्ट रीड करना
+                        # 1. मुख्य इनवॉइस का टेक्स्ट रीड करना (चाहे वह PDF हो या Excel)
                         pdf_text = ""
                         pdf_lines = []
-                        with pdfplumber.open(inv_file) as pdf:
-                            for page in pdf.pages:
-                                t = page.extract_text()
-                                if t:
-                                    pdf_text += t + "\n"
-                                    pdf_lines.extend(t.split("\n"))
                         
-                        # 2. सपोर्टिंग फाइलों (GST/DEEC) का टेक्स्ट एक्सट्रैक्शन तैयार करना
+                        file_name_lower = inv_file.name.lower()
+                        if file_name_lower.endswith(".pdf"):
+                            with pdfplumber.open(inv_file) as pdf:
+                                for page in pdf.pages:
+                                    t = page.extract_text()
+                                    if t:
+                                        pdf_text += t + "\n"
+                                        pdf_lines.extend(t.split("\n"))
+                        else:
+                            # यदि मुख्य इनवॉइस Excel फाइल है तो उसे सपोर्टिंग इंजन की तरह रीड करें[cite: 3]
+                            excel_text, _ = extract_data_from_supporting_file(inv_file)
+                            if excel_text:
+                                pdf_text = excel_text
+                                pdf_lines = excel_text.split("\n")
+                        
+                        # 2. सपोर्टिंग फाइलों (GST/DEEC) का टेक्स्ट एक्सट्रैक्शन तैयार करना[cite: 3]
                         gst_text, _ = extract_data_from_supporting_file(gst_file) if gst_file else ("", None)
                         deec_text, _ = extract_data_from_supporting_file(deec_file) if deec_file else ("", None)
                         
@@ -104,7 +113,7 @@ def render_processor():
                         
                         summary_row = 1 + inv_sr_number
                         
-                        # 3. 🎯 सभी हेडर रूल्स को प्रोसेस करना (केवल एडमिन पैनल के Target Cell के आधार पर)
+                        # 3. 🎯 सभी हेडर रूल्स को प्रोसेस करना (केवल एडमिन पैनल के Target Cell के आधार पर)[cite: 3]
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             if kw.startswith("'") and len(kw) > 1:
@@ -116,7 +125,7 @@ def render_processor():
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
                             fallback_val = r_info.get("fallback", "").strip()
-                            doc_source = r_info.get("logic", "Main Invoice (PDF)")
+                            doc_source = r_info.get("logic", "Main Invoice")
                             
                             target_lines, target_full_text = pdf_lines, pdf_text
                             if "gst" in doc_source.lower() and gst_file:
@@ -134,7 +143,7 @@ def render_processor():
                                     
                             inv_data_dict[field.lower()] = found_val
                             
-                            # 🎯 यहाँ सीधे एडमिन पैनल में दिए गए टारगेट सेल (जैसे AZ, AW आदि) में वैल्यू जाएगी
+                            # 🎯 यहाँ सीधे एडमिन पैनल में दिए गए टारगेट सेल (जैसे AZ, AW आदि) में वैल्यू जाएगी[cite: 3]
                             if target_cell and "dynamic" not in target_cell.lower():
                                 if target_cell.isalpha():
                                     cell_to_write = f"{target_cell}{summary_row}"
@@ -164,7 +173,7 @@ def render_processor():
                         if current_inv_date:
                             ws[f"AJ{summary_row}"] = current_inv_date
 
-                        # आइटम टेबल मैपिंग
+                        # आइटम टेबल मैपिंग[cite: 3]
                         resolved_item_rules = {}
                         for i_name, i_info in item_table_rules.items():
                             i_type = i_info.get("type", "")
