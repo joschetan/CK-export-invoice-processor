@@ -20,7 +20,8 @@ def ensure_default_shipper():
             "allowed_uploads": ["Full Job Excel Format File"], 
             "uploaded_files": {},
             "mapping_rules": {},
-            "item_table_rules": {}
+            "item_table_rules": {},
+            "igst_config": {"lut_keywords": "", "paid_keywords": ""}
         }
 
 def fetch_data_from_google_sheet(show_toast=False):
@@ -52,16 +53,24 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "allowed_uploads": ["Full Job Excel Format File"],
                                 "uploaded_files": {},
                                 "mapping_rules": {},
-                                "item_table_rules": {}
+                                "item_table_rules": {},
+                                "igst_config": {"lut_keywords": "", "paid_keywords": ""}
                             }
                         
-                        if "item" in rule_kind:
+                        # 🎯 IGST Config (lut_keywords / paid_keywords) हैंडल करना
+                        if "igst_config" in rule_kind or f_name.lower() in ["lut_keywords", "paid_keywords"]:
+                            kw_val = get_val_case_insensitive(row, "Keyword", "keyword", "kw", default="")
+                            if f_name.lower() == "lut_keywords":
+                                st.session_state["shipper_database"][target_key].setdefault("igst_config", {})["lut_keywords"] = kw_val
+                            elif f_name.lower() == "paid_keywords":
+                                st.session_state["shipper_database"][target_key].setdefault("igst_config", {})["paid_keywords"] = kw_val
+                        elif "item" in rule_kind:
                             st.session_state["shipper_database"][target_key].setdefault("item_table_rules", {})[f_name] = {
                                 "col": cell_val,
                                 "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
                                 "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
                             }
-                        elif "igst_config" not in rule_kind and f_name.lower() not in ["lut_keywords", "paid_keywords"]:
+                        else:
                             flt_val = get_val_case_insensitive(row, "Filter/Logic", "filter/logic", "Filter", "filter", "flt", default="None")
                             if not flt_val or flt_val.strip() == "":
                                 flt_val = "None"
@@ -86,7 +95,13 @@ def fetch_data_from_google_sheet(show_toast=False):
 
         for s_key in st.session_state["shipper_database"].keys():
             igst_fetched = fetch_igst_config_from_sheet(s_key)
-            st.session_state["shipper_database"][s_key]["igst_config"] = igst_fetched
+            if igst_fetched and isinstance(igst_fetched, dict):
+                current_igst = st.session_state["shipper_database"][s_key].get("igst_config", {})
+                if not current_igst.get("lut_keywords"):
+                    current_igst["lut_keywords"] = igst_fetched.get("lut_keywords", "")
+                if not current_igst.get("paid_keywords"):
+                    current_igst["paid_keywords"] = igst_fetched.get("paid_keywords", "")
+                st.session_state["shipper_database"][s_key]["igst_config"] = current_igst
 
             t_bytes = load_template_bytes_from_sheet(s_key)
             if t_bytes:
@@ -131,7 +146,7 @@ def add_custom_header_field_dialog(selected_shipper):
     # 🎯 नया सोर्स चयन विकल्प (Source Selector)
     doc_source = st.selectbox(
         "यह डेटा किस डॉक्यूमेंट से लिया जाएगा?",
-        ["Main Invoice (PDF)", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
+        ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
     )
     
     if st.button("Confirm & Add Field", type="primary"):
@@ -146,7 +161,7 @@ def add_custom_header_field_dialog(selected_shipper):
                 "match_mode": "Exact Word", 
                 "stop_kw": "", 
                 "filter": "None", 
-                "logic": doc_source,  # 🎯 यहाँ सोर्स सेव हो गया
+                "logic": doc_source,
                 "fallback": ""
             }
             st.success(f"🎉 फ़ील्ड '{new_field}' ({doc_source}) जुड़ गया[cite: 5]!")
@@ -271,7 +286,7 @@ def render_shipper_data():
                                 "match_mode": m_val.get("match_mode", "Exact Word"),
                                 "stop_kw": m_val.get("stop_kw", ""),
                                 "filter": m_val.get("filter", "None"),
-                                "logic": m_val.get("logic", "Main Invoice (PDF)"),
+                                "logic": m_val.get("logic", "Main Invoice"),
                                 "fallback": ""
                             }
                         shipper_info["mapping_rules"] = imported_rules
@@ -341,7 +356,7 @@ def render_shipper_data():
                     saved_flt = "Text Inside Parentheses ()"
                 
                 flt_idx = filter_options.index(saved_flt) if saved_flt in filter_options else 0
-                saved_logic = s_val.get("logic", "Main Invoice (PDF)")
+                saved_logic = s_val.get("logic", "Main Invoice")
 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
                 with c2: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
@@ -469,7 +484,7 @@ def render_shipper_data():
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
                             "Position": r_info.get("position", "Right (आगे)"), "Cell": r_info.get("cell", ""),
                             "MatchMode": r_info.get("match_mode", "Exact Word"), "StopKw": r_info.get("stop_kw", ""),
-                            "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "Main Invoice (PDF)"),
+                            "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "Main Invoice"),
                             "Fallback": r_info.get("fallback", ""),
                             "RuleKind": "header"
                         })
