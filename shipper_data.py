@@ -79,8 +79,10 @@ def fetch_data_from_google_sheet(show_toast=False):
                             if not stop_kw_val:
                                 stop_kw_val = ""
 
-                            # 🎯 गूगल शीट या डेटा से सोर्स (logic) फेच करना
-                            logic_val = get_val_case_insensitive(row, "Logic", "logic", "lg", default="Main Invoice (PDF)")
+                            # 🎯 गूगल शीट या डेटा से सोर्स (logic) फेच करना (अब डिफ़ॉल्ट Main Invoice है)
+                            logic_val = get_val_case_insensitive(row, "Logic", "logic", "lg", default="Main Invoice")
+                            if "(pdf)" in logic_val.lower():
+                                logic_val = "Main Invoice"
 
                             st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
                                 "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
@@ -128,7 +130,7 @@ def show_field_test_dialog(field_name, rule_data, result_val):
         st.markdown(f"* **Match Mode:** `{rule_data.get('match_mode', 'Exact Word')}`")
         st.markdown(f"* **Stop / Word No.:** `{rule_data.get('stop_kw', 'N/A')}`")
         st.markdown(f"* **Filter/Logic:** `{rule_data.get('filter', 'None')}`")
-        st.markdown(f"* **Source Doc:** `{rule_data.get('logic', 'Main Invoice (PDF)')}`")
+        st.markdown(f"* **Source Doc:** `{rule_data.get('logic', 'Main Invoice')}`")
         
     st.write("---")
     st.markdown("#### 🎯 Extracted Result from Uploaded File:")
@@ -286,7 +288,7 @@ def render_shipper_data():
                                 "match_mode": m_val.get("match_mode", "Exact Word"),
                                 "stop_kw": m_val.get("stop_kw", ""),
                                 "filter": m_val.get("filter", "None"),
-                                "logic": m_val.get("logic", "Main Invoice"),
+                                "logic": "Main Invoice",
                                 "fallback": ""
                             }
                         shipper_info["mapping_rules"] = imported_rules
@@ -356,7 +358,7 @@ def render_shipper_data():
                     saved_flt = "Text Inside Parentheses ()"
                 
                 flt_idx = filter_options.index(saved_flt) if saved_flt in filter_options else 0
-                saved_logic = s_val.get("logic", "Main Invoice")
+                saved_logic = "Main Invoice"
 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
                 with c2: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
@@ -474,7 +476,7 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True, key="btn_save_all_sheet"):
+            if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_control_width=True, key="btn_save_all_sheet") if hasattr(st, 'button') else st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True, key="btn_save_all_sheet"):
                 rules_payload = []
                 files_payload = []
                 
@@ -484,7 +486,7 @@ def render_shipper_data():
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
                             "Position": r_info.get("position", "Right (आगे)"), "Cell": r_info.get("cell", ""),
                             "MatchMode": r_info.get("match_mode", "Exact Word"), "StopKw": r_info.get("stop_kw", ""),
-                            "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "Main Invoice"),
+                            "Filter": r_info.get("filter", "None"), "Logic": "Main Invoice",
                             "Fallback": r_info.get("fallback", ""),
                             "RuleKind": "header"
                         })
