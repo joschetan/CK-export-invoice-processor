@@ -45,7 +45,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                         continue
 
                     if s_name and f_name:
-                        # 🎯 यहाँ से फोर्सफुल 'WELSPUN' रिप्लेसमेंट हटा दिया गया है ताकि नया शिपर अपने असली नाम से रहे
                         target_key = s_name
                             
                         if target_key not in st.session_state["shipper_database"]:
@@ -71,6 +70,9 @@ def fetch_data_from_google_sheet(show_toast=False):
                             if not stop_kw_val:
                                 stop_kw_val = ""
 
+                            # 🎯 गूगल शीट या डेटा से सोर्स (logic) फेच करना
+                            logic_val = get_val_case_insensitive(row, "Logic", "logic", "lg", default="Main Invoice (PDF)")
+
                             st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
                                 "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
                                 "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
@@ -78,7 +80,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                                 "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
                                 "stop_kw": stop_kw_val,
                                 "filter": flt_val,
-                                "logic": get_val_case_insensitive(row, "Logic", "logic", "lg", default="None"),
+                                "logic": logic_val,
                                 "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
                             }
 
@@ -111,9 +113,10 @@ def show_field_test_dialog(field_name, rule_data, result_val):
         st.markdown(f"* **Match Mode:** `{rule_data.get('match_mode', 'Exact Word')}`")
         st.markdown(f"* **Stop / Word No.:** `{rule_data.get('stop_kw', 'N/A')}`")
         st.markdown(f"* **Filter/Logic:** `{rule_data.get('filter', 'None')}`")
+        st.markdown(f"* **Source Doc:** `{rule_data.get('logic', 'Main Invoice (PDF)')}`")
         
     st.write("---")
-    st.markdown("#### 🎯 Extracted Result from Uploaded PDF:")
+    st.markdown("#### 🎯 Extracted Result from Uploaded File:")
     if "❌" in result_val or not result_val.strip():
         st.error(f"❌ **Not Found!** Value: `{result_val}`")
     else:
@@ -123,17 +126,30 @@ def show_field_test_dialog(field_name, rule_data, result_val):
 @st.dialog("➕ Add New Custom Header Field")
 def add_custom_header_field_dialog(selected_shipper):
     st.write("यहाँ नया हेडर फ़ील्ड जोड़ें:")
-    new_field = st.text_input("Field Name (उदा: Invoice No, Port of Loading):")
+    new_field = st.text_input("Field Name (उदा: Invoice No, GST Inv No):")
+    
+    # 🎯 नया सोर्स चयन विकल्प (Source Selector)
+    doc_source = st.selectbox(
+        "यह डेटा किस डॉक्यूमेंट से लिया जाएगा?",
+        ["Main Invoice (PDF)", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
+    )
+    
     if st.button("Confirm & Add Field", type="primary"):
         if not new_field.strip():
             st.error("फ़ील्ड नाम खाली नहीं हो सकता!")
         else:
             rules = st.session_state["shipper_database"][selected_shipper].setdefault("mapping_rules", {})
             rules[new_field.strip()] = {
-                "keyword": "", "position": "Right (आगे)", "cell": "",
-                "match_mode": "Exact Word", "stop_kw": "", "filter": "None", "logic": "None", "fallback": ""
+                "keyword": "", 
+                "position": "Right (आगे)", 
+                "cell": "",
+                "match_mode": "Exact Word", 
+                "stop_kw": "", 
+                "filter": "None", 
+                "logic": doc_source,  # 🎯 यहाँ सोर्स सेव हो गया
+                "fallback": ""
             }
-            st.success(f"🎉 फ़ील्ड '{new_field}' जुड़ गया[cite: 5]!")
+            st.success(f"🎉 फ़ील्ड '{new_field}' ({doc_source}) जुड़ गया[cite: 5]!")
             st.rerun()
 
 @st.dialog("➕ Add Item Column Rule")
@@ -161,7 +177,6 @@ def render_shipper_data():
     st.header("🏢 Add Shipper Name & Live-Test AI Mapping Builder")
     st.caption("सटीक डेटा एक्सट्रैक्शन और रो-बाय-रो लाइव टेस्ट इंजन[cite: 5].")
     
-    # 🎯 1. नया शिपर जोड़ने का बॉक्स
     with st.expander("➕ Add New Shipper (नया शिपर जोड़ें)", expanded=False):
         new_shipper_name = st.text_input("नया शिपर कंपनी का नाम दर्ज करें:", key="input_new_shipper_name")
         if st.button("Create New Shipper Profile", type="primary", key="btn_create_shipper"):
@@ -256,7 +271,7 @@ def render_shipper_data():
                                 "match_mode": m_val.get("match_mode", "Exact Word"),
                                 "stop_kw": m_val.get("stop_kw", ""),
                                 "filter": m_val.get("filter", "None"),
-                                "logic": m_val.get("logic", "None"),
+                                "logic": m_val.get("logic", "Main Invoice (PDF)"),
                                 "fallback": ""
                             }
                         shipper_info["mapping_rules"] = imported_rules
@@ -326,6 +341,7 @@ def render_shipper_data():
                     saved_flt = "Text Inside Parentheses ()"
                 
                 flt_idx = filter_options.index(saved_flt) if saved_flt in filter_options else 0
+                saved_logic = s_val.get("logic", "Main Invoice (PDF)")
 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
                 with c2: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
@@ -350,11 +366,11 @@ def render_shipper_data():
                             
                             rule_summary = {
                                 "keyword": ky, "position": pos, "cell": cl,
-                                "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt
+                                "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": saved_logic
                             }
                             show_field_test_dialog(edited_name, rule_summary, res_val if res_val else "❌ (Not Found)")
                 
-                updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": "None", "fallback": fb_val}
+                updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": saved_logic, "fallback": fb_val}
                 
             st.session_state["shipper_database"][selected_shipper]["mapping_rules"] = updated_rules
 
@@ -453,7 +469,7 @@ def render_shipper_data():
                             "ShipperName": s_name, "FieldName": f_name, "Keyword": r_info.get("keyword", ""),
                             "Position": r_info.get("position", "Right (आगे)"), "Cell": r_info.get("cell", ""),
                             "MatchMode": r_info.get("match_mode", "Exact Word"), "StopKw": r_info.get("stop_kw", ""),
-                            "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "None"),
+                            "Filter": r_info.get("filter", "None"), "Logic": r_info.get("logic", "Main Invoice (PDF)"),
                             "Fallback": r_info.get("fallback", ""),
                             "RuleKind": "header"
                         })
