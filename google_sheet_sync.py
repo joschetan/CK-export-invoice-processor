@@ -53,9 +53,9 @@ def load_template_bytes_from_sheet(shipper_name):
     files_list = data.get("files", [])
     for f_row in files_list:
         s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
-        target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
         
-        if target_key.lower() == shipper_name.lower():
+        # 🎯 यहाँ सटीक नाम मैचिंग लगा दी गई है ताकि हर नए और पुराने शिपर का टेम्पलेट सही से लोड हो सके
+        if s_name.lower().strip() == shipper_name.lower().strip():
             b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
             if b64_str and len(b64_str.strip()) > 0:
                 try:
