@@ -104,7 +104,7 @@ def render_processor():
                         
                         summary_row = 1 + inv_sr_number
                         
-                        # 3. 🎯 सभी हेडर रूल्स को प्रोसेस करना (Target Cell और Source के आधार पर)
+                        # 3. 🎯 सभी हेडर रूल्स को प्रोसेस करना (केवल एडमिन पैनल के Target Cell के आधार पर)
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             if kw.startswith("'") and len(kw) > 1:
@@ -134,7 +134,7 @@ def render_processor():
                                     
                             inv_data_dict[field.lower()] = found_val
                             
-                            # 🎯 डायनेमिक टारगेट सेल (जैसे AW, AX या फिक्स सेल जैसे B7) में वैल्यू लिखना
+                            # 🎯 यहाँ सीधे एडमिन पैनल में दिए गए टारगेट सेल (जैसे AZ, AW आदि) में वैल्यू जाएगी
                             if target_cell and "dynamic" not in target_cell.lower():
                                 if target_cell.isalpha():
                                     cell_to_write = f"{target_cell}{summary_row}"
@@ -163,23 +163,6 @@ def render_processor():
                         
                         if current_inv_date:
                             ws[f"AJ{summary_row}"] = current_inv_date
-
-                        # 🎯 बैकअप कॉलम मैपिंग लूप (AK, AL, AW, AX आदि सभी मुख्य कॉलम के लिए)
-                        for f_key, f_val in inv_data_dict.items():
-                            fk = f_key.lower()
-                            if "terms" in fk or "cif" in fk or "fob" in fk or "incoterm" in fk: ws[f"AK{summary_row}"] = f_val
-                            elif "currency" in fk or "curr" in fk: ws[f"AL{summary_row}"] = f_val
-                            elif "freight" in fk: ws[f"AM{summary_row}"] = f_val
-                            elif "insurance" in fk: ws[f"AN{summary_row}"] = f_val
-                            elif "commission" in fk: ws[f"AO{summary_row}"] = f_val
-                            elif "discount" in fk: ws[f"AP{summary_row}"] = f_val
-                            elif "packaging" in fk or "misc" in fk: ws[f"AQ{summary_row}"] = f_val
-                            elif "deduction" in fk or "other" in fk: ws[f"AR{summary_row}"] = f_val
-                            elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
-                            elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
-                            elif "gross" in fk and "wt" in fk: ws[f"AW{summary_row}"] = f_val
-                            elif "net" in fk and "wt" in fk: ws[f"AX{summary_row}"] = f_val
-                            elif "carton" in fk or "pkg" in fk: ws[f"AZ{summary_row}"] = f_val
 
                         # आइटम टेबल मैपिंग
                         resolved_item_rules = {}
