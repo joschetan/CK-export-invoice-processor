@@ -102,6 +102,8 @@ def render_processor():
                         current_inv_date = ""
                         inv_data_dict = {}
                         
+                        summary_row = 1 + inv_sr_number
+                        
                         # 3. 🎯 सभी हेडर रूल्स को प्रोसेस करना (Target Cell और Source के आधार पर)
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
@@ -114,9 +116,8 @@ def render_processor():
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
                             fallback_val = r_info.get("fallback", "").strip()
-                            doc_source = r_info.get("logic", "Main Invoice (PDF)") # सोर्स चेक करें
+                            doc_source = r_info.get("logic", "Main Invoice (PDF)")
                             
-                            # सोर्स के हिसाब से सही टेक्स्ट और लाइन्स चुनें
                             target_lines, target_full_text = pdf_lines, pdf_text
                             if "gst" in doc_source.lower() and gst_file:
                                 target_lines = gst_text.split("\n")
@@ -133,10 +134,15 @@ def render_processor():
                                     
                             inv_data_dict[field.lower()] = found_val
                             
-                            # 🎯 यदि यूजर ने टारगेट सेल (जैसे B7) दिया है, तो सीधे उसी एक्सेल सेल में वैल्यू डालें
-                            if target_cell:
+                            # 🎯 डायनेमिक टारगेट सेल (जैसे AW, AX या फिक्स सेल जैसे B7) में वैल्यू लिखना
+                            if target_cell and "dynamic" not in target_cell.lower():
+                                if target_cell.isalpha():
+                                    cell_to_write = f"{target_cell}{summary_row}"
+                                else:
+                                    cell_to_write = target_cell
+                                
                                 try:
-                                    ws[target_cell] = found_val
+                                    ws[cell_to_write] = found_val
                                 except Exception:
                                     pass
                             
@@ -152,14 +158,13 @@ def render_processor():
                                 elif found_val and not found_val.lower().startswith("inv"):
                                     current_inv_date = found_val
 
-                        summary_row = 1 + inv_sr_number
                         ws[f"AH{summary_row}"] = inv_sr_number
                         ws[f"AI{summary_row}"] = current_inv_number
                         
                         if current_inv_date:
                             ws[f"AJ{summary_row}"] = current_inv_date
 
-                        # 🎯 कॉलम मैपिंग लूप (AK, AL, AM आदि के लिए) यहाँ वापस जोड़ दिया गया है
+                        # 🎯 बैकअप कॉलम मैपिंग लूप (AK, AL, AW, AX आदि सभी मुख्य कॉलम के लिए)
                         for f_key, f_val in inv_data_dict.items():
                             fk = f_key.lower()
                             if "terms" in fk or "cif" in fk or "fob" in fk or "incoterm" in fk: ws[f"AK{summary_row}"] = f_val
@@ -172,6 +177,9 @@ def render_processor():
                             elif "deduction" in fk or "other" in fk: ws[f"AR{summary_row}"] = f_val
                             elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
                             elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
+                            elif "gross" in fk and "wt" in fk: ws[f"AW{summary_row}"] = f_val
+                            elif "net" in fk and "wt" in fk: ws[f"AX{summary_row}"] = f_val
+                            elif "carton" in fk or "pkg" in fk: ws[f"AZ{summary_row}"] = f_val
 
                         # आइटम टेबल मैपिंग
                         resolved_item_rules = {}
