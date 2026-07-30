@@ -114,8 +114,9 @@ def render_processor():
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
                             fallback_val = r_info.get("fallback", "").strip()
-                            doc_source = r_info.get("logic", "Main Invoice (PDF)")
+                            doc_source = r_info.get("logic", "Main Invoice (PDF)") # सोर्स चेक करें
                             
+                            # सोर्स के हिसाब से सही टेक्स्ट और लाइन्स चुनें
                             target_lines, target_full_text = pdf_lines, pdf_text
                             if "gst" in doc_source.lower() and gst_file:
                                 target_lines = gst_text.split("\n")
@@ -132,8 +133,8 @@ def render_processor():
                                     
                             inv_data_dict[field.lower()] = found_val
                             
-                            # यदि पर्टिकुलर सेल (जैसे B7) दिया है
-                            if target_cell and "dynamic" not in target_cell.lower():
+                            # 🎯 यदि यूजर ने टारगेट सेल (जैसे B7) दिया है, तो सीधे उसी एक्सेल सेल में वैल्यू डालें
+                            if target_cell:
                                 try:
                                     ws[target_cell] = found_val
                                 except Exception:
@@ -158,7 +159,7 @@ def render_processor():
                         if current_inv_date:
                             ws[f"AJ{summary_row}"] = current_inv_date
 
-                        # 🎯 कल वाला वर्किंग कॉलम मैपिंग लूप यहाँ वापस जोड़ दिया गया है (AK, AL, AM आदि के लिए)
+                        # 🎯 कॉलम मैपिंग लूप (AK, AL, AM आदि के लिए) यहाँ वापस जोड़ दिया गया है
                         for f_key, f_val in inv_data_dict.items():
                             fk = f_key.lower()
                             if "terms" in fk or "cif" in fk or "fob" in fk or "incoterm" in fk: ws[f"AK{summary_row}"] = f_val
