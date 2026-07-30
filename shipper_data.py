@@ -45,7 +45,8 @@ def fetch_data_from_google_sheet(show_toast=False):
                         continue
 
                     if s_name and f_name:
-                        target_key = "WELSPUN GLOBAL BRANDS LIMITED" if "welspun" in s_name.lower() else s_name
+                        # 🎯 यहाँ से फोर्सफुल 'WELSPUN' रिप्लेसमेंट हटा दिया गया है ताकि नया शिपर अपने असली नाम से रहे
+                        target_key = s_name
                             
                         if target_key not in st.session_state["shipper_database"]:
                             st.session_state["shipper_database"][target_key] = {
@@ -160,10 +161,10 @@ def render_shipper_data():
     st.header("🏢 Add Shipper Name & Live-Test AI Mapping Builder")
     st.caption("सटीक डेटा एक्सट्रैक्शन और रो-बाय-रो लाइव टेस्ट इंजन[cite: 5].")
     
-    # 🎯 1. यहाँ नया शिपर जोड़ने का विकल्प वापस जोड़ दिया गया है
+    # 🎯 1. नया शिपर जोड़ने का बॉक्स
     with st.expander("➕ Add New Shipper (नया शिपर जोड़ें)", expanded=False):
-        new_shipper_name = st.text_input("नया शिपर कंपनी का नाम दर्ज करें:")
-        if st.button("Create New Shipper Profile", type="primary"):
+        new_shipper_name = st.text_input("नया शिपर कंपनी का नाम दर्ज करें:", key="input_new_shipper_name")
+        if st.button("Create New Shipper Profile", type="primary", key="btn_create_shipper"):
             if not new_shipper_name.strip():
                 st.error("शिपर का नाम खाली नहीं हो सकता!")
             else:
@@ -392,7 +393,7 @@ def render_shipper_data():
             with c_head:
                 st.subheader("📦 4. Dynamic Item Table Column Builder (Shipper-Wise)")
             with c_add_btn:
-                if st.button("➕ Add Item Column", use_container_width=True):
+                if st.button("➕ Add Item Column", use_container_width=True, key="btn_add_item_col_main"):
                     add_item_col_dialog(selected_shipper)
             
             item_rules = shipper_info.get("item_table_rules", {})
@@ -442,7 +443,7 @@ def render_shipper_data():
             st.session_state["shipper_database"][selected_shipper]["item_table_rules"] = updated_item_rules
             st.write("---")
             
-            if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True):
+            if st.button("💾 Save All AI Mapping Rules to Google Sheet", type="primary", use_container_width=True, key="btn_save_all_sheet"):
                 rules_payload = []
                 files_payload = []
                 
