@@ -61,6 +61,7 @@ def render_processor():
                         
             st.write("---")
             
+            # चेक करें कि कम से कम एक मुख्य इनवॉइस अपलोड हो
             valid_batches = [b for b in uploaded_batches if b[1] is not None]
             
             if valid_batches and st.button("🚀 Process & Generate Excel with Supporting Docs", type="primary", use_container_width=True):
@@ -132,14 +133,12 @@ def render_processor():
                                     
                             inv_data_dict[field.lower()] = found_val
                             
-                            # 🎯 यदि यूजर ने टारगेट सेल (जैसे B7) दिया है, तो सीधे उसी एक्सेल सेल में वैल्यू डालें
+                            # 🎯 यदि यूजर ने टारगेट सेल (जैसे B7) दिया है, तो सीधे उसी एक्सेल सेल में वैल्यू डालें (सुरक्षित ट्राई-कैच के साथ)
                             if target_cell:
-                                # अगर सेल फिक्स है (जैसे B7, C5) और एक से ज्यादा इनवॉइस हैं, तो रो डायनेमिक बना सकते हैं या डायरेक्ट लिख सकते हैं
-                                cell_to_write = target_cell
-                                if len(target_cell) > 1 and target_cell[-1].isdigit() and inv_sr_number > 1:
-                                    # यदि मल्टीप्ल इनवॉइस हैं और रो नंबर दिया है, तो उसे शिफ्ट कर सकते हैं
+                                try:
+                                    ws[target_cell] = found_val
+                                except Exception:
                                     pass
-                                ws[target_cell] = found_val
                             
                             if "inv. no" in field.lower() or "invoice no" in field.lower():
                                 if found_val:
