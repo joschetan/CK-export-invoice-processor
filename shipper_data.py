@@ -66,7 +66,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                             if not flt_val or flt_val.strip() == "":
                                 flt_val = "None"
                                 
-                            # 🎯 यहाँ "StopKw", "Stop / Word", "stop_kw" सभी संभावित वेरिएशंस को जोड़ा गया है ताकि डेटा कभी डिलीट न हो[cite: 5]
                             stop_kw_val = get_val_case_insensitive(row, "StopKw", "stop / word", "stop_kw", "stopkw", "stop", default="")
                             if not stop_kw_val:
                                 stop_kw_val = ""
@@ -120,18 +119,6 @@ def show_field_test_dialog(field_name, rule_data, result_val):
         st.success("🎉 **SUCCESS! Extracted Value:**")
         st.code(result_val, language="text")
 
-@st.dialog("⚠️ Urgent: Verify IGST Status for Column V")
-def show_igst_manual_prompt_dialog(invoice_no):
-    st.warning(f"⚠️ इन्वॉइस **`{invoice_no}`** पर LUT या Paid (P) का स्पष्ट टेक्स्ट नहीं मिला[cite: 5]!")
-    st.write("कस्टम्स पेनाल्टी से बचने के लिए कृपया खुद से कन्फर्म करें:")
-    
-    selected_status = st.selectbox("Column V के लिए सही मोड चुनें:", ["P", "LUT"], index=0)
-    
-    if st.button("Confirm & Apply to Column V", type="primary"):
-        st.session_state[f"manual_igst_{invoice_no}"] = selected_status
-        st.success(f"✅ Selected `{selected_status}` for Invoice `{invoice_no}`")
-        st.rerun()
-
 @st.dialog("➕ Add New Custom Header Field")
 def add_custom_header_field_dialog(selected_shipper):
     st.write("यहाँ नया हेडर फ़ील्ड जोड़ें:")
@@ -173,6 +160,27 @@ def render_shipper_data():
     st.header("🏢 Add Shipper Name & Live-Test AI Mapping Builder")
     st.caption("सटीक डेटा एक्सट्रैक्शन और रो-बाय-रो लाइव टेस्ट इंजन[cite: 5].")
     
+    # 🎯 1. यहाँ नया शिपर जोड़ने का विकल्प वापस जोड़ दिया गया है
+    with st.expander("➕ Add New Shipper (नया शिपर जोड़ें)", expanded=False):
+        new_shipper_name = st.text_input("नया शिपर कंपनी का नाम दर्ज करें:")
+        if st.button("Create New Shipper Profile", type="primary"):
+            if not new_shipper_name.strip():
+                st.error("शिपर का नाम खाली नहीं हो सकता!")
+            else:
+                s_clean = new_shipper_name.strip()
+                if s_clean not in st.session_state["shipper_database"]:
+                    st.session_state["shipper_database"][s_clean] = {
+                        "allowed_uploads": ["Full Job Excel Format File"],
+                        "uploaded_files": {},
+                        "mapping_rules": {},
+                        "item_table_rules": {},
+                        "igst_config": {"lut_keywords": "", "paid_keywords": ""}
+                    }
+                    st.success(f"🎉 नया शिपर '{s_clean}' सफलतापूर्वक जुड़ गया है! अब नीचे ड्रॉपडाउन से इसे चुनकर कॉन्फ़िगर करें[cite: 5].")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ यह शिपर पहले से मौजूद है!")
+
     shippers_list = list(st.session_state["shipper_database"].keys())
     
     if shippers_list:
