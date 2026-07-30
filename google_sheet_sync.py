@@ -18,8 +18,9 @@ def get_val_case_insensitive(d, *keys, default=""):
                 return str(val).strip()
     return default
 
+@st.cache_data(show_spinner=False)
 def fetch_all_from_sheet():
-    """गूगल शीट से सारे रूल्स और सिंगल कॉलम Base64 टेम्पलेट खींचकर लाता है"""
+    """गूगल शीट से सारे रूल्स और सिंगल कॉलम Base64 टेम्पलेट खींचकर लाता है (कैश्ड)"""
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=15)
         if response.status_code == 200:
@@ -31,8 +32,12 @@ def fetch_all_from_sheet():
         pass
     return None
 
+def clear_sheet_cache():
+    """एडमिन द्वारा सेव करने पर कैच को तुरंत साफ़ करने के लिए"""
+    fetch_all_from_sheet.clear()
+
 def push_all_to_sheet(rules_payload, files_payload):
-    """सारे रूल्स और सिंगल-कॉलम Base64 डेटा को गूगल शीट पर सेव करता है"""
+    """सारे रूल्स और सिंगल-कॉलम Base64 डेटा को गूगल शीट पर सेव करता है और कैच साफ़ करता है"""
     try:
         payload = {
             "action": "save_all",
@@ -40,7 +45,10 @@ def push_all_to_sheet(rules_payload, files_payload):
             "files": files_payload
         }
         response = requests.post(WEB_APP_URL, data=json.dumps(payload), timeout=30)
-        return response.status_code == 200
+        if response.status_code == 200:
+            clear_sheet_cache() # 🚀 सेव होते ही पुरानी कैच साफ़
+            return True
+        return False
     except Exception:
         return False
 
@@ -54,7 +62,6 @@ def load_template_bytes_from_sheet(shipper_name):
     for f_row in files_list:
         s_name = get_val_case_insensitive(f_row, "ShipperName", "shipper")
         
-        # 🎯 यहाँ सटीक नाम मैचिंग लगा दी गई है ताकि हर नए और पुराने शिपर का टेम्पलेट सही से लोड हो सके
         if s_name.lower().strip() == shipper_name.lower().strip():
             b64_str = get_val_case_insensitive(f_row, "FileBase64", "base64", "file")
             if b64_str and len(b64_str.strip()) > 0:
