@@ -6,15 +6,16 @@ from io import BytesIO
 
 from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
-from pdf_engine import apply_rule_filter
+from pdf_engine import apply_rule_filter, extract_header_value
 from google_sheet_sync import load_template_from_sheet
+from supporting_engine import extract_value_using_rule
 
 def render_processor():
     fetch_data_from_google_sheet()
     ensure_default_shipper()
     
-    st.header("📤 Invoice Processing Zone")
-    st.caption("रूल्स और हेडर-वाइज फॉलबैक के आधार पर 100% सटीक डेटा एक्सट्रैक्शन[cite: 5].")
+    st.header("📤 Invoice Processing Zone (Multi-Document)")
+    st.caption("इनवॉइस PDF के साथ-साथ GST Invoice और DEEC Declaration (PDF/Excel) अपलोड करने और पर्टिकुलर कॉलम में भेजने का ज़ोन।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -29,18 +30,27 @@ def render_processor():
             
             inv_count = st.session_state[f"inv_count_{selected_shipper}"]
             
-            st.subheader("📑 Upload Invoices (PDFs)")
+            st.subheader("📑 Upload Invoices & Supporting Documents")
             
-            uploaded_pdf_files = []
+            uploaded_batches = []
             for i in range(inv_count):
-                pdf_f = st.file_uploader(f"➡️ Invoice #{i+1} का PDF अपलोड करें", type=["pdf"], key=f"inv_pdf_{selected_shipper}_{i}")
-                if pdf_f:
-                    uploaded_pdf_files.append((i+1, pdf_f))
+                st.markdown(f"#### ➡️ Invoice Set #{i+1}")
+                col_inv, col_gst, col_deec = st.columns(3)
+                
+                with col_inv:
+                    pdf_f = st.file_uploader(f" প্রধান इनवॉइस PDF #{i+1}", type=["pdf"], key=f"inv_pdf_{selected_shipper}_{i}")
+                with col_gst:
+                    gst_f = st.file_uploader(f" GST Invoice #{i+1} (PDF/Excel)", type=["pdf", "xlsx", "xls"], key=f"gst_file_{selected_shipper}_{i}")
+                with col_deec:
+                    deec_f = st.file_uploader(f" DEEC Decl. #{i+1} (PDF/Excel)", type=["pdf", "xlsx", "xls"], key=f"deec_file_{selected_shipper}_{i}")
+                    
+                uploaded_batches.append((i+1, pdf_f, gst_f, deec_f))
+                st.write("---")
             
             col_b1, col_b2, col_space = st.columns([2, 2, 6])
             with col_b1:
                 if inv_count < 10:
-                    if st.button("➕ Add Invoice", key=f"add_btn_{selected_shipper}", use_container_width=True):
+                    if st.button("➕ Add Invoice Set", key=f"add_btn_{selected_shipper}", use_container_width=True):
                         st.session_state[f"inv_count_{selected_shipper}"] += 1
                         st.rerun()
             with col_b2:
@@ -51,8 +61,11 @@ def render_processor():
                         
             st.write("---")
             
-            if uploaded_pdf_files and st.button("🚀 Process & Generate Excel", type="primary", use_container_width=True):
-                with st.spinner(f"कुल {len(uploaded_pdf_files)} इनवॉइस प्रोसेस हो रहे हैं..."):
+            # चेक करें कि कम से कम एक मुख्य इनवॉइस अपलोड हो
+            valid_batches = [b for b in uploaded_batches if b[1] is not None]
+            
+            if valid_batches and st.button("🚀 Process & Generate Excel with Supporting Docs", type="primary", use_container_width=True):
+                with st.spinner(f"कुल {len(valid_batches)} इनवॉइस सेट प्रोसेस हो रहे हैं..."):
                     rules = shipper_info.get("mapping_rules", {})
                     item_table_rules = shipper_info.get("item_table_rules", {})
                     
@@ -61,7 +74,6 @@ def render_processor():
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
                     wb = load_template_from_sheet(selected_shipper)
-                    
                     if wb is None:
                         wb = openpyxl.Workbook()
                         
@@ -71,7 +83,7 @@ def render_processor():
                     overall_item_sr = 1
                     excel_write_row = 2
                     
-                    for inv_sr_number, inv_file in uploaded_pdf_files:
+                    for inv_sr_number, inv_file, gst_file, deec_file in valid_batches:
                         pdf_text = ""
                         pdf_lines = []
                         with pdfplumber.open(inv_file) as pdf:
@@ -85,6 +97,7 @@ def render_processor():
                         current_inv_date = ""
                         inv_data_dict = {}
                         
+                        # 1. मुख्य इनवॉइस से हेडर डेटा एक्सट्रैक्शन
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             if kw.startswith("'") and len(kw) > 1:
@@ -97,40 +110,13 @@ def render_processor():
                             flt = r_info.get("filter", "None")
                             fallback_val = r_info.get("fallback", "").strip()
                             
-                            raw_text = ""
-                            if flt == "Exact Keyword Paste (If Found)":
-                                raw_text = pdf_text
-                            elif kw:
-                                for line_i, line in enumerate(pdf_lines):
-                                    if kw.lower() in line.lower():
-                                        if pos == "Right (आगे)":
-                                            start_idx = line.lower().find(kw.lower()) + len(kw)
-                                            raw_text = line[start_idx:].strip()
-                                            if raw_text.startswith(":"): raw_text = raw_text[1:].strip()
-                                            if raw_text: break
-                                        elif pos == "Below (नीचे)":
-                                            if line_i + 1 < len(pdf_lines):
-                                                raw_text = pdf_lines[line_i + 1].strip()
-                                                if raw_text: break
-                            else:
-                                raw_text = pdf_text
-                                
-                            # 🎯 अब यहाँ सीधे pdf_engine का यूनिफाइड apply_rule_filter इस्तेमाल हो रहा है
-                            found_val = apply_rule_filter(raw_text, mode, stop_kw, flt, kw)
+                            found_val = extract_header_value(pdf_lines, pdf_text, kw, pos, mode, stop_kw, flt, field_label=field)
                             
                             if not found_val or not found_val.strip():
                                 if fallback_val:
                                     found_val = fallback_val
                                     
                             inv_data_dict[field.lower()] = found_val
-                            
-                            if target_cell:
-                                if target_cell.isalpha():
-                                    dynamic_cell = f"{target_cell}{1 + inv_sr_number}"
-                                    ws[dynamic_cell] = found_val
-                                elif len(target_cell) >= 2 and target_cell[1].isdigit():
-                                    if inv_sr_number == 1:
-                                        ws[target_cell] = found_val
                             
                             if "inv. no" in field.lower() or "invoice no" in field.lower():
                                 if found_val:
@@ -144,33 +130,22 @@ def render_processor():
                                 elif found_val and not found_val.lower().startswith("inv"):
                                     current_inv_date = found_val
 
-                        resolved_item_rules = {}
-                        for i_name, i_info in item_table_rules.items():
-                            i_type = i_info.get("type", "")
-                            i_rule = i_info.get("rule", "")
-                            if i_rule.startswith("'") and len(i_rule) > 1:
-                                i_rule = i_rule[1:].strip()
-                                
-                            i_col = i_info.get("col", "K")
-                            
-                            actual_rule_val = i_rule
-                            if i_type == "Header Field Mapping":
-                                matched_header_key = i_rule.lower()
-                                if matched_header_key in inv_data_dict:
-                                    actual_rule_val = inv_data_dict[matched_header_key]
-                                else:
-                                    for h_k, h_v in inv_data_dict.items():
-                                        if h_k.lower() == matched_header_key:
-                                            actual_rule_val = h_v
-                                            break
-                            
-                            resolved_item_rules[i_name] = {
-                                "col": i_col,
-                                "type": i_type if i_type != "Header Field Mapping" else "Constant Text",
-                                "rule": actual_rule_val
-                            }
-
+                        # 2. 🛡️ सपोर्टिंग डॉक्यूमेंट्स (GST Invoice / DEEC) से डेटा निकालकर पर्टिकुलर कॉलम में भेजना
                         summary_row = 1 + inv_sr_number
+                        
+                        # मान लीजिए एडमिन रूल्स में कीवर्ड सेट हैं, या हम यहाँ सीधे कस्टमाइज़्ड कॉलम मैपिंग कर रहे हैं:
+                        if gst_file:
+                            # उदाहरण के लिए GST नंबर या GST Invoice No को कॉलम AE में भेजना
+                            gst_inv_val = extract_value_using_rule(gst_file, keyword="Invoice No")
+                            if gst_inv_val:
+                                ws[f"AE{summary_row}"] = gst_inv_val
+                                
+                        if deec_file:
+                            # उदाहरण के लिए DEEC Declaration No को कॉलम AF में भेजना
+                            deec_val = extract_value_using_rule(deec_file, keyword="Declaration No")
+                            if deec_val:
+                                ws[f"AF{summary_row}"] = deec_val
+
                         ws[f"AH{summary_row}"] = inv_sr_number
                         ws[f"AI{summary_row}"] = current_inv_number
                         
@@ -190,6 +165,27 @@ def render_processor():
                             elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
                             elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
 
+                        # आइटम टेबल मैपिंग
+                        resolved_item_rules = {}
+                        for i_name, i_info in item_table_rules.items():
+                            i_type = i_info.get("type", "")
+                            i_rule = i_info.get("rule", "")
+                            if i_rule.startswith("'") and len(i_rule) > 1:
+                                i_rule = i_rule[1:].strip()
+                            i_col = i_info.get("col", "K")
+                            
+                            actual_rule_val = i_rule
+                            if i_type == "Header Field Mapping":
+                                matched_header_key = i_rule.lower()
+                                if matched_header_key in inv_data_dict:
+                                    actual_rule_val = inv_data_dict[matched_header_key]
+                            
+                            resolved_item_rules[i_name] = {
+                                "col": i_col,
+                                "type": i_type if i_type != "Header Field Mapping" else "Constant Text",
+                                "rule": actual_rule_val
+                            }
+
                         parsed_items = extract_item_table_rows(pdf_lines)
                         ws, overall_item_sr, excel_write_row = map_items_to_excel_dynamic(
                             ws, parsed_items, resolved_item_rules,
@@ -208,10 +204,10 @@ def render_processor():
                     
                     short_shipper = selected_shipper.split(" ")[0].lower()
                     clean_inv = re.sub(r'[\\/*?:"<>|]', "", first_inv_no)
-                    final_filename = f"{clean_inv}_{short_shipper}_MultiInv.xlsx"
+                    final_filename = f"{clean_inv}_{short_shipper}_MultiDoc.xlsx"
                     
                     st.session_state["processed_file_ready"] = {"filename": final_filename, "data": output.getvalue()}
-                    st.success(f"🎉 सफलता! कुल {len(uploaded_pdf_files)} इनवॉइस की फ़ाइल '{final_filename}' तैयार है[cite: 5]!")
+                    st.success(f"🎉 सफलता! सपोर्टिंग डॉक्यूमेंट्स के साथ फाइल '{final_filename}' तैयार है!")
             
             if st.session_state.get("processed_file_ready", None):
                 st.download_button(
