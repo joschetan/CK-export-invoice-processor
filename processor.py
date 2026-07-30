@@ -8,14 +8,14 @@ from item_parser import extract_item_table_rows, map_items_to_excel_dynamic
 from shipper_data import fetch_data_from_google_sheet, ensure_default_shipper
 from pdf_engine import apply_rule_filter, extract_header_value
 from google_sheet_sync import load_template_from_sheet
-from supporting_engine import extract_value_using_rule
+from supporting_engine import extract_data_from_supporting_file
 
 def render_processor():
     fetch_data_from_google_sheet()
     ensure_default_shipper()
     
     st.header("📤 Invoice Processing Zone (Multi-Document)")
-    st.caption("इनवॉइस PDF के साथ-साथ GST Invoice और DEEC Declaration (PDF/Excel) अपलोड करने और पर्टिकुलर कॉलम में भेजने का ज़ोन।")
+    st.caption("इनवॉइस PDF के साथ-साथ GST Invoice और DEEC Declaration (PDF/Excel) अपलोड करने और पर्टिकुलर सेल/कॉलम में भेजने का ज़ोन।")
     
     shippers_list = list(st.session_state["shipper_database"].keys())
     
@@ -38,7 +38,7 @@ def render_processor():
                 col_inv, col_gst, col_deec = st.columns(3)
                 
                 with col_inv:
-                    pdf_f = st.file_uploader(f" প্রধান इनवॉइस PDF #{i+1}", type=["pdf"], key=f"inv_pdf_{selected_shipper}_{i}")
+                    pdf_f = st.file_uploader(f" मुख्य इनवॉइस PDF #{i+1}", type=["pdf"], key=f"inv_pdf_{selected_shipper}_{i}")
                 with col_gst:
                     gst_f = st.file_uploader(f" GST Invoice #{i+1} (PDF/Excel)", type=["pdf", "xlsx", "xls"], key=f"gst_file_{selected_shipper}_{i}")
                 with col_deec:
@@ -61,7 +61,6 @@ def render_processor():
                         
             st.write("---")
             
-            # चेक करें कि कम से कम एक मुख्य इनवॉइस अपलोड हो
             valid_batches = [b for b in uploaded_batches if b[1] is not None]
             
             if valid_batches and st.button("🚀 Process & Generate Excel with Supporting Docs", type="primary", use_container_width=True):
@@ -84,6 +83,7 @@ def render_processor():
                     excel_write_row = 2
                     
                     for inv_sr_number, inv_file, gst_file, deec_file in valid_batches:
+                        # 1. मुख्य इनवॉइस PDF टेक्स्ट रीड करना
                         pdf_text = ""
                         pdf_lines = []
                         with pdfplumber.open(inv_file) as pdf:
@@ -93,11 +93,15 @@ def render_processor():
                                     pdf_text += t + "\n"
                                     pdf_lines.extend(t.split("\n"))
                         
+                        # 2. सपोर्टिंग फाइलों (GST/DEEC) का टेक्स्ट एक्सट्रैक्शन तैयार करना
+                        gst_text, _ = extract_data_from_supporting_file(gst_file) if gst_file else ("", None)
+                        deec_text, _ = extract_data_from_supporting_file(deec_file) if deec_file else ("", None)
+                        
                         current_inv_number = f"INV_{inv_sr_number}"
                         current_inv_date = ""
                         inv_data_dict = {}
                         
-                        # 1. मुख्य इनवॉइस से हेडर डेटा एक्सट्रैक्शन
+                        # 3. 🎯 सभी हेडर रूल्स को प्रोसेस करना (Target Cell और Source के आधार पर)
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             if kw.startswith("'") and len(kw) > 1:
@@ -109,14 +113,33 @@ def render_processor():
                             stop_kw = r_info.get("stop_kw", "").strip()
                             flt = r_info.get("filter", "None")
                             fallback_val = r_info.get("fallback", "").strip()
+                            doc_source = r_info.get("logic", "Main Invoice (PDF)") # सोर्स चेक करें
                             
-                            found_val = extract_header_value(pdf_lines, pdf_text, kw, pos, mode, stop_kw, flt, field_label=field)
+                            # सोर्स के हिसाब से सही टेक्स्ट और लाइन्स चुनें
+                            target_lines, target_full_text = pdf_lines, pdf_text
+                            if "gst" in doc_source.lower() and gst_file:
+                                target_lines = gst_text.split("\n")
+                                target_full_text = gst_text
+                            elif "deec" in doc_source.lower() and deec_file:
+                                target_lines = deec_text.split("\n")
+                                target_full_text = deec_text
+                                
+                            found_val = extract_header_value(target_lines, target_full_text, kw, pos, mode, stop_kw, flt, field_label=field)
                             
                             if not found_val or not found_val.strip():
                                 if fallback_val:
                                     found_val = fallback_val
                                     
                             inv_data_dict[field.lower()] = found_val
+                            
+                            # 🎯 यदि यूजर ने टारगेट सेल (जैसे B7) दिया है, तो सीधे उसी एक्सेल सेल में वैल्यू डालें
+                            if target_cell:
+                                # अगर सेल फिक्स है (जैसे B7, C5) और एक से ज्यादा इनवॉइस हैं, तो रो डायनेमिक बना सकते हैं या डायरेक्ट लिख सकते हैं
+                                cell_to_write = target_cell
+                                if len(target_cell) > 1 and target_cell[-1].isdigit() and inv_sr_number > 1:
+                                    # यदि मल्टीप्ल इनवॉइस हैं और रो नंबर दिया है, तो उसे शिफ्ट कर सकते हैं
+                                    pass
+                                ws[target_cell] = found_val
                             
                             if "inv. no" in field.lower() or "invoice no" in field.lower():
                                 if found_val:
@@ -130,40 +153,12 @@ def render_processor():
                                 elif found_val and not found_val.lower().startswith("inv"):
                                     current_inv_date = found_val
 
-                        # 2. 🛡️ सपोर्टिंग डॉक्यूमेंट्स (GST Invoice / DEEC) से डेटा निकालकर पर्टिकुलर कॉलम में भेजना
                         summary_row = 1 + inv_sr_number
-                        
-                        # मान लीजिए एडमिन रूल्स में कीवर्ड सेट हैं, या हम यहाँ सीधे कस्टमाइज़्ड कॉलम मैपिंग कर रहे हैं:
-                        if gst_file:
-                            # उदाहरण के लिए GST नंबर या GST Invoice No को कॉलम AE में भेजना
-                            gst_inv_val = extract_value_using_rule(gst_file, keyword="Invoice No")
-                            if gst_inv_val:
-                                ws[f"AE{summary_row}"] = gst_inv_val
-                                
-                        if deec_file:
-                            # उदाहरण के लिए DEEC Declaration No को कॉलम AF में भेजना
-                            deec_val = extract_value_using_rule(deec_file, keyword="Declaration No")
-                            if deec_val:
-                                ws[f"AF{summary_row}"] = deec_val
-
                         ws[f"AH{summary_row}"] = inv_sr_number
                         ws[f"AI{summary_row}"] = current_inv_number
                         
                         if current_inv_date:
                             ws[f"AJ{summary_row}"] = current_inv_date
-                        
-                        for f_key, f_val in inv_data_dict.items():
-                            fk = f_key.lower()
-                            if "terms" in fk or "cif" in fk or "fob" in fk or "incoterm" in fk: ws[f"AK{summary_row}"] = f_val
-                            elif "currency" in fk or "curr" in fk: ws[f"AL{summary_row}"] = f_val
-                            elif "freight" in fk: ws[f"AM{summary_row}"] = f_val
-                            elif "insurance" in fk: ws[f"AN{summary_row}"] = f_val
-                            elif "commission" in fk: ws[f"AO{summary_row}"] = f_val
-                            elif "discount" in fk: ws[f"AP{summary_row}"] = f_val
-                            elif "packaging" in fk or "misc" in fk: ws[f"AQ{summary_row}"] = f_val
-                            elif "deduction" in fk or "other" in fk: ws[f"AR{summary_row}"] = f_val
-                            elif "contract" in fk or "exp" in fk: ws[f"AS{summary_row}"] = f_val
-                            elif "lut" in fk: ws[f"AT{summary_row}"] = f_val
 
                         # आइटम टेबल मैपिंग
                         resolved_item_rules = {}
