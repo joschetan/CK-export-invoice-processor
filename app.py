@@ -25,7 +25,9 @@ import base64
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
+@st.cache_data(show_spinner=False)
 def load_data_from_gsheet():
+    """गूगल शीट से ग्लोबल मास्टर्स और रूल्स को कैच करके लोड करता है"""
     shipper_db = {}
     master_rules_template = {}
     
