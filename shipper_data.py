@@ -52,7 +52,10 @@ def fetch_data_from_google_sheet(show_toast=False):
                 
                 s_name = get_val_case_insensitive(row_dict, "shippername", "shipper")
                 f_name = get_val_case_insensitive(row_dict, "fieldname", "field")
-                rule_kind = get_val_case_insensitive(row_dict, "rulekind", "kind", default="header").lower()
+                
+                # 🛠️ यहाँ 'rulekind' या 'fallback value' (जहाँ header/item लिखा है) को रीड करना
+                rule_kind = get_val_case_insensitive(row_dict, "rulekind", "fallback value", "kind", default="header").lower()
+                
                 cell_val = get_val_case_insensitive(row_dict, "cell", "col").strip().upper()
                 
                 if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
@@ -99,7 +102,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                             "stop_kw": get_val_case_insensitive(row_dict, "stop / word", "stopkw", "stop", default=""),
                             "filter": flt_val,
                             "logic": logic_val,
-                            "fallback": get_val_case_insensitive(row_dict, "fallback value", "fallback", default="")
+                            "fallback": "" # चूँकि इस कॉलम में rulekind आ रहा है, इसलिए फॉलबैक ब्लैंक रहेगा
                         }
 
         for s_key in st.session_state["shipper_database"].keys():
