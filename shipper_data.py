@@ -36,66 +36,76 @@ def fetch_data_from_google_sheet(show_toast=False):
             if show_toast: st.error("⚠️ गूगल शीट से डेटा नहीं मिला.")
             return
 
-        rules_list = data.get("rules", data.get("data", [])) if isinstance(data, dict) else data
+        rules_list = data.get("rules", [])
         
-        if isinstance(rules_list, list) and len(rules_list) > 0:
-            for row in rules_list:
-                if isinstance(row, dict):
-                    s_name = get_val_case_insensitive(row, "ShipperName", "shipper", "shippername")
-                    f_name = get_val_case_insensitive(row, "FieldName", "field", "fieldname")
-                    rule_kind = get_val_case_insensitive(row, "RuleKind", "kind", default="header").lower()
-                    cell_val = get_val_case_insensitive(row, "Cell", "cell", "col").strip().upper()
-                    
-                    if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
-                        continue
+        # 🛠️ गूगल शीट के 2D एरे (रो और कॉलम) को सटीक हेडर मैपिंग के साथ पढ़ना
+        if isinstance(rules_list, list) and len(rules_list) > 1:
+            headers = [str(h).strip().lower() for h in rules_list[0]]
+            
+            for row in rules_list[1:]:
+                if not row or len(row) == 0:
+                    continue
+                
+                row_dict = {}
+                for idx, val in enumerate(row):
+                    if idx < len(headers):
+                        row_dict[headers[idx]] = str(val) if val is not None else ""
+                
+                s_name = get_val_case_insensitive(row_dict, "shippername", "shipper")
+                f_name = get_val_case_insensitive(row_dict, "fieldname", "field")
+                rule_kind = get_val_case_insensitive(row_dict, "rulekind", "kind", default="header").lower()
+                cell_val = get_val_case_insensitive(row_dict, "cell", "col").strip().upper()
+                
+                if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
+                    continue
 
-                    if s_name and f_name:
-                        target_key = s_name
-                            
-                        if target_key not in st.session_state["shipper_database"]:
-                            st.session_state["shipper_database"][target_key] = {
-                                "allowed_uploads": ["Full Job Excel Format File"],
-                                "uploaded_files": {},
-                                "mapping_rules": {},
-                                "item_table_rules": {},
-                                "igst_config": {"lut_keywords": "", "paid_keywords": ""}
-                            }
+                if s_name and f_name:
+                    target_key = s_name
                         
-                        if "igst_config" in rule_kind or f_name.lower() in ["lut_keywords", "paid_keywords"]:
-                            kw_val = get_val_case_insensitive(row, "Keyword", "keyword", "kw", default="")
-                            if f_name.lower() == "lut_keywords":
-                                st.session_state["shipper_database"][target_key].setdefault("igst_config", {})["lut_keywords"] = kw_val
-                            elif f_name.lower() == "paid_keywords":
-                                st.session_state["shipper_database"][target_key].setdefault("igst_config", {})["paid_keywords"] = kw_val
-                        elif "item" in rule_kind:
-                            st.session_state["shipper_database"][target_key].setdefault("item_table_rules", {})[f_name] = {
-                                "col": cell_val,
-                                "type": get_val_case_insensitive(row, "MatchMode", "match_mode", "type", default="PDF Row Item"),
-                                "rule": get_val_case_insensitive(row, "Keyword", "keyword", "rule")
-                            }
-                        else:
-                            flt_val = get_val_case_insensitive(row, "Filter/Logic", "filter/logic", "Filter", "filter", "flt", default="None")
-                            if not flt_val or flt_val.strip() == "":
-                                flt_val = "None"
-                                
-                            stop_kw_val = get_val_case_insensitive(row, "StopKw", "stop / word", "stop_kw", "stopkw", "stop", default="")
-                            if not stop_kw_val:
-                                stop_kw_val = ""
+                    if target_key not in st.session_state["shipper_database"]:
+                        st.session_state["shipper_database"][target_key] = {
+                            "allowed_uploads": ["Full Job Excel Format File"],
+                            "uploaded_files": {},
+                            "mapping_rules": {},
+                            "item_table_rules": {},
+                            "igst_config": {"lut_keywords": "", "paid_keywords": ""}
+                        }
+                    
+                    if "igst_config" in rule_kind or f_name.lower() in ["lut_keywords", "paid_keywords"]:
+                        kw_val = get_val_case_insensitive(row_dict, "keyword", "kw", default="")
+                        if f_name.lower() == "lut_keywords":
+                            st.session_state["shipper_database"][target_key].setdefault("igst_config", {})["lut_keywords"] = kw_val
+                        elif f_name.lower() == "paid_keywords":
+                            st.session_state["shipper_database"][target_key].setdefault("igst_config", {})["paid_keywords"] = kw_val
+                    elif "item" in rule_kind:
+                        st.session_state["shipper_database"][target_key].setdefault("item_table_rules", {})[f_name] = {
+                            "col": cell_val,
+                            "type": get_val_case_insensitive(row_dict, "matchmode", "type", default="PDF Row Item"),
+                            "rule": get_val_case_insensitive(row_dict, "keyword", "rule")
+                        }
+                    else:
+                        flt_val = get_val_case_insensitive(row_dict, "filter/logic", "filter", default="None")
+                        if not flt_val or flt_val.strip() == "":
+                            flt_val = "None"
+                            
+                        stop_kw_val = get_val_case_insensitive(row_dict, "stop / word", "stopkw", "stop", default="")
+                        if not stop_kw_val:
+                            stop_kw_val = ""
 
-                            logic_val = get_val_case_insensitive(row, "Logic", "logic", "lg", default="Main Invoice")
-                            if "(pdf)" in logic_val.lower():
-                                logic_val = "Main Invoice"
+                        logic_val = get_val_case_insensitive(row_dict, "main invoice", "logic", default="Main Invoice")
+                        if "(pdf)" in logic_val.lower():
+                            logic_val = "Main Invoice"
 
-                            st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
-                                "keyword": get_val_case_insensitive(row, "Keyword", "keyword", "kw"),
-                                "position": get_val_case_insensitive(row, "Position", "position", "pos", default="Right (आगे)"),
-                                "cell": cell_val,
-                                "match_mode": get_val_case_insensitive(row, "MatchMode", "match_mode", "matchmode", default="Exact Word"),
-                                "stop_kw": stop_kw_val,
-                                "filter": flt_val,
-                                "logic": logic_val,
-                                "fallback": get_val_case_insensitive(row, "Fallback", "fallback", "fb", default="")
-                            }
+                        st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
+                            "keyword": get_val_case_insensitive(row_dict, "keyword", "kw"),
+                            "position": get_val_case_insensitive(row_dict, "position", "pos", default="Right (आगे)"),
+                            "cell": cell_val,
+                            "match_mode": get_val_case_insensitive(row_dict, "matchmode", "match_mode", default="Exact Word"),
+                            "stop_kw": stop_kw_val,
+                            "filter": flt_val,
+                            "logic": logic_val,
+                            "fallback": get_val_case_insensitive(row_dict, "fallback value", "fallback", default="")
+                        }
 
         for s_key in st.session_state["shipper_database"].keys():
             igst_fetched = fetch_igst_config_from_sheet(s_key)
@@ -517,10 +527,8 @@ def render_shipper_data():
                 with st.spinner("⏳ गूगल शीट में सुरक्षित सेव हो रहा है..."):
                     success = push_all_to_sheet(rules_payload, files_payload)
                     if success:
-                        # 🚀 जैसे ही आप सेव करेंगे, पुरानी कैच मेमोरी तुरंत साफ़ हो जाएगी ताकि नया डेटा तुरंत लोड हो सके
                         fetch_cached_sheet_data.clear()
                         st.session_state["sheet_data_loaded"] = False
-                        
                         st.success("🎉 आपके सभी रूल्स, IGST कॉन्फिग और Excel टेम्पलेट गूगल शीट में 100% परमानेंट सेव हो गए हैं और कैच रीसेट हो गई है!")
                         st.balloons()
                     else:
