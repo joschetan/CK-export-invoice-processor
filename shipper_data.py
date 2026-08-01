@@ -43,7 +43,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                 if not row or len(row) < 11:
                     continue
                 
-                # 🎯 सीधी कॉलम इंडेक्स मैपिंग (गूगल शीट के सटीक A से K क्रम के अनुसार)
                 # A: ShipperName (0), B: FieldName (1), C: Keyword (2), D: Position (3), E: Cell (4), F: MatchMode (5)
                 # G: Stop/Word (6), H: Filter/Logic (7), I: Main Invoice (8), J: Fallback (9), K: RuleKind (10)
                 s_name = str(row[0]).strip() if row[0] is not None else ""
@@ -79,7 +78,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                         elif f_name.lower() == "paid_keywords":
                             st.session_state["shipper_database"][target_key].setdefault("igst_config", {})["paid_keywords"] = kw_val
                     elif "item" in rule_kind:
-                        # 📦 आइटम टेबल रूल्स सीधे सेक्शन 4 में लोड होंगे
                         st.session_state["shipper_database"][target_key].setdefault("item_table_rules", {})[f_name] = {
                             "col": cell_val,
                             "type": match_val,
@@ -92,7 +90,6 @@ def fetch_data_from_google_sheet(show_toast=False):
                         if "(pdf)" in logic_val.lower():
                             logic_val = "Main Invoice"
 
-                        # 🛠️ हेडर रूल्स सीधे सेक्शन 3 में लोड होंगे
                         st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
                             "keyword": kw_val,
                             "position": pos_val,
@@ -273,9 +270,11 @@ def render_shipper_data():
                 st.subheader("🛠️ 3. Header Fields Mapping Rules")
             with col_sync:
                 if st.button("🔄 Reload Saved Rules", type="secondary", use_container_width=True):
-                    st.session_state["sheet_data_loaded"] = False
-                    st.session_state["shipper_database"] = {}
-                    fetch_data_from_google_sheet(show_toast=True)
+                    with st.spinner("⏳ गूगल शीट से रूल्स लोड हो रहे हैं..."):
+                        fetch_cached_sheet_data.clear()
+                        st.session_state["sheet_data_loaded"] = False
+                        st.session_state["shipper_database"] = {}
+                        fetch_data_from_google_sheet(show_toast=True)
                     st.rerun()
             with col_add_h:
                 if st.button("➕ Add Field", type="secondary", use_container_width=True):
