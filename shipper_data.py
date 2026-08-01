@@ -38,25 +38,22 @@ def fetch_data_from_google_sheet(show_toast=False):
 
         rules_list = data.get("rules", [])
         
-        # 🛠️ गूगल शीट के रो (Index 0 to 10) से सीधा डेटा पढ़ना
         if isinstance(rules_list, list) and len(rules_list) > 1:
+            headers = [str(h).strip().lower() for h in rules_list[0]]
+            
             for row in rules_list[1:]:
-                if not row or len(row) < 11:
+                if not row or len(row) == 0:
                     continue
                 
-                # A: ShipperName, B: FieldName, C: Keyword, D: Position, E: Cell, F: MatchMode
-                # G: Stop/Word, H: Filter/Logic, I: Main Invoice (Logic), J: Fallback, K: RuleKind
-                s_name = str(row[0]).strip() if row[0] is not None else ""
-                f_name = str(row[1]).strip() if row[1] is not None else ""
-                kw_val = str(row[2]).strip() if row[2] is not None else ""
-                pos_val = str(row[3]).strip() if row[3] is not None else "Right (आगे)"
-                cell_val = str(row[4]).strip().upper() if row[4] is not None else ""
-                match_val = str(row[5]).strip() if row[5] is not None else "Exact Word"
-                stop_val = str(row[6]).strip() if row[6] is not None else ""
-                flt_val = str(row[7]).strip() if row[7] is not None else "None"
-                logic_val = str(row[8]).strip() if row[8] is not None else "Main Invoice"
-                fb_val = str(row[9]).strip() if row[9] is not None else ""
-                rule_kind = str(row[10]).strip().lower() if row[10] is not None else "header"
+                row_dict = {}
+                for idx, val in enumerate(row):
+                    if idx < len(headers):
+                        row_dict[headers[idx]] = str(val) if val is not None else ""
+                
+                s_name = get_val_case_insensitive(row_dict, "shippername", "shipper")
+                f_name = get_val_case_insensitive(row_dict, "fieldname", "field")
+                rule_kind = get_val_case_insensitive(row_dict, "rulekind", "kind", default="header").lower()
+                cell_val = get_val_case_insensitive(row_dict, "cell", "col").strip().upper()
                 
                 if f_name.lower() in ["igst status", "igst mode"] or cell_val in ["V", "B19"]:
                     continue
@@ -74,6 +71,7 @@ def fetch_data_from_google_sheet(show_toast=False):
                         }
                     
                     if "igst_config" in rule_kind or f_name.lower() in ["lut_keywords", "paid_keywords"]:
+                        kw_val = get_val_case_insensitive(row_dict, "keyword", "kw", default="")
                         if f_name.lower() == "lut_keywords":
                             st.session_state["shipper_database"][target_key].setdefault("igst_config", {})["lut_keywords"] = kw_val
                         elif f_name.lower() == "paid_keywords":
@@ -81,25 +79,27 @@ def fetch_data_from_google_sheet(show_toast=False):
                     elif "item" in rule_kind:
                         st.session_state["shipper_database"][target_key].setdefault("item_table_rules", {})[f_name] = {
                             "col": cell_val,
-                            "type": match_val,
-                            "rule": kw_val
+                            "type": get_val_case_insensitive(row_dict, "matchmode", "type", default="PDF Row Item"),
+                            "rule": get_val_case_insensitive(row_dict, "keyword", "rule")
                         }
                     else:
-                        if not flt_val or flt_val == "":
+                        flt_val = get_val_case_insensitive(row_dict, "filter/logic", "filter", default="None")
+                        if not flt_val or flt_val.strip() == "":
                             flt_val = "None"
                             
+                        logic_val = get_val_case_insensitive(row_dict, "main invoice", "logic", default="Main Invoice")
                         if "(pdf)" in logic_val.lower():
                             logic_val = "Main Invoice"
 
                         st.session_state["shipper_database"][target_key].setdefault("mapping_rules", {})[f_name] = {
-                            "keyword": kw_val,
-                            "position": pos_val,
+                            "keyword": get_val_case_insensitive(row_dict, "keyword", "kw"),
+                            "position": get_val_case_insensitive(row_dict, "position", "pos", default="Right (आगे)"),
                             "cell": cell_val,
-                            "match_mode": match_val,
-                            "stop_kw": stop_val,
+                            "match_mode": get_val_case_insensitive(row_dict, "matchmode", "match_mode", default="Exact Word"),
+                            "stop_kw": get_val_case_insensitive(row_dict, "stop / word", "stopkw", "stop", default=""),
                             "filter": flt_val,
                             "logic": logic_val,
-                            "fallback": fb_val
+                            "fallback": get_val_case_insensitive(row_dict, "fallback value", "fallback", default="")
                         }
 
         for s_key in st.session_state["shipper_database"].keys():
