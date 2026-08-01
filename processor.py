@@ -73,15 +73,8 @@ def render_processor():
                     lut_kws = igst_cfg.get("lut_keywords", "")
                     paid_kws = igst_cfg.get("paid_keywords", "")
                     
-                    # 🎯 सुरक्षित टेम्पलेट लोडिंग (गूगल शीट से मास्टर टेम्पलेट फेच करना)
-                    wb = None
-                    try:
-                        wb = load_template_from_sheet(selected_shipper)
-                    except Exception as e:
-                        wb = None
-                        
+                    wb = load_template_from_sheet(selected_shipper)
                     if wb is None:
-                        st.error(f"⚠️ चेतावनी: शिपर '{selected_shipper}' के लिए गूगल शीट से मास्टर टेम्पलेट लोड नहीं हो पाई! कृपया एडमिन पैनल में टेम्पलेट चेक करें।")
                         wb = openpyxl.Workbook()
                         
                     ws = wb["INV"] if "INV" in wb.sheetnames else wb.active
@@ -91,7 +84,7 @@ def render_processor():
                     excel_write_row = 2
                     
                     for inv_sr_number, inv_file, gst_file, deec_file in valid_batches:
-                        # 1. मुख्य इनवॉइस का टेक्स्ट रीड करना (चाहे वह PDF हो या Excel)
+                        # 1. मुख्य इनवॉइस का टेक्स्ट रीड करना (चाहे वह PDF हो या Excel)[cite: 5]
                         pdf_text = ""
                         pdf_lines = []
                         
@@ -104,12 +97,13 @@ def render_processor():
                                         pdf_text += t + "\n"
                                         pdf_lines.extend(t.split("\n"))
                         else:
+                            # यदि मुख्य इनवॉइस Excel फाइल है तो उसे सपोर्टिंग इंजन की तरह रीड करें[cite: 3, 5]
                             excel_text, _ = extract_data_from_supporting_file(inv_file)
                             if excel_text:
                                 pdf_text = excel_text
                                 pdf_lines = excel_text.split("\n")
                         
-                        # 2. सपोर्टिंग फाइलों (GST/DEEC) का टेक्स्ट एक्सट्रैक्शन
+                        # 2. सपोर्टिंग फाइलों (GST/DEEC) का टेक्स्ट एक्सट्रैक्शन तैयार करना[cite: 3, 5]
                         gst_text, _ = extract_data_from_supporting_file(gst_file) if gst_file else ("", None)
                         deec_text, _ = extract_data_from_supporting_file(deec_file) if deec_file else ("", None)
                         
@@ -119,7 +113,7 @@ def render_processor():
                         
                         summary_row = 1 + inv_sr_number
                         
-                        # 3. सभी हेडर रूल्स को प्रोसेस करना
+                        # 3. 🎯 सभी हेडर रूल्स को प्रोसेस करना (केवल एडमिन पैनल के Target Cell के आधार पर)[cite: 3, 5]
                         for field, r_info in rules.items():
                             kw = r_info.get("keyword", "").strip()
                             if kw.startswith("'") and len(kw) > 1:
@@ -149,6 +143,7 @@ def render_processor():
                                     
                             inv_data_dict[field.lower()] = found_val
                             
+                            # 🎯 यहाँ सीधे एडमिन पैनल में दिए गए टारगेट सेल (जैसे AZ, AW आदि) में वैल्यू जाएगी[cite: 3, 5]
                             if target_cell and "dynamic" not in target_cell.lower():
                                 if target_cell.isalpha():
                                     cell_to_write = f"{target_cell}{summary_row}"
@@ -178,7 +173,7 @@ def render_processor():
                         if current_inv_date:
                             ws[f"AJ{summary_row}"] = current_inv_date
 
-                        # आइटम टेबल मैपिंग
+                        # आइटम टेबल मैपिंग[cite: 3, 5]
                         resolved_item_rules = {}
                         for i_name, i_info in item_table_rules.items():
                             i_type = i_info.get("type", "")
