@@ -56,7 +56,7 @@ def create_new_parser_file_on_github(parser_name, github_token, repo_owner="josc
     if not clean_name.startswith("parser_"):
         clean_name = f"parser_{clean_name}"
         
-    file_path = clean_name  # रिपॉजिटरी में फाइल का नाम
+    file_path = clean_name  
     url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
     
     headers = {
@@ -64,7 +64,6 @@ def create_new_parser_file_on_github(parser_name, github_token, repo_owner="josc
         "Accept": "application/vnd.github.v3+json"
     }
     
-    # इनिशियल ब्लैंक कॉर्ड स्ट्रक्चर
     initial_content = f"# Parser Rule File: {file_path}\n# Created automatically by CK Export Invoice Pro\n\n"
     encoded_content = base64.b64encode(initial_content.encode('utf-8')).decode('utf-8')
     
@@ -94,7 +93,8 @@ def ask_local_ai(messages):
 
     try:
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # यहाँ मॉडल का नाम 'gemini-1.5-flash-latest' कर दिया गया है ताकि 404 एरर न आए
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         
         full_prompt = ""
         if isinstance(messages, list):
