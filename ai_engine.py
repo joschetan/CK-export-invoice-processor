@@ -4,32 +4,32 @@ import base64
 import google.generativeai as genai
 import requests
 
-CONFIG_DIR = "local_shipper_data"
-CONFIG_FILE = os.path.join(CONFIG_DIR, "gemini_config.json")
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
-def ensure_config_dir():
-    if not os.path.exists(CONFIG_DIR):
-        os.makedirs(CONFIG_DIR)
-
-def save_gemini_api_key(api_key):
-    ensure_config_dir()
+def save_gemini_api_key_to_sheet(api_key):
+    """Gemini API Key को सीधे Google Sheet पर सेव करने के लिए"""
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump({"gemini_api_key": api_key.strip()}, f, indent=4)
-        return True
-    except Exception as e:
+        payload = {
+            "action": "save_api_key",
+            "api_key": api_key.strip()
+        }
+        response = requests.post(WEB_APP_URL, data=json.dumps(payload), timeout=30)
+        if response.status_code == 200:
+            return True
+        return False
+    except Exception:
         return False
 
-def load_gemini_api_key():
-    ensure_config_dir()
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data.get("gemini_api_key", "")
-        except:
-            pass
+def load_gemini_api_key_from_sheet():
+    """Google Sheet से सेव की गई Gemini API Key फेच करने के लिए"""
+    try:
+        response = requests.get(WEB_APP_URL, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, dict):
+                return data.get("api_key", "")
+    except Exception:
+        pass
     return ""
 
 def push_all_to_sheet(shippers_json_payload):
@@ -87,13 +87,12 @@ def ask_local_ai(messages):
     """
     Google Gemini API के माध्यम से डेटा एक्सट्रैक्ट करने का सुपर-फास्ट इंजन।
     """
-    api_key = load_gemini_api_key()
+    api_key = load_gemini_api_key_from_sheet()
     if not api_key:
         return "❌ Error: Gemini API Key सेट नहीं है। कृपया UI में जाकर अपनी API Key दर्ज करें।"
 
     try:
         genai.configure(api_key=api_key)
-        # अब यहाँ बिल्कुल नया और सही मॉडल 'gemini-3.6-flash' सेट कर दिया गया है
         model = genai.GenerativeModel("gemini-3.6-flash")
         
         full_prompt = ""
