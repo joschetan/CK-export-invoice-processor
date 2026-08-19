@@ -46,7 +46,7 @@ def push_all_to_sheet(shippers_json_payload):
     except Exception:
         return False
 
-def create_new_parser_file_on_github(parser_name, github_token, repo_owner="apna_github_username", repo_name="ck-export-invoice-processor"):
+def create_new_parser_file_on_github(parser_name, github_token, repo_owner="joschetan", repo_name="CK-export-invoice-processor"):
     """
     GitHub API का उपयोग करके सीधे रिपॉजिटरी में एक नई ब्लैंक पार्सर फाइल (.py) क्रिएट करता है।
     """
