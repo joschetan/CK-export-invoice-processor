@@ -7,8 +7,7 @@ from io import BytesIO
 
 from pdf_engine import detect_igst_status
 from test_suite import render_universal_test_suite
-from ai_parser_agent import render_ai_parser_agent_ui
-from ai_engine import ask_local_ai, save_gemini_api_key, load_gemini_api_key
+from ai_engine import ask_local_ai, save_gemini_api_key, load_gemini_api_key, push_all_to_sheet
 
 LOCAL_DATA_DIR = "local_shipper_data"
 TEMPLATES_DIR = os.path.join(LOCAL_DATA_DIR, "templates")
@@ -25,6 +24,8 @@ def save_local_shippers():
     try:
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(st.session_state["shipper_database"], f, indent=4)
+        # Google Sheet पर भी सिंक करें
+        push_all_to_sheet(st.session_state["shipper_database"])
     except Exception as e:
         st.error(f"लोकल सेव करने में एरर: {str(e)}")
 
@@ -53,16 +54,15 @@ def load_local_shippers():
     ensure_local_directories()
     json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
     
-    st.session_state["shipper_database"] = {}
-    
-    if os.path.exists(json_path):
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                saved_data = json.load(f)
-                if isinstance(saved_data, dict) and saved_data:
-                    st.session_state["shipper_database"] = saved_data
-        except Exception:
-            pass
+    if "shipper_database" not in st.session_state or not st.session_state["shipper_database"]:
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    saved_data = json.load(f)
+                    if isinstance(saved_data, dict) and saved_data:
+                        st.session_state["shipper_database"] = saved_data
+            except Exception:
+                pass
 
 def ensure_default_shipper():
     load_local_shippers()
@@ -430,6 +430,3 @@ def render_shipper_data():
                 st.success("🎉 आपके सारे रूल्स लोकल फोल्डर में सुरक्षित सेव हो गए हैं!")
 
             render_universal_test_suite(selected_shipper)
-            
-            # 🤖 AI PARSER AGENT INTEGRATION
-            render_ai_parser_agent_ui(selected_shipper, shipper_info)
