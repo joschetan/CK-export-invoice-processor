@@ -7,7 +7,7 @@ from io import BytesIO
 
 from pdf_engine import detect_igst_status
 from test_suite import render_universal_test_suite
-from ai_engine import ask_local_ai, save_gemini_api_key, load_gemini_api_key, push_all_to_sheet, create_new_parser_file_on_github, WEB_APP_URL
+from ai_engine import ask_local_ai, save_gemini_api_key_to_sheet, load_gemini_api_key_from_sheet, push_all_to_sheet, create_new_parser_file_on_github, WEB_APP_URL
 import requests
 
 LOCAL_DATA_DIR = "local_shipper_data"
@@ -35,10 +35,8 @@ def save_local_shippers():
     ensure_local_directories()
     json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
     try:
-        # लोकल फाइल में भी सेव करें (बैकअप के लिए)
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(st.session_state["shipper_database"], f, indent=4)
-        # 🌐 मुख्य रूप से Google Sheet पर सिंक (Push) करें
         push_all_to_sheet(st.session_state["shipper_database"])
     except Exception as e:
         st.error(f"सेव करने में एरर: {str(e)}")
@@ -64,17 +62,14 @@ def check_template_exists(selected_shipper):
     file_path = os.path.join(TEMPLATES_DIR, f"{safe_name}_template.xlsx")
     return os.path.exists(file_path)
 
-# 🌐 डेटा लोड करने का स्मार्ट तरीका: पहले Google Sheet से, फिर लोकल बैकअप से
 def load_local_shippers():
     ensure_local_directories()
     
     if "shipper_database" not in st.session_state or not st.session_state["shipper_database"]:
-        # 1. पहले Google Sheet से फेच करने की कोशिश करें
         sheet_data = fetch_data_from_google_sheet()
         if sheet_data:
             st.session_state["shipper_database"] = sheet_data
         else:
-            # 2. अगर शीट से न मिले, तो लोकल बैकअप फाइल चेक करें
             json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
             if os.path.exists(json_path):
                 try:
@@ -88,7 +83,6 @@ def load_local_shippers():
 def ensure_default_shipper():
     load_local_shippers()
 
-# 🧪 Interactive Test Dialog for Header Fields
 @st.dialog("🧪 Live Header Field Test & Verification")
 def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, field_key):
     st.write(f"### 🔍 Header Field: **`{field_name}`**")
@@ -125,7 +119,6 @@ def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, 
             st.info("Action cancelled.")
             st.rerun()
 
-# 📦 Interactive Test Dialog for Item Table Columns
 @st.dialog("📦 Live Item Table Column Test & Verification")
 def show_item_test_dialog(item_field, rule_data, extracted_rows, selected_shipper):
     st.write(f"### 📦 Item Column: **`{item_field}`** ➡️ Excel Col: **`{rule_data.get('col', 'N/A')}`**")
@@ -182,21 +175,21 @@ def render_shipper_data():
     st.header("🏢 Add Shipper Name & AI-Powered Mapping Builder")
     st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)।")
     
-    # 🔑 Gemini API Key Box
+    # 🔑 Gemini API Key Box (Google Sheet Synced)
     with st.expander("🔑 Gemini API Key Settings", expanded=False):
-        current_saved_key = load_gemini_api_key()
+        current_saved_key = load_gemini_api_key_from_sheet()
         if current_saved_key:
-            st.write("वर्तमान स्थिति: 🟢 API Key सेट है")
+            st.write("वर्तमान स्थिति: 🟢 Google Sheet पर API Key सेट है")
             if st.button("🗑️ Delete API Key", type="secondary"):
-                save_gemini_api_key("")
+                save_gemini_api_key_to_sheet("")
                 st.success("🗑️ API Key डिलीट कर दी गई है!")
                 st.rerun()
         else:
             st.write("वर्तमान स्थिति: 🔴 API Key सेट नहीं है")
             new_key = st.text_input("Gemini API Key दर्ज करें:", type="password")
-            if st.button("💾 Save API Key", type="primary"):
-                if new_key.strip() and save_gemini_api_key(new_key.strip()):
-                    st.success("🎉 API Key सेव हो गई!")
+            if st.button("💾 Save API Key to Sheet", type="primary"):
+                if new_key.strip() and save_gemini_api_key_to_sheet(new_key.strip()):
+                    st.success("🎉 API Key गूगल शीट पर सेव हो गई!")
                     st.rerun()
 
     st.write("---")
@@ -261,7 +254,7 @@ def render_shipper_data():
             shipper_info["item_table_rule_name"] = updated_parser_choice
             save_local_shippers()
 
-            # 📁 1. टेम्पलेट फ़ाइल अपलोड (Local Excel Template) - FIXED & RESTORED
+            # 📁 1. टेम्पलेट फ़ाइल अपलोड
             st.write("---")
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड (Full Job Excel Template)")
             has_saved_template = check_template_exists(selected_shipper)
