@@ -93,8 +93,8 @@ def ask_local_ai(messages):
 
     try:
         genai.configure(api_key=api_key)
-        # यहाँ मॉडल का नाम 'gemini-1.5-flash-latest' कर दिया गया है ताकि 404 एरर न आए
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        # यहाँ मॉडल को 'gemini-1.5-pro' कर दिया गया है जो सभी API Keys पर सपोर्टेड है
+        model = genai.GenerativeModel("gemini-1.5-pro")
         
         full_prompt = ""
         if isinstance(messages, list):
