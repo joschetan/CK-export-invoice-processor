@@ -17,7 +17,7 @@ if not st.session_state["app_authenticated"]:
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align: center;'>🚢 CK Export Invoice Processor Pro</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='text-align: center;'>🚢 CK Export Invoice Prjocessor Pro</h2>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: gray;'>कृपया आगे बढ़ने के लिए ऐप का पासवर्ड दर्ज करें।</p>", unsafe_allow_html=True)
         
         with st.form(key="login_form"):
@@ -25,7 +25,7 @@ if not st.session_state["app_authenticated"]:
             submit_button = st.form_submit_button("Unlock App", use_container_width=True, type="primary")
             
             if submit_button:
-                if pass_input == "CK":
+                if pass_input == "CKJ":
                     st.session_state["app_authenticated"] = True
                     st.rerun()
                 else:
@@ -184,7 +184,7 @@ else:
         with st.expander("🛠️ Admin Settings Access"):
             pwd = st.text_input("एडमिन पासवर्ड दर्ज करें:", type="password", key="main_admin_pwd")
             if st.button("लॉगिन करें"):
-                if pwd == "CK@SOHAM":
+                if pwd == "TEST":
                     st.session_state["admin_authenticated"] = True
                     st.rerun()
                 else:
