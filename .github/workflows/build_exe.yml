@@ -1,7 +1,8 @@
 name: Build Portable App Folder
+
 on:
-  push:
-    branches: [ main, master ]
+  workflow_dispatch:  # 👈 यह सुनिश्चित करता है कि यह सिर्फ तभी रन हो जब आप खुद मैन्युअली चाहें
+
 jobs:
   build:
     runs-on: windows-latest
