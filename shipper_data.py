@@ -67,6 +67,10 @@ def load_local_shippers():
 def ensure_default_shipper():
     load_local_shippers()
 
+def fetch_data_from_google_sheet():
+    load_local_shippers()
+    return st.session_state.get("shipper_database", {})
+
 @st.dialog("🧪 Live Header Field Test Result")
 def show_field_test_dialog(field_name, rule_data, result_val):
     st.write(f"### 🔍 Header Field: **`{field_name}`**")
@@ -160,7 +164,7 @@ def render_shipper_data():
 
     st.write("---")
 
-    with st.expander("➕ Add New Shipper (नया शिपर जोड़ें)", expanded=False):
+    with st.expander("➕ Add New Shipper (नया शिपर जोड़ें)", expanded=False):
         new_shipper_name = st.text_input("नया शिपर कंपनी का नाम दर्ज करें:", key="input_new_shipper_name")
         
         available_parsers = ["parser_welspun", "parser_bkt", "parser_polycab", "parser_vapi_welspun"]
@@ -181,7 +185,7 @@ def render_shipper_data():
                         "igst_config": {"lut_keywords": "", "paid_keywords": ""}
                     }
                     save_local_shippers()
-                    st.success(f"🎉 नया शिपर '{s_clean}' सफलतापूर्वक जुड़ गया है!")
+                    st.success(f"🎉 नया शिपर '{s_clean}' सफलतापूर्वक जुड़ गया है!")
                     st.rerun()
                 else:
                     st.warning("⚠️ यह शिपर पहले से मौजूद है!")
@@ -189,7 +193,7 @@ def render_shipper_data():
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     
     if not shippers_list:
-        st.info("ℹ️ वर्तमान में कोई शिपर मौजूद नहीं है। ऊपर दिए गए 'Add New Shipper' से नया शिपर जोड़ें।")
+        st.info("ℹ️ वर्तमान में कोई शिपर मौजूद नहीं है। ऊपर दिए गए 'Add New Shipper' से नया शिपर जोड़ें।")
     else:
         selected_shipper = st.selectbox(
             "कॉन्फ़िगर करने के लिए शिपर चुनें:", 
