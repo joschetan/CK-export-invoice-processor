@@ -133,9 +133,9 @@ def render_shipper_data():
     st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन।")
     
     # =========================================================================
-    # 🔑 GEMINI API KEY CONFIGURATOR BOX (UI)
+    # 🔑 GEMINI API KEY CONFIGURATOR BOX (Smart UI: Hides input if already saved)
     # =========================================================================
-    with st.expander("🔑 Gemini API Key Settings (यहाँ अपनी API Key दर्ज करें)", expanded=True):
+    with st.expander("🔑 Gemini API Key Settings (यहाँ अपनी API Key देखें/बदले)", expanded=False):
         current_saved_key = load_gemini_api_key()
         masked_key = "********" + current_saved_key[-4:] if len(current_saved_key) > 4 else ""
         
@@ -143,10 +143,14 @@ def render_shipper_data():
         if masked_key:
             st.caption(f"Saved Key: {masked_key}")
             
-        new_api_key_input = st.text_input("Gemini API Key दर्ज करें:", value="", type="password", placeholder="AIzaSy...")
-        
-        col_k1, col_k2 = st.columns(2)
-        with col_k1:
+        # यदि की पहले से सेव है, तो इनपुट बॉक्स और सेव बटन को छिपा दें, सिर्फ डिलीट बटन दिखाएं
+        if current_saved_key:
+            if st.button("🗑️ Delete API Key", type="secondary", use_container_width=True):
+                save_gemini_api_key("")
+                st.success("🗑️ API Key डिलीट कर दी गई है!")
+                st.rerun()
+        else:
+            new_api_key_input = st.text_input("Gemini API Key दर्ज करें:", value="", type="password", placeholder="AIzaSy...")
             if st.button("💾 Save API Key", type="primary", use_container_width=True):
                 if new_api_key_input.strip():
                     if save_gemini_api_key(new_api_key_input.strip()):
@@ -156,11 +160,6 @@ def render_shipper_data():
                         st.error("एरर: की सेव करने में समस्या आई।")
                 else:
                     st.error("कृपया वैध API Key दर्ज करें!")
-        with col_k2:
-            if st.button("🗑️ Delete API Key", type="secondary", use_container_width=True):
-                save_gemini_api_key("")
-                st.success("🗑️ API Key डिलीट कर दी गई है!")
-                st.rerun()
 
     st.write("---")
 
