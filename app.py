@@ -5,7 +5,7 @@ st.set_page_config(
     page_title="CK Export Invoice Processor Pro", 
     page_icon="🚢",
     layout="wide", 
-    initial_sidebar_state="expanded"  # साइडबार को इनेबल कर दिया ताकि प्रोफाइल अच्छे से दिखे
+    initial_sidebar_state="expanded"
 )
 
 # 📌 2. सेशन स्टेट इनिशियलाइज़ेशन (ग्लोबल ऐप लॉक के लिए)
@@ -20,7 +20,6 @@ if not st.session_state["app_authenticated"]:
         st.markdown("<h2 style='text-align: center;'>🚢 CK Export Invoice Processor Pro</h2>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center; color: gray;'>कृपया आगे बढ़ने के लिए ऐप का पासवर्ड दर्ज करें।</p>", unsafe_allow_html=True)
         
-        # 🚀 Form का उपयोग ताकि Enter दबाने पर सीधे लॉगिन हो जाए
         with st.form(key="login_form"):
             pass_input = st.text_input("पासवर्ड दर्ज करें:", type="password", key="global_lock_pwd")
             submit_button = st.form_submit_button("Unlock App", use_container_width=True, type="primary")
@@ -31,15 +30,12 @@ if not st.session_state["app_authenticated"]:
                     st.rerun()
                 else:
                     st.error("❌ गलत पासवर्ड! कृपया सही पासवर्ड दर्ज करें।")
-    
-    # जब तक पासवर्ड सही न हो, आगे का कोड रन न हो
     st.stop()
 
 # ==========================================
 # 🚀 पासवर्ड सही होने के बाद दिखने वाला मुख्य ऐप कोड
 # ==========================================
 
-# 📌 साइडबार प्रोफाइल और CSS स्टाइलिंग
 st.markdown("""
     <style>
         [data-testid="stSidebarCollapseButton"] { display: none !important; }
@@ -69,11 +65,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 🚀 CREATOR / FOUNDER PROFILE SECTION (Sidebar) ---
 with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
-    
-    # यहाँ आपकी फोटो सीधे रेंडर होगी
     try:
         st.image("ck_photo.jpg", use_container_width=True)
     except:
@@ -91,7 +84,6 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # ऐप लॉक आउट बटन (साइडबार में)
     if st.button("🔒 Lock App", use_container_width=True):
         st.session_state["app_authenticated"] = False
         st.rerun()
@@ -108,96 +100,34 @@ SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
 @st.cache_data(show_spinner=False)
 def load_data_from_gsheet():
-    """गूगल शीट से ग्लोबल मास्टर्स और रूल्स को कैच करके लोड करता है"""
+    """सीधे 'Shipper_JSON_Database' शीट से सारा डेटा लोड करता है"""
     shipper_db = {}
     master_rules_template = {}
     
     try:
-        master_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Global_Masters"
-        df_m = pd.read_csv(master_url)
-        if not df_m.empty:
-            df_m.columns = df_m.columns.str.strip()
-            for _, row in df_m.iterrows():
-                if "FieldName" in df_m.columns and pd.notna(row["FieldName"]):
-                    f_name = str(row["FieldName"]).strip()
-                    master_rules_template[f_name] = {
-                        "keyword": row["Keyword"] if "Keyword" in df_m.columns and pd.notna(row["Keyword"]) else "",
-                        "position": row["Position"] if "Position" in df_m.columns and pd.notna(row["Position"]) else "Right (आगे)",
-                        "cell": row["Cell"] if "Cell" in df_m.columns and pd.notna(row["Cell"]) else "",
-                        "match_mode": row["MatchMode"] if "MatchMode" in df_m.columns and pd.notna(row["MatchMode"]) else "Exact Word",
-                        "stop_kw": row["StopKw"] if "StopKw" in df_m.columns and pd.notna(row["StopKw"]) else "",
-                        "filter": row["Filter"] if "Filter" in df_m.columns and pd.notna(row["Filter"]) else "None",
-                        "logic": row["Logic"] if "Logic" in df_m.columns and pd.notna(row["Logic"]) else "None",
-                        "fallback": row["Fallback"] if "Fallback" in df_m.columns and pd.notna(row["Fallback"]) else ""
-                    }
-    except Exception:
-        pass
-
-    try:
-        rules_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Rules"
-        df_rules = pd.read_csv(rules_url)
-        if not df_rules.empty:
-            df_rules.columns = df_rules.columns.str.strip()
-            for _, row in df_rules.iterrows():
-                if "ShipperName" in df_rules.columns and pd.notna(row["ShipperName"]):
+        json_db_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_JSON_Database"
+        df_json = pd.read_csv(json_db_url)
+        if not df_json.empty:
+            df_json.columns = df_json.columns.str.strip()
+            for _, row in df_json.iterrows():
+                if "ShipperName" in df_json.columns and pd.notna(row["ShipperName"]):
                     s_name = str(row["ShipperName"]).strip()
                     if s_name and s_name.lower() != "nan":
-                        if s_name not in shipper_db:
+                        shipper_json_str = row["ShipperJSON"] if "ShipperJSON" in df_json.columns and pd.notna(row["ShipperJSON"]) else "{}"
+                        try:
+                            shipper_db[s_name] = json.loads(shipper_json_str)
+                        except:
                             shipper_db[s_name] = {
-                                "allowed_uploads": ["Full Job Excel Format File"], 
-                                "uploaded_files": {}, 
+                                "allowed_uploads": ["Full Job Excel Format File"],
+                                "uploaded_files": {},
                                 "mapping_rules": {},
                                 "item_table_rules": {},
+                                "item_table_rule_name": "parser_welspun",
                                 "igst_config": {"lut_keywords": "", "paid_keywords": ""}
                             }
-                        
-                        field = str(row["FieldName"]).strip() if "FieldName" in df_rules.columns else None
-                        rule_kind = str(row["RuleKind"]).strip().lower() if "RuleKind" in df_rules.columns and pd.notna(row["RuleKind"]) else "header"
-                        
-                        if field and pd.notna(row["FieldName"]):
-                            if "item" in rule_kind:
-                                shipper_db[s_name].setdefault("item_table_rules", {})[field] = {
-                                    "col": str(row["Cell"]).strip().upper() if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else "K",
-                                    "type": str(row["MatchMode"]).strip() if "MatchMode" in df_rules.columns and pd.notna(row["MatchMode"]) else "PDF Row Item",
-                                    "rule": str(row["Keyword"]).strip() if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else ""
-                                }
-                            elif "igst_config" in rule_kind or field.lower() in ["lut_keywords", "paid_keywords"]:
-                                shipper_db[s_name].setdefault("igst_config", {})[field] = str(row["Keyword"]).strip() if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else ""
-                            else:
-                                shipper_db[s_name].setdefault("mapping_rules", {})[field] = {
-                                    "keyword": row["Keyword"] if "Keyword" in df_rules.columns and pd.notna(row["Keyword"]) else "",
-                                    "position": row["Position"] if "Position" in df_rules.columns and pd.notna(row["Position"]) else "Right (आगे)",
-                                    "cell": row["Cell"] if "Cell" in df_rules.columns and pd.notna(row["Cell"]) else "",
-                                    "match_mode": row["MatchMode"] if "MatchMode" in df_rules.columns and pd.notna(row["MatchMode"]) else "Exact Word",
-                                    "stop_kw": row["StopKw"] if "StopKw" in df_rules.columns and pd.notna(row["StopKw"]) else "",
-                                    "filter": row["Filter"] if "Filter" in df_rules.columns and pd.notna(row["Filter"]) else "None",
-                                    "logic": row["Logic"] if "Logic" in df_rules.columns and pd.notna(row["Logic"]) else "None",
-                                    "fallback": row["Fallback"] if "Fallback" in df_rules.columns and pd.notna(row["Fallback"]) else ""
-                                }
-    except Exception:
-        pass
-
-    try:
-        files_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=Shipper_Files"
-        df_files = pd.read_csv(files_url)
-        if not df_files.empty:
-            df_files.columns = df_files.columns.str.strip()
-            for _, row in df_files.iterrows():
-                if "ShipperName" in df_files.columns and pd.notna(row["ShipperName"]):
-                    s_name = str(row["ShipperName"]).strip()
-                    if s_name not in shipper_db:
-                        shipper_db[s_name] = {
-                            "allowed_uploads": ["Full Job Excel Format File"], 
-                            "uploaded_files": {}, 
-                            "mapping_rules": {},
-                            "item_table_rules": {},
-                            "igst_config": {"lut_keywords": "", "paid_keywords": ""}
-                        }
-                    if "FileBase64" in df_files.columns and pd.notna(row["FileBase64"]):
-                        shipper_db[s_name]["uploaded_files"]["Full Job Excel Format File"] = base64.b64decode(str(row["FileBase64"]).strip())
-    except Exception:
-        pass
-                    
+    except Exception as e:
+        st.error(f"Error loading Shipper_JSON_Database: {e}")
+        
     return shipper_db, master_rules_template
 
 # 🔄 डेटा लोड इंजन
