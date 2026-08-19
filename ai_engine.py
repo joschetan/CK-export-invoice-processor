@@ -93,8 +93,8 @@ def ask_local_ai(messages):
 
     try:
         genai.configure(api_key=api_key)
-        # यहाँ मॉडल का नाम 'gemini-2.0-flash' सेट किया गया है
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        # यहाँ मॉडल को गूगल के नए लेटेस्ट वर्ज़न 'gemini-2.5-flash' पर सेट किया गया है
+        model = genai.GenerativeModel("gemini-2.5-flash")
         
         full_prompt = ""
         if isinstance(messages, list):
