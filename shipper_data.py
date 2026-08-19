@@ -69,7 +69,7 @@ def fetch_data_from_google_sheet():
     load_local_shippers()
     return st.session_state.get("shipper_database", {})
 
-# 🧪 Interactive Test Dialog with Accept / Re-check / Cancel Workflow
+# 🧪 Interactive Test Dialog for Header Fields with Accept / Re-check / Cancel
 @st.dialog("🧪 Live Header Field Test & Verification")
 def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, field_key):
     st.write(f"### 🔍 Header Field: **`{field_name}`**")
@@ -93,30 +93,49 @@ def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, 
     st.write("---")
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     with col_btn1:
-        if st.button("✅ Accept", type="primary", use_container_width=True):
+        if st.button("✅ Accept", type="primary", use_container_width=True, key=f"acc_h_{field_key}"):
             st.success("🎉 Rule Accepted & Saved!")
             save_local_shippers()
             st.rerun()
     with col_btn2:
-        if st.button("🔄 Re-check", use_container_width=True):
+        if st.button("🔄 Re-check", use_container_width=True, key=f"rec_h_{field_key}"):
             st.toast("Re-running AI check...")
             st.rerun()
     with col_btn3:
-        if st.button("❌ Cancel", use_container_width=True):
+        if st.button("❌ Cancel", use_container_width=True, key=f"can_h_{field_key}"):
             st.info("Action cancelled.")
             st.rerun()
 
-@st.dialog("📦 Live Item Table Column Test Result")
-def show_item_test_dialog(item_field, col_name, prompt_val, extracted_rows):
-    st.write(f"### 📦 Item Column: **`{item_field}`** ➡️ Excel Col: **`{col_name}`**")
-    st.markdown(f"* **AI Prompt Instruction:** `{prompt_val}`")
+# 📦 Interactive Test Dialog for Item Table Columns with Accept / Re-check / Cancel
+@st.dialog("📦 Live Item Table Column Test & Verification")
+def show_item_test_dialog(item_field, rule_data, extracted_rows, selected_shipper):
+    st.write(f"### 📦 Item Column: **`{item_field}`** ➡️ Excel Col: **`{rule_data.get('col', 'N/A')}`**")
+    st.markdown(f"* **Source Doc:** `{rule_data.get('logic', 'N/A')}`")
+    st.markdown(f"* **AI Prompt Instruction:** `{rule_data.get('ai_prompt', 'N/A')}`")
+    st.markdown(f"* **Result Example:** `{rule_data.get('result_example', 'N/A')}`")
     st.write("---")
     st.markdown("#### 🎯 Extracted Row-by-Row List:")
     if not extracted_rows:
         st.warning("⚠️ कोई डेटा एक्सट्रैक्ट नहीं हो पाया। कृपया अपना AI प्रॉम्प्ट या Result Example जांचें।")
     else:
         for idx, r_val in enumerate(extracted_rows, start=1):
-            st.markdown(f"**Row {idx} (Col {col_name}):** `{r_val}`")
+            st.markdown(f"**Row {idx} (Col {rule_data.get('col', 'N/A')}):** `{r_val}`")
+            
+    st.write("---")
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
+    with col_btn1:
+        if st.button("✅ Accept", type="primary", use_container_width=True, key=f"acc_i_{item_field}"):
+            st.success("🎉 Item Rule Accepted & Saved!")
+            save_local_shippers()
+            st.rerun()
+    with col_btn2:
+        if st.button("🔄 Re-check", use_container_width=True, key=f"rec_i_{item_field}"):
+            st.toast("Re-running AI check...")
+            st.rerun()
+    with col_btn3:
+        if st.button("❌ Cancel", use_container_width=True, key=f"can_i_{item_field}"):
+            st.info("Action cancelled.")
+            st.rerun()
 
 @st.dialog("➕ Add New Custom Header Field")
 def add_custom_header_field_dialog(selected_shipper):
@@ -217,7 +236,14 @@ def render_shipper_data():
             st.write(f"### ⚙️ प्रोफाइल सेटअप और रूल्स: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
-            # 🧪 2. Instant PDF Upload & Live Data Test Engine
+            current_assigned_parser = shipper_info.get("item_table_rule_name", "parser_welspun")
+            p_idx = available_parsers.index(current_assigned_parser) if current_assigned_parser in available_parsers else 0
+            updated_parser_choice = st.selectbox("📌 इस शिपर के लिए एक्टिव पार्सर रूल (Parser File):", available_parsers, index=p_idx, key=f"sel_parser_{selected_shipper}")
+            shipper_info["item_table_rule_name"] = updated_parser_choice
+            save_local_shippers()
+
+            # 🧪 1. Instant PDF Upload & Live Data Test Engine
+            st.write("---")
             st.subheader("🧪 1. Instant PDF Upload & Live Data Test Engine")
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए सैंपल इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             if test_pdf:
@@ -233,6 +259,7 @@ def render_shipper_data():
                 st.session_state["cached_pdf_text"] = pdf_text
                 st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)।")
 
+            # 🛠️ 2. Header Fields Mapping Rules
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
             with c_title:
@@ -245,7 +272,6 @@ def render_shipper_data():
             updated_rules = {}
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
             
-            # कॉलम स्ट्रक्चर: Field Name, Source Doc, Keyword, Cell, AI Prompt, Result Example, Del, Test
             if current_rules:
                 h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([1.5, 1.2, 1.5, 0.8, 1.8, 1.5, 0.4, 0.7])
                 with h1: st.markdown("**Field Name**")
@@ -303,6 +329,101 @@ def render_shipper_data():
             shipper_info["mapping_rules"] = updated_rules
 
             st.write("---")
-            if st.button("💾 Save Rules Locally & Sync to Sheet", type="primary", use_container_width=True):
+
+            # 🛡️ SECTION 4: COLUMN V AUTO-DETECTION CONFIGURATOR
+            st.subheader("🛡️ Column V Auto-Detection Configurator (LUT vs Paid 'P')")
+            igst_cfg = shipper_info.setdefault("igst_config", {"lut_keywords": "", "paid_keywords": ""})
+            s_lut, s_paid = st.columns(2)
+            with s_lut:
+                s_lut_val = st.text_area("📌 LUT Detection Keywords:", value=igst_cfg.get("lut_keywords", ""), key=f"lut_kw_{selected_shipper}")
+            with s_paid:
+                s_paid_val = st.text_area("📌 Paid (P) Detection Keywords:", value=igst_cfg.get("paid_keywords", ""), key=f"paid_kw_{selected_shipper}")
+            shipper_info["igst_config"] = {"lut_keywords": s_lut_val, "paid_keywords": s_paid_val}
+            
+            st.write("---")
+
+            # 📦 SECTION 5: DYNAMIC ITEM TABLE COLUMN BUILDER (Updated with Source Doc & Result Example)
+            st.subheader("📦 3. Dynamic Item Table Column Builder (Gemini AI-Powered)")
+            st.caption("आइटम टेबल के लिए कॉलम, सोर्स डॉक्यूमेंट, एक्सेल कॉलम, AI निर्देश और उदाहरण यहाँ दर्ज करें:")
+            
+            item_rules = shipper_info.setdefault("item_table_rules", {})
+            updated_item_rules = {}
+            
+            if item_rules:
+                ic1, ic2, ic3, ic4, ic5, ic6, ic7 = st.columns([1.8, 1.2, 0.8, 2.2, 1.5, 0.4, 0.7])
+                with ic1: st.markdown("**Item Field Name**")
+                with ic2: st.markdown("**Source Doc**")
+                with ic3: st.markdown("**Excel Col**")
+                with ic4: st.markdown("**🤖 AI Table Prompt**")
+                with ic5: st.markdown("**Result Example**")
+                with ic6: st.markdown("**Del**")
+                with ic7: st.markdown("**Test**")
+            
+            for item_field in list(item_rules.keys()):
+                ir = item_rules[item_field]
+                ic1, ic2, ic3, ic4, ic5, ic6, ic7 = st.columns([1.8, 1.2, 0.8, 2.2, 1.5, 0.4, 0.7])
+                
+                with ic1: ie_field = st.text_input(f"if_{selected_shipper}_{item_field}", value=item_field, label_visibility="collapsed")
+                with ic2: ie_logic = st.selectbox(f"ilogic_{selected_shipper}_{item_field}", doc_source_options, index=doc_source_options.index(ir.get("logic", doc_source_options[0])) if ir.get("logic") in doc_source_options else 0, label_visibility="collapsed")
+                with ic3: ie_col = st.text_input(f"ic_{selected_shipper}_{item_field}", value=ir.get("col", "K"), label_visibility="collapsed").upper()
+                with ic4: ie_prompt = st.text_input(f"ip_{selected_shipper}_{item_field}", value=ir.get("ai_prompt", ir.get("rule", "")), placeholder="उदा: हर row से HS Code लो", label_visibility="collapsed")
+                with ic5: ie_ex = st.text_input(f"iex_{selected_shipper}_{item_field}", value=ir.get("result_example", ""), placeholder="उदा: 8504, 8507", label_visibility="collapsed")
+                
+                with ic6:
+                    if st.button("🗑️", key=f"idel_{selected_shipper}_{item_field}"):
+                        del shipper_info["item_table_rules"][item_field]
+                        save_local_shippers()
+                        st.rerun()
+                with ic7:
+                    if st.button("⚡ Test", key=f"test_item_btn_{item_field}"):
+                        curr_pdf_text = st.session_state.get("cached_pdf_text", "")
+                        if not curr_pdf_text:
+                            st.toast("⚠️ पहले ऊपर PDF अपलोड करें!")
+                        else:
+                            with st.spinner("Gemini AI असली PDF से आइटम्स की लिस्ट निकाल रहा है..."):
+                                table_extraction_prompt = [
+                                    {"role": "system", "content": "You are an expert Indian Customs invoice item table extraction AI."},
+                                    {"role": "user", "content": f"""
+                                    Here is the extracted invoice text:
+                                    ----------------------------------
+                                    {curr_pdf_text[:4000]}
+                                    ----------------------------------
+                                    
+                                    Field Name: '{ie_field}'
+                                    Prompt Instruction: '{ie_prompt}'
+                                    Result Example expected: '{ie_ex}'
+                                    
+                                    Task: Extract the list of values for '{ie_field}' row-by-row based on the instruction and example.
+                                    Return ONLY a valid JSON list of strings (e.g., ["val1", "val2", "val3"]). No extra text.
+                                    """}
+                                ]
+                                ai_res = ask_local_ai(table_extraction_prompt)
+                                extracted_list = []
+                                try:
+                                    import re
+                                    json_match = re.search(r'\[(.*?)\]', ai_res, re.DOTALL)
+                                    if json_match:
+                                        extracted_list = json.loads(json_match.group(0))
+                                    else:
+                                        extracted_list = [line.strip() for line in ai_res.split('\n') if line.strip()]
+                                except:
+                                    extracted_list = [ai_res]
+                                    
+                                show_item_test_dialog(ie_field, {"col": ie_col, "logic": ie_logic, "ai_prompt": ie_prompt, "result_example": ie_ex}, extracted_list, selected_shipper)
+                        
+                updated_item_rules[ie_field] = {
+                    "col": ie_col, "logic": ie_logic, "ai_prompt": ie_prompt, "result_example": ie_ex, "type": "PDF Row Item", "rule": ie_prompt
+                }
+                
+            shipper_info["item_table_rules"] = updated_item_rules
+            
+            if st.button("➕ Add Item Column", key=f"add_item_col_{selected_shipper}", type="secondary"):
+                shipper_info["item_table_rules"]["New Item Field"] = {"col": "K", "logic": "Main Invoice", "ai_prompt": "", "result_example": "", "type": "PDF Row Item", "rule": ""}
                 save_local_shippers()
-                st.success("🎉 सारे रूल्स सफलतापूर्वक सेव और सिंक हो गए हैं!")
+                st.rerun()
+                
+            st.write("---")
+
+            if st.button("💾 Save Rules Locally & Sync to Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
+                save_local_shippers()
+                st.success("🎉 आपके सारे रूल्स और सेटिंग्स सफलतापूर्वक सेव और सिंक हो गए हैं!")
