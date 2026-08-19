@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import google.generativeai as genai
 import requests
 
@@ -44,6 +45,44 @@ def push_all_to_sheet(shippers_json_payload):
         return False
     except Exception:
         return False
+
+def create_new_parser_file_on_github(parser_name, github_token, repo_owner="apna_github_username", repo_name="ck-export-invoice-processor"):
+    """
+    GitHub API का उपयोग करके सीधे रिपॉजिटरी में एक नई ब्लैंक पार्सर फाइल (.py) क्रिएट करता है।
+    """
+    clean_name = str(parser_name).strip().lower()
+    if not clean_name.endswith(".py"):
+        clean_name += ".py"
+    if not clean_name.startswith("parser_"):
+        clean_name = f"parser_{clean_name}"
+        
+    file_path = clean_name  # रिपॉजिटरी में फाइल का नाम
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{file_path}"
+    
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    # इनिशियल ब्लैंक कॉर्ड स्ट्रक्चर
+    initial_content = f"# Parser Rule File: {file_path}\n# Created automatically by CK Export Invoice Pro\n\n"
+    encoded_content = base64.b64encode(initial_content.encode('utf-8')).decode('utf-8')
+    
+    payload = {
+        "message": f"Create new parser rule file: {file_path}",
+        "content": encoded_content,
+        "branch": "main"
+    }
+    
+    try:
+        response = requests.put(url, headers=headers, json=payload)
+        if response.status_code in [201, 200]:
+            return True, f"सफलता! फाइल '{file_path}' GitHub पर बन गई है।"
+        else:
+            err_msg = response.json().get('message', 'Unknown error')
+            return False, f"GitHub Error: {err_msg}"
+    except Exception as e:
+        return False, f"Connection Error: {str(e)}"
 
 def ask_local_ai(messages):
     """
