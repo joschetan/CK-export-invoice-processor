@@ -1,9 +1,11 @@
 import os
 import json
 import google.generativeai as genai
+import requests
 
 CONFIG_DIR = "local_shipper_data"
 CONFIG_FILE = os.path.join(CONFIG_DIR, "gemini_config.json")
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 
 def ensure_config_dir():
     if not os.path.exists(CONFIG_DIR):
@@ -28,6 +30,20 @@ def load_gemini_api_key():
         except:
             pass
     return ""
+
+def push_all_to_sheet(shippers_json_payload):
+    """शिपर का डेटा और रूल्स गूगल शीट (Shipper_JSON_Database) पर सेव करने के लिए"""
+    try:
+        payload = {
+            "action": "save_shipper_json",
+            "shippers_data": shippers_json_payload
+        }
+        response = requests.post(WEB_APP_URL, data=json.dumps(payload), timeout=120)
+        if response.status_code == 200:
+            return True
+        return False
+    except Exception:
+        return False
 
 def ask_local_ai(messages):
     """
