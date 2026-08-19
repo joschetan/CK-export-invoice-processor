@@ -7,7 +7,8 @@ from io import BytesIO
 
 from pdf_engine import detect_igst_status
 from test_suite import render_universal_test_suite
-from ai_engine import ask_local_ai, save_gemini_api_key, load_gemini_api_key, push_all_to_sheet, create_new_parser_file_on_github
+from ai_engine import ask_local_ai, save_gemini_api_key, load_gemini_api_key, push_all_to_sheet, create_new_parser_file_on_github, WEB_APP_URL
+import requests
 
 LOCAL_DATA_DIR = "local_shipper_data"
 TEMPLATES_DIR = os.path.join(LOCAL_DATA_DIR, "templates")
@@ -18,15 +19,29 @@ def ensure_local_directories():
     if not os.path.exists(TEMPLATES_DIR):
         os.makedirs(TEMPLATES_DIR)
 
+# 🌐 Google Sheet से डेटा फेच (Fetch) करने का फंक्शन
+def fetch_data_from_google_sheet():
+    try:
+        response = requests.get(WEB_APP_URL, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, dict) and data:
+                return data
+    except Exception as e:
+        pass
+    return {}
+
 def save_local_shippers():
     ensure_local_directories()
     json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
     try:
+        # लोकल फाइल में भी सेव करें (बैकअप के लिए)
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(st.session_state["shipper_database"], f, indent=4)
+        # 🌐 मुख्य रूप से Google Sheet पर सिंक (Push) करें
         push_all_to_sheet(st.session_state["shipper_database"])
     except Exception as e:
-        st.error(f"लोकल सेव करने में एरर: {str(e)}")
+        st.error(f"सेव करने में एरर: {str(e)}")
 
 def get_safe_filename(shipper_name):
     return "".join([c if c.isalnum() else "_" for c in str(shipper_name)]).strip("_")
@@ -49,27 +64,31 @@ def check_template_exists(selected_shipper):
     file_path = os.path.join(TEMPLATES_DIR, f"{safe_name}_template.xlsx")
     return os.path.exists(file_path)
 
+# 🌐 डेटा लोड करने का स्मार्ट तरीका: पहले Google Sheet से, फिर लोकल बैकअप से
 def load_local_shippers():
     ensure_local_directories()
-    json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
+    
     if "shipper_database" not in st.session_state or not st.session_state["shipper_database"]:
-        if os.path.exists(json_path):
-            try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    saved_data = json.load(f)
-                    if isinstance(saved_data, dict) and saved_data:
-                        st.session_state["shipper_database"] = saved_data
-            except Exception:
-                pass
+        # 1. पहले Google Sheet से फेच करने की कोशिश करें
+        sheet_data = fetch_data_from_google_sheet()
+        if sheet_data:
+            st.session_state["shipper_database"] = sheet_data
+        else:
+            # 2. अगर शीट से न मिले, तो लोकल बैकअप फाइल चेक करें
+            json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        saved_data = json.load(f)
+                        if isinstance(saved_data, dict) and saved_data:
+                            st.session_state["shipper_database"] = saved_data
+                except Exception:
+                    pass
 
 def ensure_default_shipper():
     load_local_shippers()
 
-def fetch_data_from_google_sheet():
-    load_local_shippers()
-    return st.session_state.get("shipper_database", {})
-
-# 🧪 Interactive Test Dialog for Header Fields with Accept / Re-check / Cancel
+# 🧪 Interactive Test Dialog for Header Fields
 @st.dialog("🧪 Live Header Field Test & Verification")
 def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, field_key):
     st.write(f"### 🔍 Header Field: **`{field_name}`**")
@@ -94,7 +113,7 @@ def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, 
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     with col_btn1:
         if st.button("✅ Accept", type="primary", use_container_width=True, key=f"acc_h_{field_key}"):
-            st.success("🎉 Rule Accepted & Saved!")
+            st.success("🎉 Rule Accepted & Saved to Google Sheet!")
             save_local_shippers()
             st.rerun()
     with col_btn2:
@@ -106,7 +125,7 @@ def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, 
             st.info("Action cancelled.")
             st.rerun()
 
-# 📦 Interactive Test Dialog for Item Table Columns with Accept / Re-check / Cancel
+# 📦 Interactive Test Dialog for Item Table Columns
 @st.dialog("📦 Live Item Table Column Test & Verification")
 def show_item_test_dialog(item_field, rule_data, extracted_rows, selected_shipper):
     st.write(f"### 📦 Item Column: **`{item_field}`** ➡️ Excel Col: **`{rule_data.get('col', 'N/A')}`**")
@@ -125,7 +144,7 @@ def show_item_test_dialog(item_field, rule_data, extracted_rows, selected_shippe
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     with col_btn1:
         if st.button("✅ Accept", type="primary", use_container_width=True, key=f"acc_i_{item_field}"):
-            st.success("🎉 Item Rule Accepted & Saved!")
+            st.success("🎉 Item Rule Accepted & Saved to Google Sheet!")
             save_local_shippers()
             st.rerun()
     with col_btn2:
@@ -154,14 +173,14 @@ def add_custom_header_field_dialog(selected_shipper):
                 "logic": doc_source, "keyword": "", "cell": "", "ai_prompt": "", "result_example": ""
             }
             save_local_shippers()
-            st.success(f"🎉 फ़ील्ड '{new_field}' जुड़ गया!")
+            st.success(f"🎉 फ़ील्ड '{new_field}' गूगल शीट पर सिंक हो गया!")
             st.rerun()
 
 def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & AI-Powered Mapping Builder")
-    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन।")
+    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)।")
     
     # 🔑 Gemini API Key Box
     with st.expander("🔑 Gemini API Key Settings", expanded=False):
@@ -224,7 +243,7 @@ def render_shipper_data():
                         "igst_config": {"lut_keywords": "", "paid_keywords": ""}
                     }
                     save_local_shippers()
-                    st.success(f"🎉 नया शिपर '{s_clean}' सफलतापूर्वक जुड़ गया है!")
+                    st.success(f"🎉 नया शिपर '{s_clean}' गूगल शीट पर सफलतापर्वक जुड़ गया है!")
                     st.rerun()
                 else:
                     st.warning("⚠️ यह शिपर पहले से मौजूद है!")
@@ -242,9 +261,42 @@ def render_shipper_data():
             shipper_info["item_table_rule_name"] = updated_parser_choice
             save_local_shippers()
 
-            # 🧪 1. Instant PDF Upload & Live Data Test Engine
+            # 📁 1. टेम्पलेट फ़ाइल अपलोड (Local Excel Template) - FIXED & RESTORED
             st.write("---")
-            st.subheader("🧪 1. Instant PDF Upload & Live Data Test Engine")
+            st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड (Full Job Excel Template)")
+            has_saved_template = check_template_exists(selected_shipper)
+            
+            if has_saved_template:
+                st.success(f"✅ 'Full Job Excel Format File (Template)' अपलोडेड और सुरक्षित है।")
+                col_rep, col_del = st.columns([3, 1])
+                with col_rep:
+                    f_replace = st.file_uploader("🔄 Replace Template (नई एक्सेल फाइल चुनें):", type=["xlsx", "xls"], key=f"repl_tpl_{selected_shipper}")
+                    if f_replace is not None:
+                        if st.button("🚀 Confirm & Replace", type="primary", key=f"btn_repl_{selected_shipper}"):
+                            if save_local_template_file(selected_shipper, f_replace):
+                                st.success("🎉 टेम्पलेट सफलतापूर्वक रिप्लेस हो गई!")
+                                st.rerun()
+                with col_del:
+                    st.write("##") 
+                    if st.button("🗑️ Delete Template", type="secondary", use_container_width=True, key=f"btn_del_tpl_{selected_shipper}"):
+                        safe_name = get_safe_filename(selected_shipper)
+                        file_path = os.path.join(TEMPLATES_DIR, f"{safe_name}_template.xlsx")
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                            st.success("🗑️ टेम्पलेट डिलीट हो गई!")
+                            st.rerun()
+            else:
+                st.info("ℹ️ इस शिपर के लिए अभी कोई टेम्पलेट अपलोड नहीं की गई है।")
+                f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) चुनें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
+                if f_upload is not None:
+                    if st.button("🚀 Save Template Locally", type="primary", use_container_width=True, key=f"btn_upload_tpl_{selected_shipper}"):
+                        if save_local_template_file(selected_shipper, f_upload):
+                            st.success("🎉 टेम्पलेट एक्सेल फाइल सफलतापर्वक सेव हो गई!")
+                            st.rerun()
+
+            # 🧪 2. Instant PDF Upload & Live Data Test Engine
+            st.write("---")
+            st.subheader("🧪 2. Instant PDF Upload & Live Data Test Engine")
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए सैंपल इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             if test_pdf:
                 st.session_state["cached_pdf_bytes"] = test_pdf.getvalue()
@@ -259,11 +311,11 @@ def render_shipper_data():
                 st.session_state["cached_pdf_text"] = pdf_text
                 st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)।")
 
-            # 🛠️ 2. Header Fields Mapping Rules
+            # 🛠️ 3. Header Fields Mapping Rules
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
             with c_title:
-                st.subheader("🛠️ 2. Header Fields Mapping Rules (Gemini AI-Powered)")
+                st.subheader("🛠️ 3. Header Fields Mapping Rules (Gemini AI-Powered)")
             with c_add_h:
                 if st.button("➕ Add Header Field", type="secondary", use_container_width=True):
                     add_custom_header_field_dialog(selected_shipper)
@@ -342,8 +394,8 @@ def render_shipper_data():
             
             st.write("---")
 
-            # 📦 SECTION 5: DYNAMIC ITEM TABLE COLUMN BUILDER (Updated with Source Doc & Result Example)
-            st.subheader("📦 3. Dynamic Item Table Column Builder (Gemini AI-Powered)")
+            # 📦 SECTION 5: DYNAMIC ITEM TABLE COLUMN BUILDER
+            st.subheader("📦 4. Dynamic Item Table Column Builder (Gemini AI-Powered)")
             st.caption("आइटम टेबल के लिए कॉलम, सोर्स डॉक्यूमेंट, एक्सेल कॉलम, AI निर्देश और उदाहरण यहाँ दर्ज करें:")
             
             item_rules = shipper_info.setdefault("item_table_rules", {})
@@ -424,6 +476,6 @@ def render_shipper_data():
                 
             st.write("---")
 
-            if st.button("💾 Save Rules Locally & Sync to Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
+            if st.button("💾 Save Rules Locally & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स और सेटिंग्स सफलतापूर्वक सेव और सिंक हो गए हैं!")
+                st.success("🎉 आपके सारे रूल्स और सेटिंग्स सफलतापूर्वक गूगल शीट पर सेव और सिंक हो गए हैं!")
