@@ -84,10 +84,10 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # 💱 Sidebar Exchange Rates Widget (Left Side, Clean & Compact)
+    # 💱 Sidebar Exchange Rates Widget (Left Side, Clean & Safe)
     st.markdown("### 💱 Customs Exchange Rates")
     
-    if "exchange_rates" not in st.session_state:
+    if "exchange_rates" not in st.session_state or not isinstance(st.session_state["exchange_rates"], dict):
         st.session_state["exchange_rates"] = {
             "date": "21-08-2026",
             "rates": {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"},
@@ -95,7 +95,11 @@ with st.sidebar:
         }
         
     ex_data = st.session_state["exchange_rates"]
-    st.markdown(f"<p style='font-size: 12px; color: #00cec9; margin-bottom: 5px;'>📅 <b>Effective Date (w.e.f):</b> {ex_data['date']}</p>", unsafe_allow_html=True)
+    if "date" not in ex_data: ex_data["date"] = "21-08-2026"
+    if "rates" not in ex_data: ex_data["rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
+    if "all_rates" not in ex_data: ex_data["all_rates"] = {}
+    
+    st.markdown(f"<p style='font-size: 12px; color: #00cec9; margin-bottom: 5px;'>📅 <b>Effective Date (w.e.f):</b> {ex_data.get('date', 'N/A')}</p>", unsafe_allow_html=True)
     
     # PDF Uploader in Sidebar to replace rates
     ex_pdf = st.file_uploader("➡️ Upload Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
@@ -139,7 +143,7 @@ with st.sidebar:
         except Exception as e:
             st.error(f"एरर: {str(e)}")
 
-    # Always Visible EUR, GBP, USD Export Rates (Compact Sidebar view)
+    # Always Visible EUR, GBP, USD Export Rates
     r = ex_data["rates"]
     col_e, col_g, col_u = st.columns(3)
     with col_e: st.metric(label="EUR", value=r.get("EUR", "109.8"))
