@@ -86,15 +86,15 @@ with st.sidebar:
     if "rates" not in ex_data: ex_data["rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
     if "all_rates" not in ex_data: ex_data["all_rates"] = {}
 
-    # 1. Display EUR, GBP, USD First
+    # 1. Display EUR, GBP, USD First (Perfect original fonts)
     r = ex_data["rates"]
     col_e, col_g, col_u = st.columns(3)
     with col_e: st.metric(label="EUR", value=r.get("EUR", "109.8"))
     with col_g: st.metric(label="GBP", value=r.get("GBP", "128.15"))
     with col_u: st.metric(label="USD", value=r.get("USD", "94.8"))
 
-    # 2. Display Effective Date (w.e.f) right below the 3 currencies
-    st.markdown(f"<p style='font-size: 13px; color: #00cec9; text-align: center; margin-top: 4px; margin-bottom: 4px;'>📅 <b>w.e.f:</b> {ex_data.get('date', 'N/A')}</p>", unsafe_allow_html=True)
+    # 2. Display Effective Date right below currencies with a larger font size
+    st.markdown(f"<div style='text-align: center; margin-top: 6px; margin-bottom: 10px;'><span style='font-size: 14px; font-weight: bold; color: #00cec9; background: rgba(0,206,201,0.1); padding: 4px 10px; border-radius: 6px;'>📅 w.e.f: {ex_data.get('date', 'N/A')}</span></div>", unsafe_allow_html=True)
 
     # Creator Card Profile
     st.markdown("""
