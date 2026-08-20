@@ -1,6 +1,6 @@
 import streamlit as st
 
-# 📌 1. मुख्य पेज कॉन्फ़िगरेशन
+# 📌 1. Mukhya Page Configuration
 st.set_page_config(
     page_title="CK Export Invoice Processor Pro", 
     page_icon="🚢",
@@ -8,20 +8,20 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 📌 2. सेशन स्टेट इनिशियलाइज़ेशन (ग्लोबल ऐप लॉक के लिए)
+# 📌 2. Session State Initialization (Global App Lock ke liye)
 if "app_authenticated" not in st.session_state:
     st.session_state["app_authenticated"] = False
 
-# 🔒 यदि ऐप अनलॉक नहीं है, तो पहले पासवर्ड स्क्रीन दिखाएँ
+# 🔒 Agar app unlock nahi hai, toh pehle password screen dikhayein
 if not st.session_state["app_authenticated"]:
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.markdown("<h2 style='text-align: center;'>🚢 CK Export Invoice Prjocessor Pro</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: gray;'>कृपया आगे बढ़ने के लिए ऐप का पासवर्ड दर्ज करें।</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: gray;'>Kripya aage badhne ke liye app ka password darj karein.</p>", unsafe_allow_html=True)
         
         with st.form(key="login_form"):
-            pass_input = st.text_input("पासवर्ड दर्ज करें:", type="password", key="global_lock_pwd")
+            pass_input = st.text_input("Password darj karein:", type="password", key="global_lock_pwd")
             submit_button = st.form_submit_button("Unlock App", use_container_width=True, type="primary")
             
             if submit_button:
@@ -29,11 +29,11 @@ if not st.session_state["app_authenticated"]:
                     st.session_state["app_authenticated"] = True
                     st.rerun()
                 else:
-                    st.error("❌ गलत पासवर्ड! कृपया सही पासवर्ड दर्ज करें।")
+                    st.error("❌ Galat password! Kripya sahi password darj karein.")
     st.stop()
 
 # ==========================================
-# 🚀 पासवर्ड सही होने के बाद दिखने वाला मुख्य ऐप कोड
+# 🚀 Password sahi hone ke baad dikhne wala main app code
 # ==========================================
 
 st.markdown("""
@@ -63,19 +63,26 @@ st.markdown("""
             text-transform: uppercase;
             font-weight: 600;
         }
+        /* Exchange rates (metrics) ke font ko chhota karne ke liye */
+        [data-testid="stMetricValue"] {
+            font-size: 18px !important;
+        }
+        [data-testid="stMetricLabel"] {
+            font-size: 12px !important;
+        }
     </style>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
     
-    # 1. सबसे ऊपर: फोटो (Photo)
+    # 1. Sabse upar: Photo
     try:
         st.image("ck_photo.jpg", use_container_width=True)
     except:
         st.info("Photo loading...")
         
-    # 2. उसके नीचे: Chetan Joshi वाला ब्लू प्रोफाइल कार्ड
+    # 2. Uske niche: Chetan Joshi wala blue profile card
     st.markdown("""
         <div class="creator-card">
             <div class="creator-name">Chetan Joshi</div>
@@ -101,17 +108,17 @@ with st.sidebar:
     if "rates" not in ex_data: ex_data["rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
     if "all_rates" not in ex_data: ex_data["all_rates"] = {}
 
-    # 3. उसके नीचे: तीन करेंसियाँ (EUR, GBP, USD) अपने ओरिजिनल परफेक्ट फॉन्ट में
+    # 3. Uske niche: Teen currencies (EUR, GBP, USD) chote font mein
     r = ex_data["rates"]
     col_e, col_g, col_u = st.columns(3)
     with col_e: st.metric(label="EUR", value=r.get("EUR", "109.8"))
     with col_g: st.metric(label="GBP", value=r.get("GBP", "128.15"))
     with col_u: st.metric(label="USD", value=r.get("USD", "94.8"))
 
-    # 4. उसके नीचे: छोटे फॉन्ट में Effective Date (w.e.f: 21-08-2026)
-    st.markdown(f"<div style='text-align: center; margin-top: 4px; margin-bottom: 8px;'><span style='font-size: 11px; color: #00cec9;'>📅 w.e.f: {ex_data.get('date', 'N/A')}</span></div>", unsafe_allow_html=True)
+    # 4. Uske niche: Bohat Badi Size mein Effective Date (w.e.f: 21-08-2026)
+    st.markdown(f"<div style='text-align: center; margin-top: 10px; margin-bottom: 12px;'><span style='font-size: 20px; font-weight: 800; color: #00cec9; background: rgba(0, 206, 201, 0.1); padding: 4px 10px; border-radius: 6px; display: inline-block;'>📅 w.e.f: {ex_data.get('date', 'N/A')}</span></div>", unsafe_allow_html=True)
 
-    # 5. उसके नीचे: Customs Exchange Rates हेडिंग और PDF अपलोडर
+    # 5. Uske niche: Customs Exchange Rates heading aur PDF uploader
     st.markdown("##### 💱 Customs Exchange Rates")
     ex_pdf = st.file_uploader("➡️ Upload Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
     if ex_pdf is not None:
@@ -146,11 +153,11 @@ with st.sidebar:
                 for c in ["EUR", "GBP", "USD"]:
                     if c in all_parsed:
                         ex_data["rates"][c] = all_parsed[c]
-                st.success(f"🎉 रेट्स अपडेट (w.e.f {ex_data['date']})!")
+                st.success(f"🎉 Rates update ho gaye (w.e.f {ex_data['date']})!")
             else:
-                st.warning("⚠️ PDF से डेटा नहीं पढ़ा जा सका!")
+                st.warning("⚠️ PDF se data nahi padha ja saka!")
         except Exception as e:
-            st.error(f"एरर: {str(e)}")
+            st.error(f"Error: {str(e)}")
 
     # Expander to view all other currency rates
     if ex_data["all_rates"]:
@@ -176,7 +183,7 @@ SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
 @st.cache_data(show_spinner=False)
 def load_data_from_gsheet():
-    """सीधे 'Shipper_JSON_Database' शीट से सारा डेटा लोड करता है"""
+    """Sidhe 'Shipper_JSON_Database' sheet se sara data load karta hai"""
     shipper_db = {}
     master_rules_template = {}
     
@@ -206,7 +213,7 @@ def load_data_from_gsheet():
         
     return shipper_db, master_rules_template
 
-# 🔄 डेटा लोड इंजन
+# 🔄 Data load engine
 if "shipper_database" not in st.session_state or "master_rules_template" not in st.session_state:
     db, m_template = load_data_from_gsheet()
     st.session_state["shipper_database"] = db
@@ -231,7 +238,7 @@ if st.session_state["admin_authenticated"]:
     st.write("---")
     
     sub_menu = st.radio(
-        "📋 एडमिन सेटिंग्स चुनें:", 
+        "📋 Admin settings chunein:", 
         ["i. 🏢 Add Shipper Name & Setup", "iii. 🌍 Global Masters & Common Dictionaries"],
         horizontal=True
     )
@@ -258,10 +265,10 @@ else:
         st.write("---")
         
         with st.expander("🛠️ Admin Settings Access"):
-            pwd = st.text_input("एडमिन पासवर्ड दर्ज करें:", type="password", key="main_admin_pwd")
-            if st.button("लॉगिन करें"):
+            pwd = st.text_input("Admin password darj karein:", type="password", key="main_admin_pwd")
+            if st.button("Login Karein"):
                 if pwd == "TEST":
                     st.session_state["admin_authenticated"] = True
                     st.rerun()
                 else:
-                    st.error("गलत पासवर्ड!")
+                    st.error("Galat password!")
