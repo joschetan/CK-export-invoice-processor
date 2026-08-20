@@ -63,7 +63,6 @@ st.markdown("""
             text-transform: uppercase;
             font-weight: 600;
         }
-        /* Exchange rates (metrics) ke font ko chhota karne ke liye */
         [data-testid="stMetricValue"] {
             font-size: 18px !important;
         }
@@ -115,7 +114,7 @@ with st.sidebar:
     with col_g: st.metric(label="GBP", value=r.get("GBP", "128.15"))
     with col_u: st.metric(label="USD", value=r.get("USD", "94.8"))
 
-    # 4. Uske niche: Bohat Badi Size mein Effective Date (w.e.f: 21-08-2026)
+    # 4. Uske niche: Bohat Badi Size mein Effective Date (w.e.f)
     st.markdown(f"<div style='text-align: center; margin-top: 10px; margin-bottom: 12px;'><span style='font-size: 20px; font-weight: 800; color: #00cec9; background: rgba(0, 206, 201, 0.1); padding: 4px 10px; border-radius: 6px; display: inline-block;'>📅 w.e.f: {ex_data.get('date', 'N/A')}</span></div>", unsafe_allow_html=True)
 
     # 5. Uske niche: Customs Exchange Rates heading aur PDF uploader
@@ -131,9 +130,13 @@ with st.sidebar:
                     t = page.extract_text()
                     if t: text += t + "\n"
             
-            date_match = re.search(r"w\.e\.f\s*([\d\-\/]+)", text, re.IGNORECASE)
+            # Extract Effective Date correctly
+            date_match = re.search(r"w\.e\.f[\s\.:]*([\d]{2}[\-\/][\d]{2}[\-\/][\d]{4})", text, re.IGNORECASE)
+            if not date_match:
+                date_match = re.search(r"w\.e\.f[\s\.:]*([0-9A-Za-z\-]+)", text, re.IGNORECASE)
+                
             if date_match:
-                ex_data["date"] = date_match.group(1)
+                ex_data["date"] = date_match.group(1).strip()
                 
             lines = text.split("\n")
             all_parsed = {}
@@ -154,6 +157,7 @@ with st.sidebar:
                     if c in all_parsed:
                         ex_data["rates"][c] = all_parsed[c]
                 st.success(f"🎉 Rates update ho gaye (w.e.f {ex_data['date']})!")
+                st.rerun()
             else:
                 st.warning("⚠️ PDF se data nahi padha ja saka!")
         except Exception as e:
