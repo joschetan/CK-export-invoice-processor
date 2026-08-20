@@ -25,6 +25,9 @@ def fetch_all_from_sheet_app():
         pass
     return {}
 
+def clear_app_cache():
+    fetch_all_from_sheet_app.clear()
+
 def save_exchange_rates_to_sheet(ex_data):
     try:
         payload = {
@@ -32,7 +35,10 @@ def save_exchange_rates_to_sheet(ex_data):
             "exchange_data": ex_data
         }
         res = requests.post(WEB_APP_URL, data=json.dumps(payload), timeout=30)
-        return res.status_code == 200
+        if res.status_code == 200:
+            clear_app_cache()
+            return True
+        return False
     except Exception:
         return False
 
@@ -122,7 +128,7 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
-    # Session State & Google Sheet Fetch for Exchange Rates (Load once)
+    # Session State & Google Sheet Fetch for Exchange Rates (Always syncs with Sheet)
     if "exchange_rates" not in st.session_state or not isinstance(st.session_state["exchange_rates"], dict):
         sheet_full_data = fetch_all_from_sheet_app()
         sheet_ex = sheet_full_data.get("exchange_rates", None) if isinstance(sheet_full_data, dict) else None
@@ -154,13 +160,11 @@ with st.sidebar:
     # 5. Uske niche: Customs Exchange Rates heading aur PDF uploader
     st.markdown("##### 💱 Customs Exchange Rates")
     
-    # Track uploaded file ID to prevent infinite loops
     if "processed_ex_file_id" not in st.session_state:
         st.session_state["processed_ex_file_id"] = None
 
     ex_pdf = st.file_uploader("➡️ Upload Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
     if ex_pdf is not None:
-        # Check if this exact file was already processed
         file_signature = f"{ex_pdf.name}_{ex_pdf.size}"
         if st.session_state["processed_ex_file_id"] != file_signature:
             import pdfplumber
@@ -198,14 +202,14 @@ with st.sidebar:
                         if c in all_parsed:
                             ex_data["rates"][c] = all_parsed[c]
                     
-                    # Save to Google Sheet permanently and mark file as processed
+                    # Save to Google Sheet permanently and clear cache
                     save_exchange_rates_to_sheet(ex_data)
                     st.session_state["processed_ex_file_id"] = file_signature
                     
-                    st.success(f"🎉 Rates update & saved to Sheet (w.e.f {ex_data['date']})!")
+                    st.success(f"🎉 Rates updated & saved to Sheet (w.e.f {ex_data['date']})!")
                     st.rerun()
                 else:
-                    st.warning("⚠️ PDF से data nahi padha ja saka!")
+                    st.warning("⚠️ PDF se data nahi padha ja saka!")
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
