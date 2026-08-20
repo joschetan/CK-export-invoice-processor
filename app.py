@@ -84,6 +84,45 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
+    # 💱 Customs Exchange Rate Widget (EUR, GBP, USD Export Rates)
+    st.markdown("### 💱 Customs Exchange Rates")
+    if "exchange_rates" not in st.session_state:
+        st.session_state["exchange_rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
+        
+    with st.expander("📉 View / Update Exchange Rates", expanded=False):
+        ex_pdf = st.file_uploader("➡️ Upload Exchange Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
+        if ex_pdf is not None:
+            import pdfplumber
+            import re
+            try:
+                with pdfplumber.open(ex_pdf) as pdf:
+                    text = ""
+                    for page in pdf.pages:
+                        t = page.extract_text()
+                        if t: text += t + "\n"
+                
+                extracted_rates = {}
+                for curr in ["EUR", "GBP", "USD"]:
+                    pattern = rf"{curr}\s+[A-Za-z\s]+\s+[\d\.]+\s+[\d\.]+\s+([\d\.]+)"
+                    match = re.search(pattern, text)
+                    if match:
+                        extracted_rates[curr] = match.group(1)
+                
+                if extracted_rates:
+                    st.session_state["exchange_rates"].update(extracted_rates)
+                    st.success("🎉 एक्सचेंज रेट अपडेट हो गए!")
+                else:
+                    st.warning("⚠️ PDF से रेट्स मैच नहीं हुए!")
+            except Exception as e:
+                st.error(f"एरर: {str(e)}")
+                
+        rates = st.session_state["exchange_rates"]
+        st.metric(label="🇪🇺 EUR (Export)", value=rates.get("EUR", "109.8"))
+        st.metric(label="🇬🇧 GBP (Export)", value=rates.get("GBP", "128.15"))
+        st.metric(label="🇺🇸 USD (Export)", value=rates.get("USD", "94.8"))
+
+    st.markdown("---")
+    
     if st.button("🔒 Lock App", use_container_width=True):
         st.session_state["app_authenticated"] = False
         st.rerun()
