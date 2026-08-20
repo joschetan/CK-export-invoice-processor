@@ -42,21 +42,21 @@ st.markdown("""
         [data-testid="stSidebarCollapsedControl"] { display: none !important; }
         .creator-card {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            padding: 15px;
-            border-radius: 12px;
+            padding: 12px;
+            border-radius: 10px;
             color: white;
             text-align: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
         .creator-name {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
-            margin-top: 8px;
+            margin-top: 6px;
             margin-bottom: 2px;
         }
         .creator-title {
-            font-size: 12px;
+            font-size: 11px;
             color: #d1d8e0;
             letter-spacing: 1px;
             text-transform: uppercase;
@@ -76,13 +76,83 @@ with st.sidebar:
         <div class="creator-card">
             <div class="creator-name">Chetan Joshi</div>
             <div class="creator-title">📞 +91 98253 06898</div>
-            <hr style="border-color: rgba(255,255,255,0.2); margin: 8px 0;">
-            <p style='font-size: 11px; color: #f1f2f6; margin: 0;'>
+            <hr style="border-color: rgba(255,255,255,0.2); margin: 6px 0;">
+            <p style='font-size: 10px; color: #f1f2f6; margin: 0;'>
                 <b>CK Export Invoice Pro v2.0</b><br>
-                Engineered for Enterprise Automation & Precision.
+                Enterprise Automation & Precision.
             </p>
         </div>
     """, unsafe_allow_html=True)
+    
+    # 💱 Sidebar Exchange Rates Widget (Left Side, Clean & Compact)
+    st.markdown("### 💱 Customs Exchange Rates")
+    
+    if "exchange_rates" not in st.session_state:
+        st.session_state["exchange_rates"] = {
+            "date": "21-08-2026",
+            "rates": {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"},
+            "all_rates": {}
+        }
+        
+    ex_data = st.session_state["exchange_rates"]
+    st.markdown(f"<p style='font-size: 12px; color: #00cec9; margin-bottom: 5px;'>📅 <b>Effective Date (w.e.f):</b> {ex_data['date']}</p>", unsafe_allow_html=True)
+    
+    # PDF Uploader in Sidebar to replace rates
+    ex_pdf = st.file_uploader("➡️ Upload Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
+    if ex_pdf is not None:
+        import pdfplumber
+        import re
+        try:
+            with pdfplumber.open(ex_pdf) as pdf:
+                text = ""
+                for page in pdf.pages:
+                    t = page.extract_text()
+                    if t: text += t + "\n"
+            
+            # Extract date
+            date_match = re.search(r"w\.e\.f\s*([\d\-\/]+)", text, re.IGNORECASE)
+            if date_match:
+                ex_data["date"] = date_match.group(1)
+                
+            # Extract all currency rates (Export Rate is last column)
+            lines = text.split("\n")
+            all_parsed = {}
+            for line in lines:
+                parts = line.split()
+                if len(parts) >= 5 and parts[0].isupper() and len(parts[0]) == 3:
+                    curr_code = parts[0]
+                    export_val = parts[-1]
+                    try:
+                        float(export_val)
+                        all_parsed[curr_code] = export_val
+                    except:
+                        pass
+            
+            if all_parsed:
+                ex_data["all_rates"] = all_parsed
+                for c in ["EUR", "GBP", "USD"]:
+                    if c in all_parsed:
+                        ex_data["rates"][c] = all_parsed[c]
+                st.success(f"🎉 रेट्स अपडेट हो गए (w.e.f {ex_data['date']})!")
+            else:
+                st.warning("⚠️ PDF से डेटा नहीं पढ़ा जा सका!")
+        except Exception as e:
+            st.error(f"एरर: {str(e)}")
+
+    # Always Visible EUR, GBP, USD Export Rates (Compact Sidebar view)
+    r = ex_data["rates"]
+    col_e, col_g, col_u = st.columns(3)
+    with col_e: st.metric(label="EUR", value=r.get("EUR", "109.8"))
+    with col_g: st.metric(label="GBP", value=r.get("GBP", "128.15"))
+    with col_u: st.metric(label="USD", value=r.get("USD", "94.8"))
+
+    # Expander to view all other currency rates
+    if ex_data["all_rates"]:
+        with st.expander("📉 View All Currencies"):
+            for c_code, c_val in ex_data["all_rates"].items():
+                st.markdown(f"**{c_code}**: `{c_val}`")
+
+    st.markdown("---")
     
     if st.button("🔒 Lock App", use_container_width=True):
         st.session_state["app_authenticated"] = False
@@ -174,55 +244,7 @@ else:
     
     col_l, col_c, col_r = st.columns([1, 5, 1])
     with col_c:
-        # 🌟 Top Header & Right-Side Exchange Rate Widget Row
-        head_c1, head_c2 = st.columns([6, 4])
-        with head_c1:
-            st.title("🚢 CK Export Invoice Processor")
-        with head_c2:
-            # 💱 Customs Exchange Rate Widget (Top-Right)
-            if "exchange_rates" not in st.session_state:
-                st.session_state["exchange_rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8", "date": "21-08-2026"}
-            
-            rates = st.session_state["exchange_rates"]
-            eff_date = rates.get("date", "N/A")
-            
-            with st.expander(f"💱 Customs Exch. Rates (w.e.f {eff_date})", expanded=False):
-                ex_pdf = st.file_uploader("➡️ Upload Exchange Rate PDF", type=["pdf"], key="ex_pdf_topright")
-                if ex_pdf is not None:
-                    import pdfplumber
-                    import re
-                    try:
-                        with pdfplumber.open(ex_pdf) as pdf:
-                            text = ""
-                            for page in pdf.pages:
-                                t = page.extract_text()
-                                if t: text += t + "\n"
-                        
-                        # Extract effective date (w.e.f DD-MM-YYYY)
-                        date_match = re.search(r"w\.e\.f\s*([\d\-\/]+)", text, re.IGNORECASE)
-                        if date_match:
-                            rates["date"] = date_match.group(1)
-                            
-                        extracted_rates = {}
-                        for curr in ["EUR", "GBP", "USD"]:
-                            pattern = rf"{curr}\s+[A-Za-z\s]+\s+[\d\.]+\s+[\d\.]+\s+([\d\.]+)"
-                            match = re.search(pattern, text)
-                            if match:
-                                extracted_rates[curr] = match.group(1)
-                        
-                        if extracted_rates:
-                            rates.update(extracted_rates)
-                            st.success(f"🎉 एक्सचेंज रेट (w.e.f {rates['date']}) अपडेट हो गए!")
-                        else:
-                            st.warning("⚠️ PDF से रेट्स मैच नहीं हुए!")
-                    except Exception as e:
-                        st.error(f"एरर: {str(e)}")
-                
-                m1, m2, m3 = st.columns(3)
-                with m1: st.metric(label="🇪🇺 EUR", value=rates.get("EUR", "109.8"))
-                with m2: st.metric(label="🇬🇧 GBP", value=rates.get("GBP", "128.15"))
-                with m3: st.metric(label="🇺🇸 USD", value=rates.get("USD", "94.8"))
-
+        st.title("🚢 CK Export Invoice Processor")
         st.write("---")
         render_processor()
         
