@@ -1,4 +1,8 @@
 import streamlit as st
+import pandas as pd
+import requests
+import json
+import base64
 
 # 📌 1. Mukhya Page Configuration
 st.set_page_config(
@@ -7,6 +11,30 @@ st.set_page_config(
     layout="wide", 
     initial_sidebar_state="expanded"
 )
+
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
+SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
+
+@st.cache_data(show_spinner=False)
+def fetch_all_from_sheet_app():
+    try:
+        response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=20)
+        if response.status_code == 200:
+            return response.json()
+    except Exception:
+        pass
+    return {}
+
+def save_exchange_rates_to_sheet(ex_data):
+    try:
+        payload = {
+            "action": "save_exchange_rates",
+            "exchange_data": ex_data
+        }
+        res = requests.post(WEB_APP_URL, data=json.dumps(payload), timeout=30)
+        return res.status_code == 200
+    except Exception:
+        return False
 
 # 📌 2. Session State Initialization (Global App Lock ke liye)
 if "app_authenticated" not in st.session_state:
@@ -94,16 +122,22 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
-    # Session State for Exchange Rates
+    # Session State & Google Sheet Fetch for Exchange Rates
     if "exchange_rates" not in st.session_state or not isinstance(st.session_state["exchange_rates"], dict):
-        st.session_state["exchange_rates"] = {
-            "date": "21-08-2026",
-            "rates": {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"},
-            "all_rates": {}
-        }
+        sheet_full_data = fetch_all_from_sheet_app()
+        sheet_ex = sheet_full_data.get("exchange_rates", None) if isinstance(sheet_full_data, dict) else None
+        
+        if sheet_ex and isinstance(sheet_ex, dict):
+            st.session_state["exchange_rates"] = sheet_ex
+        else:
+            st.session_state["exchange_rates"] = {
+                "date": "07-08-2026",
+                "rates": {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"},
+                "all_rates": {}
+            }
         
     ex_data = st.session_state["exchange_rates"]
-    if "date" not in ex_data: ex_data["date"] = "21-08-2026"
+    if "date" not in ex_data: ex_data["date"] = "07-08-2026"
     if "rates" not in ex_data: ex_data["rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
     if "all_rates" not in ex_data: ex_data["all_rates"] = {}
 
@@ -130,7 +164,6 @@ with st.sidebar:
                     t = page.extract_text()
                     if t: text += t + "\n"
             
-            # Extract Effective Date correctly
             date_match = re.search(r"w\.e\.f[\s\.:]*([\d]{2}[\-\/][\d]{2}[\-\/][\d]{4})", text, re.IGNORECASE)
             if not date_match:
                 date_match = re.search(r"w\.e\.f[\s\.:]*([0-9A-Za-z\-]+)", text, re.IGNORECASE)
@@ -156,10 +189,14 @@ with st.sidebar:
                 for c in ["EUR", "GBP", "USD"]:
                     if c in all_parsed:
                         ex_data["rates"][c] = all_parsed[c]
-                st.success(f"🎉 Rates update ho gaye (w.e.f {ex_data['date']})!")
+                
+                # Save to Google Sheet permanently
+                save_exchange_rates_to_sheet(ex_data)
+                
+                st.success(f"🎉 Rates update & saved to Sheet (w.e.f {ex_data['date']})!")
                 st.rerun()
             else:
-                st.warning("⚠️ PDF se data nahi padha ja saka!")
+                st.warning("⚠️ PDF से data nahi padha ja saka!")
         except Exception as e:
             st.error(f"Error: {str(e)}")
 
@@ -176,14 +213,6 @@ with st.sidebar:
         st.rerun()
         
     st.markdown("---")
-
-import pandas as pd
-import requests
-import json
-import base64
-
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
-SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
 @st.cache_data(show_spinner=False)
 def load_data_from_gsheet():
