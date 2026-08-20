@@ -42,32 +42,26 @@ st.markdown("""
         [data-testid="stSidebarCollapsedControl"] { display: none !important; }
         .creator-card {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            padding: 10px;
-            border-radius: 8px;
+            padding: 12px;
+            border-radius: 10px;
             color: white;
             text-align: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             margin-bottom: 12px;
+            margin-top: 10px;
         }
         .creator-name {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 700;
-            margin-top: 4px;
+            margin-top: 6px;
             margin-bottom: 2px;
         }
         .creator-title {
-            font-size: 10px;
+            font-size: 11px;
             color: #d1d8e0;
             letter-spacing: 1px;
             text-transform: uppercase;
             font-weight: 600;
-        }
-        /* Make sidebar metrics smaller and compact */
-        [data-testid="stMetricValue"] {
-            font-size: 18px !important;
-        }
-        [data-testid="stMetricLabel"] {
-            font-size: 11px !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -79,19 +73,7 @@ with st.sidebar:
     except:
         st.info("Photo loading...")
         
-    st.markdown("""
-        <div class="creator-card">
-            <div class="creator-name">Chetan Joshi</div>
-            <div class="creator-title">📞 +91 98253 06898</div>
-            <hr style="border-color: rgba(255,255,255,0.2); margin: 4px 0;">
-            <p style='font-size: 9px; color: #f1f2f6; margin: 0;'>
-                <b>CK Export Invoice Pro v2.0</b><br>
-                Enterprise Automation & Precision.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    # 💱 Sidebar Exchange Rates Widget (Top Rates, then Heading & Uploader)
+    # 💱 Sidebar Exchange Rates (EUR, GBP, USD) right below photo
     if "exchange_rates" not in st.session_state or not isinstance(st.session_state["exchange_rates"], dict):
         st.session_state["exchange_rates"] = {
             "date": "21-08-2026",
@@ -104,20 +86,31 @@ with st.sidebar:
     if "rates" not in ex_data: ex_data["rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
     if "all_rates" not in ex_data: ex_data["all_rates"] = {}
 
-    # 1. Display EUR, GBP, USD FIRST (Right above heading)
+    # 1. Display EUR, GBP, USD First
     r = ex_data["rates"]
     col_e, col_g, col_u = st.columns(3)
     with col_e: st.metric(label="EUR", value=r.get("EUR", "109.8"))
     with col_g: st.metric(label="GBP", value=r.get("GBP", "128.15"))
     with col_u: st.metric(label="USD", value=r.get("USD", "94.8"))
 
-    st.markdown("---")
+    # 2. Display Effective Date (w.e.f) right below the 3 currencies
+    st.markdown(f"<p style='font-size: 13px; color: #00cec9; text-align: center; margin-top: 4px; margin-bottom: 4px;'>📅 <b>w.e.f:</b> {ex_data.get('date', 'N/A')}</p>", unsafe_allow_html=True)
+
+    # Creator Card Profile
+    st.markdown("""
+        <div class="creator-card">
+            <div class="creator-name">Chetan Joshi</div>
+            <div class="creator-title">📞 +91 98253 06898</div>
+            <hr style="border-color: rgba(255,255,255,0.2); margin: 6px 0;">
+            <p style='font-size: 10px; color: #f1f2f6; margin: 0;'>
+                <b>CK Export Invoice Pro v2.0</b><br>
+                Enterprise Automation & Precision.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # 2. Heading & Effective Date
+    # Heading & Uploader
     st.markdown("##### 💱 Customs Exchange Rates")
-    st.markdown(f"<p style='font-size: 11px; color: #00cec9; margin-bottom: 4px;'>📅 <b>w.e.f:</b> {ex_data.get('date', 'N/A')}</p>", unsafe_allow_html=True)
-    
-    # 3. PDF Uploader in Sidebar to replace rates
     ex_pdf = st.file_uploader("➡️ Upload Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
     if ex_pdf is not None:
         import pdfplumber
