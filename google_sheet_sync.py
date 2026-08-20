@@ -20,7 +20,7 @@ def get_val_case_insensitive(d, *keys, default=""):
 
 @st.cache_data(show_spinner=False)
 def fetch_all_from_sheet():
-    """गूगल शीट के 'Shipper_JSON_Database' से JSON डेटा और टेम्पलेट्स फेच करता है"""
+    """गूगल शीट से JSON डेटा, टेम्पलेट्स और API Key फेच करता है"""
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=20)
         if response.status_code == 200:
@@ -54,8 +54,29 @@ def push_rules_to_sheet(shippers_json_payload):
     """केवल रूल्स (JSON) को गूगल शीट पर सेव करने के लिए"""
     return push_all_to_sheet(shippers_json_payload)
 
+# 🔑 Gemini API Key Google Sheet Functions
+def save_gemini_api_key_to_sheet(api_key):
+    try:
+        payload = {
+            "action": "save_api_key",
+            "api_key": api_key.strip()
+        }
+        response = requests.post(WEB_APP_URL, data=json.dumps(payload), timeout=30)
+        if response.status_code == 200:
+            clear_sheet_cache()
+            return True
+        return False
+    except Exception:
+        return False
+
+def load_gemini_api_key_from_sheet():
+    data = fetch_all_from_sheet()
+    if data and isinstance(data, dict):
+        return data.get("api_key", "")
+    return ""
+
 def push_template_file_to_sheet(shipper_name, file_bytes):
-    """टेम्पलेट फाइल को बेस64 में बदलकर गूगल शीट पर भेजता है (जो Apps Script द्वारा टुकड़ों में बंट जाती है)"""
+    """टेम्पलेट फाइल को बेस64 में बदलकर गूगल शीट पर भेजता है"""
     try:
         b64_str = base64.b64encode(file_bytes).decode('utf-8') if file_bytes else ""
         
