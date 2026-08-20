@@ -75,19 +75,6 @@ with st.sidebar:
     except:
         st.info("Photo loading...")
         
-    # 2. उसके नीचे: Chetan Joshi वाला ब्लू प्रोफाइल कार्ड
-    st.markdown("""
-        <div class="creator-card">
-            <div class="creator-name">Chetan Joshi</div>
-            <div class="creator-title">📞 +91 98253 06898</div>
-            <hr style="border-color: rgba(255,255,255,0.2); margin: 8px 0;">
-            <p style='font-size: 11px; color: #f1f2f6; margin: 0;'>
-                <b>CK Export Invoice Pro v2.0</b><br>
-                Enterprise Automation & Precision.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-    
     # Session State for Exchange Rates
     if "exchange_rates" not in st.session_state or not isinstance(st.session_state["exchange_rates"], dict):
         st.session_state["exchange_rates"] = {
@@ -101,15 +88,28 @@ with st.sidebar:
     if "rates" not in ex_data: ex_data["rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
     if "all_rates" not in ex_data: ex_data["all_rates"] = {}
 
-    # 3. उसके नीचे: तीन करेंसियाँ (EUR, GBP, USD) अपने ओरिजिनल परफेक्ट फॉन्ट में
+    # 2. उसके नीचे: तीन करेंसियाँ (EUR, GBP, USD) अपने ओरिजिनल परफेक्ट फॉन्ट में
     r = ex_data["rates"]
     col_e, col_g, col_u = st.columns(3)
     with col_e: st.metric(label="EUR", value=r.get("EUR", "109.8"))
     with col_g: st.metric(label="GBP", value=r.get("GBP", "128.15"))
     with col_u: st.metric(label="USD", value=r.get("USD", "94.8"))
 
-    # 4. उसके नीचे: बड़ी साइज में Effective Date (w.e.f: 21-08-2026)
-    st.markdown(f"<div style='text-align: center; margin-top: 8px; margin-bottom: 12px;'><span style='font-size: 16px; font-weight: bold; color: #00cec9;'>📅 w.e.f: {ex_data.get('date', 'N/A')}</span></div>", unsafe_allow_html=True)
+    # 3. उसके नीचे: बड़ी साइज में Effective Date (w.e.f: 21-08-2026)
+    st.markdown(f"<div style='text-align: center; margin-top: 6px; margin-bottom: 12px;'><span style='font-size: 16px; font-weight: bold; color: #00cec9;'>📅 w.e.f: {ex_data.get('date', 'N/A')}</span></div>", unsafe_allow_html=True)
+
+    # 4. उसके नीचे: Chetan Joshi वाला ब्लू प्रोफाइल कार्ड
+    st.markdown("""
+        <div class="creator-card">
+            <div class="creator-name">Chetan Joshi</div>
+            <div class="creator-title">📞 +91 98253 06898</div>
+            <hr style="border-color: rgba(255,255,255,0.2); margin: 8px 0;">
+            <p style='font-size: 11px; color: #f1f2f6; margin: 0;'>
+                <b>CK Export Invoice Pro v2.0</b><br>
+                Enterprise Automation & Precision.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
     # 5. उसके नीचे: Customs Exchange Rates हेडिंग और PDF अपलोडर
     st.markdown("##### 💱 Customs Exchange Rates")
