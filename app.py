@@ -122,7 +122,7 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
-    # Session State & Google Sheet Fetch for Exchange Rates
+    # Session State & Google Sheet Fetch for Exchange Rates (Load once)
     if "exchange_rates" not in st.session_state or not isinstance(st.session_state["exchange_rates"], dict):
         sheet_full_data = fetch_all_from_sheet_app()
         sheet_ex = sheet_full_data.get("exchange_rates", None) if isinstance(sheet_full_data, dict) else None
@@ -131,13 +131,13 @@ with st.sidebar:
             st.session_state["exchange_rates"] = sheet_ex
         else:
             st.session_state["exchange_rates"] = {
-                "date": "07-08-2026",
+                "date": "21-08-2026",
                 "rates": {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"},
                 "all_rates": {}
             }
         
     ex_data = st.session_state["exchange_rates"]
-    if "date" not in ex_data: ex_data["date"] = "07-08-2026"
+    if "date" not in ex_data: ex_data["date"] = "21-08-2026"
     if "rates" not in ex_data: ex_data["rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
     if "all_rates" not in ex_data: ex_data["all_rates"] = {}
 
@@ -153,52 +153,61 @@ with st.sidebar:
 
     # 5. Uske niche: Customs Exchange Rates heading aur PDF uploader
     st.markdown("##### 💱 Customs Exchange Rates")
+    
+    # Track uploaded file ID to prevent infinite loops
+    if "processed_ex_file_id" not in st.session_state:
+        st.session_state["processed_ex_file_id"] = None
+
     ex_pdf = st.file_uploader("➡️ Upload Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
     if ex_pdf is not None:
-        import pdfplumber
-        import re
-        try:
-            with pdfplumber.open(ex_pdf) as pdf:
-                text = ""
-                for page in pdf.pages:
-                    t = page.extract_text()
-                    if t: text += t + "\n"
-            
-            date_match = re.search(r"w\.e\.f[\s\.:]*([\d]{2}[\-\/][\d]{2}[\-\/][\d]{4})", text, re.IGNORECASE)
-            if not date_match:
-                date_match = re.search(r"w\.e\.f[\s\.:]*([0-9A-Za-z\-]+)", text, re.IGNORECASE)
+        # Check if this exact file was already processed
+        file_signature = f"{ex_pdf.name}_{ex_pdf.size}"
+        if st.session_state["processed_ex_file_id"] != file_signature:
+            import pdfplumber
+            import re
+            try:
+                with pdfplumber.open(ex_pdf) as pdf:
+                    text = ""
+                    for page in pdf.pages:
+                        t = page.extract_text()
+                        if t: text += t + "\n"
                 
-            if date_match:
-                ex_data["date"] = date_match.group(1).strip()
+                date_match = re.search(r"w\.e\.f[\s\.:]*([\d]{2}[\-\/][\d]{2}[\-\/][\d]{4})", text, re.IGNORECASE)
+                if not date_match:
+                    date_match = re.search(r"w\.e\.f[\s\.:]*([0-9A-Za-z\-]+)", text, re.IGNORECASE)
+                    
+                if date_match:
+                    ex_data["date"] = date_match.group(1).strip()
+                    
+                lines = text.split("\n")
+                all_parsed = {}
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) >= 5 and parts[0].isupper() and len(parts[0]) == 3:
+                        curr_code = parts[0]
+                        export_val = parts[-1]
+                        try:
+                            float(export_val)
+                            all_parsed[curr_code] = export_val
+                        except:
+                            pass
                 
-            lines = text.split("\n")
-            all_parsed = {}
-            for line in lines:
-                parts = line.split()
-                if len(parts) >= 5 and parts[0].isupper() and len(parts[0]) == 3:
-                    curr_code = parts[0]
-                    export_val = parts[-1]
-                    try:
-                        float(export_val)
-                        all_parsed[curr_code] = export_val
-                    except:
-                        pass
-            
-            if all_parsed:
-                ex_data["all_rates"] = all_parsed
-                for c in ["EUR", "GBP", "USD"]:
-                    if c in all_parsed:
-                        ex_data["rates"][c] = all_parsed[c]
-                
-                # Save to Google Sheet permanently
-                save_exchange_rates_to_sheet(ex_data)
-                
-                st.success(f"🎉 Rates update & saved to Sheet (w.e.f {ex_data['date']})!")
-                st.rerun()
-            else:
-                st.warning("⚠️ PDF से data nahi padha ja saka!")
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+                if all_parsed:
+                    ex_data["all_rates"] = all_parsed
+                    for c in ["EUR", "GBP", "USD"]:
+                        if c in all_parsed:
+                            ex_data["rates"][c] = all_parsed[c]
+                    
+                    # Save to Google Sheet permanently and mark file as processed
+                    save_exchange_rates_to_sheet(ex_data)
+                    st.session_state["processed_ex_file_id"] = file_signature
+                    
+                    st.success(f"🎉 Rates update & saved to Sheet (w.e.f {ex_data['date']})!")
+                    st.rerun()
+                else:
+                    st.warning("⚠️ PDF से data nahi padha ja saka!")
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
     # Expander to view all other currency rates
     if ex_data["all_rates"]:
