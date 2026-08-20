@@ -42,44 +42,53 @@ st.markdown("""
         [data-testid="stSidebarCollapsedControl"] { display: none !important; }
         .creator-card {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-            padding: 10px;
-            border-radius: 8px;
+            padding: 15px;
+            border-radius: 12px;
             color: white;
             text-align: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
             margin-bottom: 12px;
+            margin-top: 10px;
         }
         .creator-name {
-            font-size: 14px;
+            font-size: 18px;
             font-weight: 700;
-            margin-top: 4px;
+            margin-top: 8px;
             margin-bottom: 2px;
         }
         .creator-title {
-            font-size: 10px;
+            font-size: 12px;
             color: #d1d8e0;
             letter-spacing: 1px;
             text-transform: uppercase;
             font-weight: 600;
-        }
-        /* Make sidebar metrics smaller and compact */
-        [data-testid="stMetricValue"] {
-            font-size: 18px !important;
-        }
-        [data-testid="stMetricLabel"] {
-            font-size: 11px !important;
         }
     </style>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 1. सबसे ऊपर: फोटो (Photo)
     try:
         st.image("ck_photo.jpg", use_container_width=True)
     except:
         st.info("Photo loading...")
         
-    # 💱 Sidebar Exchange Rates Widget (EUR, GBP, USD right below photo)
+    # 2. उसके नीचे: Chetan Joshi वाला ब्लू प्रोफाइल कार्ड
+    st.markdown("""
+        <div class="creator-card">
+            <div class="creator-name">Chetan Joshi</div>
+            <div class="creator-title">📞 +91 98253 06898</div>
+            <hr style="border-color: rgba(255,255,255,0.2); margin: 8px 0;">
+            <p style='font-size: 11px; color: #f1f2f6; margin: 0;'>
+                <b>CK Export Invoice Pro v2.0</b><br>
+                Enterprise Automation & Precision.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Session State for Exchange Rates
     if "exchange_rates" not in st.session_state or not isinstance(st.session_state["exchange_rates"], dict):
         st.session_state["exchange_rates"] = {
             "date": "21-08-2026",
@@ -92,32 +101,18 @@ with st.sidebar:
     if "rates" not in ex_data: ex_data["rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
     if "all_rates" not in ex_data: ex_data["all_rates"] = {}
 
-    # 1. Display EUR, GBP, USD First
+    # 3. उसके नीचे: तीन करेंसियाँ (EUR, GBP, USD) अपने ओरिजिनल परफेक्ट फॉन्ट में
     r = ex_data["rates"]
     col_e, col_g, col_u = st.columns(3)
     with col_e: st.metric(label="EUR", value=r.get("EUR", "109.8"))
     with col_g: st.metric(label="GBP", value=r.get("GBP", "128.15"))
     with col_u: st.metric(label="USD", value=r.get("USD", "94.8"))
 
-    # 2. Display Effective Date right below currencies with a larger font size
-    st.markdown(f"<div style='text-align: center; margin-top: 4px; margin-bottom: 8px;'><span style='font-size: 13px; font-weight: bold; color: #00cec9;'>📅 w.e.f: {ex_data.get('date', 'N/A')}</span></div>", unsafe_allow_html=True)
+    # 4. उसके नीचे: बड़ी साइज में Effective Date (w.e.f: 21-08-2026)
+    st.markdown(f"<div style='text-align: center; margin-top: 8px; margin-bottom: 12px;'><span style='font-size: 16px; font-weight: bold; color: #00cec9;'>📅 w.e.f: {ex_data.get('date', 'N/A')}</span></div>", unsafe_allow_html=True)
 
-    st.markdown("""
-        <div class="creator-card">
-            <div class="creator-name">Chetan Joshi</div>
-            <div class="creator-title">📞 +91 98253 06898</div>
-            <hr style="border-color: rgba(255,255,255,0.2); margin: 4px 0;">
-            <p style='font-size: 9px; color: #f1f2f6; margin: 0;'>
-                <b>CK Export Invoice Pro v2.0</b><br>
-                Enterprise Automation & Precision.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # 3. Heading & Uploader
+    # 5. उसके नीचे: Customs Exchange Rates हेडिंग और PDF अपलोडर
     st.markdown("##### 💱 Customs Exchange Rates")
-    
-    # 4. PDF Uploader in Sidebar to replace rates
     ex_pdf = st.file_uploader("➡️ Upload Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
     if ex_pdf is not None:
         import pdfplumber
@@ -153,7 +148,7 @@ with st.sidebar:
                         ex_data["rates"][c] = all_parsed[c]
                 st.success(f"🎉 रेट्स अपडेट (w.e.f {ex_data['date']})!")
             else:
-                st.warning("⚠️ PDF से डेटा नहीं पढ़ा जा सका!")
+                st.warning("⚠️ PDF से डेटा नहीं पढ़ा जा सका!")
         except Exception as e:
             st.error(f"एरर: {str(e)}")
 
