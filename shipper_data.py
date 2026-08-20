@@ -7,7 +7,11 @@ from io import BytesIO
 
 from pdf_engine import detect_igst_status
 from test_suite import render_universal_test_suite
-from ai_engine import ask_local_ai, save_gemini_api_key_to_sheet, load_gemini_api_key_from_sheet, push_all_to_sheet, create_new_parser_file_on_github, WEB_APP_URL
+from ai_engine import ask_local_ai, create_new_parser_file_on_github, WEB_APP_URL
+from google_sheet_sync import (
+    fetch_all_from_sheet, push_rules_to_sheet, push_template_file_to_sheet, 
+    load_template_bytes_from_sheet, save_gemini_api_key_to_sheet, load_gemini_api_key_from_sheet
+)
 import requests
 
 LOCAL_DATA_DIR = "local_shipper_data"
@@ -19,14 +23,11 @@ def ensure_local_directories():
     if not os.path.exists(TEMPLATES_DIR):
         os.makedirs(TEMPLATES_DIR)
 
-# 🌐 Google Sheet से डेटा फेच (Fetch) करने का फंक्शन
 def fetch_data_from_google_sheet():
     try:
-        response = requests.get(WEB_APP_URL, timeout=30)
-        if response.status_code == 200:
-            data = response.json()
-            if isinstance(data, dict) and data:
-                return data
+        data = fetch_all_from_sheet()
+        if isinstance(data, dict) and data:
+            return data
     except Exception as e:
         pass
     return {}
@@ -37,38 +38,29 @@ def save_local_shippers():
     try:
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(st.session_state["shipper_database"], f, indent=4)
-        push_all_to_sheet(st.session_state["shipper_database"])
+        shippers_payload = {}
+        for s_name, s_data in st.session_state["shipper_database"].items():
+            shippers_payload[s_name] = {
+                "mapping_rules": s_data.get("mapping_rules", {}),
+                "item_table_rules": s_data.get("item_table_rules", {}),
+                "item_table_rule_name": s_data.get("item_table_rule_name", "parser_welspun"),
+                "igst_config": s_data.get("igst_config", {})
+            }
+        push_rules_to_sheet(shippers_payload)
     except Exception as e:
         st.error(f"सेव करने में एरर: {str(e)}")
 
 def get_safe_filename(shipper_name):
     return "".join([c if c.isalnum() else "_" for c in str(shipper_name)]).strip("_")
 
-def save_local_template_file(selected_shipper, uploaded_file_obj):
-    ensure_local_directories()
-    safe_name = get_safe_filename(selected_shipper)
-    file_path = os.path.join(TEMPLATES_DIR, f"{safe_name}_template.xlsx")
-    try:
-        with open(file_path, "wb") as f:
-            f.write(uploaded_file_obj.getbuffer())
-        return True
-    except Exception as e:
-        st.error(f"टेम्पलेट सेव करने में एरर: {str(e)}")
-        return False
-
-def check_template_exists(selected_shipper):
-    ensure_local_directories()
-    safe_name = get_safe_filename(selected_shipper)
-    file_path = os.path.join(TEMPLATES_DIR, f"{safe_name}_template.xlsx")
-    return os.path.exists(file_path)
-
 def load_local_shippers():
     ensure_local_directories()
     
     if "shipper_database" not in st.session_state or not st.session_state["shipper_database"]:
         sheet_data = fetch_data_from_google_sheet()
-        if sheet_data:
-            st.session_state["shipper_database"] = sheet_data
+        shippers_dict = sheet_data.get("shippers", {}) if isinstance(sheet_data, dict) else {}
+        if shippers_dict:
+            st.session_state["shipper_database"] = shippers_dict
         else:
             json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
             if os.path.exists(json_path):
@@ -254,38 +246,43 @@ def render_shipper_data():
             shipper_info["item_table_rule_name"] = updated_parser_choice
             save_local_shippers()
 
-            # 📁 1. टेम्पलेट फ़ाइल अपलोड
+            # 📁 1. टेम्पलेट फ़ाइल अपलोड (Google Sheet Synced)
             st.write("---")
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड (Full Job Excel Template)")
-            has_saved_template = check_template_exists(selected_shipper)
+            
+            t_bytes = load_template_bytes_from_sheet(selected_shipper)
+            has_saved_template = t_bytes is not None and len(t_bytes) > 0
             
             if has_saved_template:
-                st.success(f"✅ 'Full Job Excel Format File (Template)' अपलोडेड और सुरक्षित है।")
+                st.success(f"✅ 'Full Job Excel Format File (Template)' गूगल शीट पर अपलोडेड एवं सुरक्षित है।")
                 col_rep, col_del = st.columns([3, 1])
                 with col_rep:
                     f_replace = st.file_uploader("🔄 Replace Template (नई एक्सेल फाइल चुनें):", type=["xlsx", "xls"], key=f"repl_tpl_{selected_shipper}")
                     if f_replace is not None:
                         if st.button("🚀 Confirm & Replace", type="primary", key=f"btn_repl_{selected_shipper}"):
-                            if save_local_template_file(selected_shipper, f_replace):
-                                st.success("🎉 टेम्पलेट सफलतापूर्वक रिप्लेस हो गई!")
-                                st.rerun()
+                            with st.spinner("⏳ गूगल शीट पर टेम्पलेट अपलोड हो रही है..."):
+                                if push_template_file_to_sheet(selected_shipper, f_replace.getvalue()):
+                                    st.success("🎉 टेम्पलेट सफलतापूर्वक गूगल शीट पर रिप्लेस हो गई!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ अपलोड फेल हो गया!")
                 with col_del:
                     st.write("##") 
                     if st.button("🗑️ Delete Template", type="secondary", use_container_width=True, key=f"btn_del_tpl_{selected_shipper}"):
-                        safe_name = get_safe_filename(selected_shipper)
-                        file_path = os.path.join(TEMPLATES_DIR, f"{safe_name}_template.xlsx")
-                        if os.path.exists(file_path):
-                            os.remove(file_path)
-                            st.success("🗑️ टेम्पलेट डिलीट हो गई!")
-                            st.rerun()
+                        push_template_file_to_sheet(selected_shipper, b"")
+                        st.success("🗑️ टेम्पलेट डिलीट हो गई!")
+                        st.rerun()
             else:
                 st.info("ℹ️ इस शिपर के लिए अभी कोई टेम्पलेट अपलोड नहीं की गई है।")
                 f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) चुनें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
                 if f_upload is not None:
-                    if st.button("🚀 Save Template Locally", type="primary", use_container_width=True, key=f"btn_upload_tpl_{selected_shipper}"):
-                        if save_local_template_file(selected_shipper, f_upload):
-                            st.success("🎉 टेम्पलेट एक्सेल फाइल सफलतापर्वक सेव हो गई!")
-                            st.rerun()
+                    if st.button("🚀 Save Template to Google Sheet", type="primary", use_container_width=True, key=f"btn_upload_tpl_{selected_shipper}"):
+                        with st.spinner("⏳ गूगल शीट पर टेम्पलेट अपलोड हो रही है..."):
+                            if push_template_file_to_sheet(selected_shipper, f_upload.getvalue()):
+                                st.success("🎉 टेम्पलेट एक्सेल फाइल सफलतापर्वक गूगल शीट पर सेव हो गई!")
+                                st.rerun()
+                            else:
+                                st.error("❌ अपलोड फेल हो गया!")
 
             # 🧪 2. Instant PDF Upload & Live Data Test Engine
             st.write("---")
@@ -469,6 +466,6 @@ def render_shipper_data():
                 
             st.write("---")
 
-            if st.button("💾 Save Rules Locally & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
+            if st.button("💾 Save Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
                 st.success("🎉 आपके सारे रूल्स और सेटिंग्स सफलतापूर्वक गूगल शीट पर सेव और सिंक हो गए हैं!")
