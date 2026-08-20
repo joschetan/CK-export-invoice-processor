@@ -84,45 +84,6 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
     
-    # 💱 Customs Exchange Rate Widget (EUR, GBP, USD Export Rates)
-    st.markdown("### 💱 Customs Exchange Rates")
-    if "exchange_rates" not in st.session_state:
-        st.session_state["exchange_rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8"}
-        
-    with st.expander("📉 View / Update Exchange Rates", expanded=False):
-        ex_pdf = st.file_uploader("➡️ Upload Exchange Rate PDF", type=["pdf"], key="ex_pdf_sidebar")
-        if ex_pdf is not None:
-            import pdfplumber
-            import re
-            try:
-                with pdfplumber.open(ex_pdf) as pdf:
-                    text = ""
-                    for page in pdf.pages:
-                        t = page.extract_text()
-                        if t: text += t + "\n"
-                
-                extracted_rates = {}
-                for curr in ["EUR", "GBP", "USD"]:
-                    pattern = rf"{curr}\s+[A-Za-z\s]+\s+[\d\.]+\s+[\d\.]+\s+([\d\.]+)"
-                    match = re.search(pattern, text)
-                    if match:
-                        extracted_rates[curr] = match.group(1)
-                
-                if extracted_rates:
-                    st.session_state["exchange_rates"].update(extracted_rates)
-                    st.success("🎉 एक्सचेंज रेट अपडेट हो गए!")
-                else:
-                    st.warning("⚠️ PDF से रेट्स मैच नहीं हुए!")
-            except Exception as e:
-                st.error(f"एरर: {str(e)}")
-                
-        rates = st.session_state["exchange_rates"]
-        st.metric(label="🇪🇺 EUR (Export)", value=rates.get("EUR", "109.8"))
-        st.metric(label="🇬🇧 GBP (Export)", value=rates.get("GBP", "128.15"))
-        st.metric(label="🇺🇸 USD (Export)", value=rates.get("USD", "94.8"))
-
-    st.markdown("---")
-    
     if st.button("🔒 Lock App", use_container_width=True):
         st.session_state["app_authenticated"] = False
         st.rerun()
@@ -213,7 +174,55 @@ else:
     
     col_l, col_c, col_r = st.columns([1, 5, 1])
     with col_c:
-        st.title("🚢 CK Export Invoice Processor Pro")
+        # 🌟 Top Header & Right-Side Exchange Rate Widget Row
+        head_c1, head_c2 = st.columns([6, 4])
+        with head_c1:
+            st.title("🚢 CK Export Invoice Processor")
+        with head_c2:
+            # 💱 Customs Exchange Rate Widget (Top-Right)
+            if "exchange_rates" not in st.session_state:
+                st.session_state["exchange_rates"] = {"EUR": "109.8", "GBP": "128.15", "USD": "94.8", "date": "21-08-2026"}
+            
+            rates = st.session_state["exchange_rates"]
+            eff_date = rates.get("date", "N/A")
+            
+            with st.expander(f"💱 Customs Exch. Rates (w.e.f {eff_date})", expanded=False):
+                ex_pdf = st.file_uploader("➡️ Upload Exchange Rate PDF", type=["pdf"], key="ex_pdf_topright")
+                if ex_pdf is not None:
+                    import pdfplumber
+                    import re
+                    try:
+                        with pdfplumber.open(ex_pdf) as pdf:
+                            text = ""
+                            for page in pdf.pages:
+                                t = page.extract_text()
+                                if t: text += t + "\n"
+                        
+                        # Extract effective date (w.e.f DD-MM-YYYY)
+                        date_match = re.search(r"w\.e\.f\s*([\d\-\/]+)", text, re.IGNORECASE)
+                        if date_match:
+                            rates["date"] = date_match.group(1)
+                            
+                        extracted_rates = {}
+                        for curr in ["EUR", "GBP", "USD"]:
+                            pattern = rf"{curr}\s+[A-Za-z\s]+\s+[\d\.]+\s+[\d\.]+\s+([\d\.]+)"
+                            match = re.search(pattern, text)
+                            if match:
+                                extracted_rates[curr] = match.group(1)
+                        
+                        if extracted_rates:
+                            rates.update(extracted_rates)
+                            st.success(f"🎉 एक्सचेंज रेट (w.e.f {rates['date']}) अपडेट हो गए!")
+                        else:
+                            st.warning("⚠️ PDF से रेट्स मैच नहीं हुए!")
+                    except Exception as e:
+                        st.error(f"एरर: {str(e)}")
+                
+                m1, m2, m3 = st.columns(3)
+                with m1: st.metric(label="🇪🇺 EUR", value=rates.get("EUR", "109.8"))
+                with m2: st.metric(label="🇬🇧 GBP", value=rates.get("GBP", "128.15"))
+                with m3: st.metric(label="🇺🇸 USD", value=rates.get("USD", "94.8"))
+
         st.write("---")
         render_processor()
         
