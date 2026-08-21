@@ -176,7 +176,6 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
                         st.warning(f"⚠️ लोकल सेव हो गया, लेकिन GitHub अपडेट में एरर: {msg}")
                 else:
                     st.success(f"🎉 सफलता! फाइल `{parser_file_path}` में नया कोड लोकल रूप से सेव हो गया है (Google Sheet पर GitHub PAT सेट नहीं है)।")
-                st.rerun()
             else:
                 st.error("❌ कोड बॉक्स खाली है!")
         except Exception as e:
