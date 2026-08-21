@@ -2,7 +2,10 @@ import streamlit as st
 import os
 import json
 from io import BytesIO
-from ai_engine import ask_local_ai, load_gemini_api_key_from_sheet, update_parser_file_on_github
+from ai_engine import (
+    ask_local_ai, load_gemini_api_key_from_sheet, 
+    update_parser_file_on_github, save_github_pat_to_sheet, load_github_pat_from_sheet
+)
 
 def get_parser_file_path(parser_rule_name):
     clean_name = str(parser_rule_name).strip().lower()
@@ -38,8 +41,19 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
     current_parser_name = shipper_info.get("item_table_rule_name", "parser_welspun")
     parser_file_path = get_parser_file_path(current_parser_name)
     
-    # 🔑 GitHub PAT Input for AI Code Pushing
-    github_pat_for_agent = st.text_input("🔑 GitHub Personal Access Token (PAT) - AI Code Auto-Update के लिए:", type="password", key=f"gha_pat_{selected_shipper}", placeholder="ghp_...")
+    # 🔑 Google Sheet Synced GitHub PAT Management
+    with st.expander("🔑 GitHub Personal Access Token (PAT) Settings", expanded=False):
+        saved_pat = load_github_pat_from_sheet()
+        if saved_pat:
+            st.write("वर्तमान स्थिति: 🟢 Google Sheet पर GitHub PAT सेट है")
+        else:
+            st.write("वर्तमान स्थिति: 🔴 GitHub PAT सेट नहीं है")
+            
+        input_pat = st.text_input("GitHub PAT दर्ज करें:", value=saved_pat, type="password", key=f"gha_pat_input_{selected_shipper}", placeholder="ghp_...")
+        if st.button("💾 Save PAT to Google Sheet", type="primary", key=f"save_pat_btn_{selected_shipper}"):
+            if input_pat.strip() and save_github_pat_to_sheet(input_pat.strip()):
+                st.success("🎉 GitHub PAT गूगल शीट पर सफलतापर्वक सेव हो गया!")
+                st.rerun()
 
     # 📸 स्क्रीनशॉट / इमेज अपलोड करने का विजुअल बॉक्स
     col_up1, col_up2 = st.columns([2, 1])
@@ -130,15 +144,16 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
                             with open(parser_file_path, "w", encoding="utf-8") as pf:
                                 pf.write(code_block)
                             
-                            # 2. सीधे GitHub पर पुश/कमिट करना (अगर टोकन दिया गया है)
-                            if github_pat_for_agent.strip():
-                                success, msg = update_parser_file_on_github(current_parser_name, code_block, github_pat_for_agent.strip())
+                            # 2. सीधे गूगल शीट से फेच किया गया PAT उपयोग करके GitHub पर पुश करना
+                            active_pat = load_github_pat_from_sheet()
+                            if active_pat.strip():
+                                success, msg = update_parser_file_on_github(current_parser_name, code_block, active_pat.strip())
                                 if success:
                                     st.success(f"🎉 सफलता! लोकल फाइल और GitHub दोनों जगह कोड अपडेट हो गया है! ({msg})")
                                 else:
                                     st.warning(f"⚠️ लोकल सेव हो गया, लेकिन GitHub अपडेट में एरर: {msg}")
                             else:
-                                st.success(f"🎉 सफलता! फाइल `{parser_file_path}` में नया कोड लोकल रूप से सेव हो गया है (GitHub टोकन नहीं दिया गया था)।")
+                                st.success(f"🎉 सफलता! फाइल `{parser_file_path}` में नया कोड लोकल रूप से सेव हो गया है (Google Sheet पर GitHub PAT सेट नहीं है)।")
                             st.rerun()
                     except Exception as e:
                         st.error(f"फाइल सेव करने में एरर: {str(e)}")
