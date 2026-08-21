@@ -44,14 +44,14 @@ def format_date_ddmmyyyy(date_str):
 
 def extract_invoice_details_from_text(pdf_text):
     """
-    PDF टेक्स्ट से 'EXPORTER' जैसे शब्दों को छोड़कर सही इनवॉइस नंबर और डेट ढूंढता है[cite: 13].
+    PDF टेक्स्ट से 'EXPORTER' जैसे शब्दों को छोड़कर सही इनवॉइस नंबर और डेट ढूंढता है.
     """
     inv_no = ""
     inv_date = ""
     if not pdf_text:
         return inv_no, inv_date
 
-    # 1. टेक्स्ट की लाइनों में 'INVOICE' या 'NO' वाले हिस्से को खोजना[cite: 13]
+    # 1. टेक्स्ट की लाइनों में 'INVOICE' या 'NO' वाले हिस्से को खोजना
     lines = pdf_text.split('\n')
     for line in lines:
         upper_line = line.upper()
@@ -59,14 +59,14 @@ def extract_invoice_details_from_text(pdf_text):
             words = line.split()
             for w in words:
                 w_clean = w.strip(".,:-/")
-                # 'EXPORTER' या बहुत छोटे शब्दों को छोड़कर सही अल्फा-न्युमेरिक नंबर उठाना[cite: 13]
+                # 'EXPORTER' या बहुत छोटे शब्दों को छोड़कर सही अल्फा-न्युमेरिक नंबर उठाना
                 if len(w_clean) >= 6 and w_clean.upper() != "EXPORTER" and any(c.isdigit() for c in w_clean):
                     inv_no = w_clean
                     break
         if inv_no:
             break
 
-    # 2. अगर लाइन-बाय-लाइन न मिले तो जनरल पैटर्न से खोजना (EXPORTER को छोड़कर)[cite: 13]
+    # 2. अगर लाइन-बाय-लाइन न मिले तो जनरल पैटर्न से खोजना (EXPORTER को छोड़कर)
     if not inv_no:
         matches = re.findall(r'(?:NO\.?|NUMBER)?\s*[:\.]?\s*([A-Z0-9]{8,20})', pdf_text, re.IGNORECASE)
         for m in matches:
@@ -83,41 +83,35 @@ def extract_invoice_details_from_text(pdf_text):
 
 def extract_polycab_items(pdf_lines, pdf_text=""):
     """
-    Polycab के लिए डेडीकेटेड पार्सर लॉजिक[cite: 10].
+    Polycab के लिए शुद्ध और वास्तविक डेटा आधारित पार्सर लॉजिक।
     """
     parsed_items = []
-    current_hs = "85446090"
+    current_hs = ""
 
     for line in pdf_lines:
         line_str = line.strip()
 
-        if "85446090" in line_str:
-            current_hs = "85446090"
+        # यदि PDF में कोई वैध HSN कोड लाइन मिलती है उसे ट्रैक करना
+        hs_match = re.search(r'\b\d{8}\b', line_str)
+        if hs_match:
+            current_hs = hs_match.group(0)
 
         if "METER" in line_str or re.search(r'\d+\.\d{2}', line_str):
             nums = re.findall(r'[\d,]+\.\d{2,3}', line_str)
             if nums:
                 item_data = {
                     "hs_code": current_hs,
-                    "description_text": "ALUMINIUM CONDUCTOR COVERED WITH SEMI CONDUCTING COMPOUND XLPE INSULATED HDPE SHEATHED UNARMOURED CABLE",
+                    "description_text": line_str,
                     "nums": nums,
                     "dbk_found": ""
                 }
                 parsed_items.append(item_data)
 
-    if not parsed_items:
-        parsed_items.append({
-            "hs_code": "85446090",
-            "description_text": "ELECTRICAL CABLES",
-            "nums": ["0", "0", "0", "0", "0", "0", "0"],
-            "dbk_found": ""
-        })
-
     return parsed_items
 
 def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws="", parser_rule=""):
     """
-    एक्सल शीट में Polycab का डेटा डायनेमिकली भरने का फंक्शन[cite: 10].
+    एक्सल शीट में Polycab का डेटा डायनेमिकली भरने का फंक्शन (बिना किसी हार्डकोडेड डिफ़ॉल्ट के)।
     """
     current_row = start_excel_row
     overall_sr = start_overall_sr
@@ -137,11 +131,10 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
     for idx, item in enumerate(parsed_items):
         item_sr = idx + 1
 
-        # 1. सबसे पहले F, G, H, I, J में पक्का डेटा फिक्स करना
         ws[f"F{current_row}"] = overall_sr          # SR. NO.
         ws[f"G{current_row}"] = inv_sr_no           # Inv. Sr. No.
         ws[f"H{current_row}"] = item_sr             # Item Sr. No.
-        ws[f"I{current_row}"] = inv_no if inv_no else "INV"  # Invoice No.
+        ws[f"I{current_row}"] = inv_no if inv_no else ""  # Invoice No.
         ws[f"J{current_row}"] = formatted_date      # Invoice Date (DD/MM/YYYY)
 
         for field_name, rule_info in resolved_item_rules.items():
@@ -149,7 +142,6 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
             r_type = rule_info.get("type", "")
             r_val = rule_info.get("rule", "")
 
-            # 🛑 Absolute Guard: कॉलम I और J पर किसी भी अन्य नियम को चलने ही न दें
             if col in ["I", "J"]:
                 continue
 
@@ -158,10 +150,9 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
             field_name_lower = field_name.lower()
 
             if "description" in field_name_lower:
-                desc_raw = item.get("description_text", "")
-                val_to_write = desc_raw.replace("DESCRIPTION", "DESCRIPTION\nOF GOODS")
+                val_to_write = item.get("description_text", "")
             elif "hs" in field_name_lower or "ritc" in field_name_lower:
-                val_to_write = item.get("hs_code", "85446090")
+                val_to_write = item.get("hs_code", "")
             elif r_type == "Constant Text":
                 val_to_write = r_val
             else:
@@ -173,8 +164,7 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
 
             ws[cell_target] = val_to_write
 
-        # 🛡️ Double Protection: लूप खत्म होने के बाद भी आखिरी बार सुनिश्चित करना कि कॉलम I और J ओवरराइट न हों
-        ws[f"I{current_row}"] = inv_no if inv_no else "INV"
+        ws[f"I{current_row}"] = inv_no if inv_no else ""
         ws[f"J{current_row}"] = formatted_date
 
         current_row += 1
