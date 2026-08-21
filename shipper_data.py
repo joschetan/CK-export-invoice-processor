@@ -8,6 +8,7 @@ from io import BytesIO
 from pdf_engine import detect_igst_status
 from test_suite import render_universal_test_suite
 from ai_engine import ask_local_ai, create_new_parser_file_on_github, WEB_APP_URL
+from ai_parser_agent import render_ai_parser_agent_ui
 from google_sheet_sync import (
     fetch_all_from_sheet, push_rules_to_sheet, push_template_file_to_sheet, 
     load_template_bytes_from_sheet, save_gemini_api_key_to_sheet, load_gemini_api_key_from_sheet
@@ -469,3 +470,6 @@ def render_shipper_data():
             if st.button("💾 Save Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
                 st.success("🎉 आपके सारे रूल्स और सेटिंग्स सफलतापूर्वक गूगल शीट पर सेव और सिंक हो गए हैं!")
+
+            # 🤖 AI Parser Code & Rule Assistant UI Integration
+            render_ai_parser_agent_ui(selected_shipper, shipper_info)
