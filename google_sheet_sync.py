@@ -18,22 +18,27 @@ def get_val_case_insensitive(d, *keys, default=""):
                 return str(val).strip()
     return default
 
-@st.cache_data(show_spinner=False)
 def fetch_all_from_sheet():
-    """गूगल शीट से JSON डेटा, टेम्पलेट्स और API Key फेच करता है"""
+    """गूगल शीट से JSON डेटा, टेम्पलेट्स और API Key फेच करता है (Session State Caching के साथ ताकि बार-बार फेच न हो)"""
+    if "gsheet_master_cache" in st.session_state and st.session_state["gsheet_master_cache"] is not None:
+        return st.session_state["gsheet_master_cache"]
+        
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=20)
         if response.status_code == 200:
             res_text = response.text.strip()
             if res_text.startswith("<"):
                 return None
-            return response.json()
+            data = response.json()
+            st.session_state["gsheet_master_cache"] = data
+            return data
     except Exception:
         pass
     return None
 
 def clear_sheet_cache():
-    fetch_all_from_sheet.clear()
+    if "gsheet_master_cache" in st.session_state:
+        st.session_state["gsheet_master_cache"] = None
 
 def push_all_to_sheet(shippers_json_payload):
     """पुराने कोड और रूल्स सेव करने के लिए कम्पाटिबल फंक्शन"""
