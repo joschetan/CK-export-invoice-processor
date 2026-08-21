@@ -77,7 +77,7 @@ def ensure_default_shipper():
     load_local_shippers()
 
 @st.dialog("🧪 Live Header Field Test & Verification")
-def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, field_key):
+def show_field_test_dialog(field_name, rule_data, result_val, gen_logic, selected_shipper, field_key):
     st.write(f"### 🔍 Header Field: **`{field_name}`**")
     st.markdown("#### 📋 Rule Parameters:")
     col_a, col_b = st.columns(2)
@@ -95,6 +95,10 @@ def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, 
     else:
         st.success("🎉 **Extracted Value:**")
         st.code(result_val, language="text")
+        
+        if gen_logic:
+            st.markdown("#### ⚡ AI Generated Regex / Logic:")
+            st.code(gen_logic, language="python")
         
     st.write("---")
     col_btn1, col_btn2, col_btn3 = st.columns(3)
@@ -166,7 +170,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & AI-Powered Mapping Builder")
-    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)[cite: 4].")
+    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced).")
     
     # 🔑 Gemini API Key Box (Google Sheet Synced)
     with st.expander("🔑 Gemini API Key Settings", expanded=False):
@@ -352,7 +356,7 @@ def render_shipper_data():
                         else:
                             with st.spinner("Gemini AI डेटा और पक्का लॉजिक ढूंढ रहा है..."):
                                 header_test_prompt = [
-                                    {"role": "system", "content": "You are an expert Indian Customs invoice data extraction AI. Extract the requested value and also write a robust Python/Regex snippet or extraction logic that python/pdfplumber can execute reliably. Return the response strictly in JSON format with keys: 'extracted_value' and 'extracted_logic'."},
+                                    {"role": "system", "content": "You are an expert Indian Customs invoice data extraction AI. Extract the requested value and also write a robust Python/Regex snippet or extraction logic that python/pdfplumber can execute reliably. Return the response strictly as a valid JSON object with keys: 'extracted_value' and 'extracted_logic'. Example: {\"extracted_value\": \"INV-123\", \"extracted_logic\": \"re.search(r'INV-\\d+', text)\"}"},
                                     {"role": "user", "content": f"""
                                     Invoice Text:
                                     {curr_pdf_text[:4000]}
@@ -362,7 +366,7 @@ def render_shipper_data():
                                     Prompt: '{ai_p}'
                                     Result Example expected: '{res_ex}'
                                     
-                                    Task: Find the value and formulate a reliable extraction logic/regex. Return JSON: {{"extracted_value": "...", "extracted_logic": "..."}}
+                                    Task: Find the value and formulate a reliable extraction logic/regex. Return ONLY valid JSON: {{"extracted_value": "...", "extracted_logic": "..."}}
                                     """}
                                 ]
                                 ai_res = ask_local_ai(header_test_prompt)
@@ -375,14 +379,15 @@ def render_shipper_data():
                                     res_val = parsed_res.get("extracted_value", "")
                                     generated_logic = parsed_res.get("extracted_logic", "")
                                 except:
-                                    res_val = ai_res
+                                    # Fallback अगर JSON पार्स न हो तो सादा टेक्स्ट निकाल लें
+                                    res_val = ai_res.strip()
                                     generated_logic = f"# Regex/Logic based on keyword: {ky}"
                                     
                                 # अगर AI ने लॉजिक ढूंढ लिया है तो उसे ऑटोमैटिकली सेशन में अपडेट करना
                                 if generated_logic:
                                     current_rules[field]["extracted_logic"] = generated_logic
 
-                                show_field_test_dialog(edited_name, {"logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex, "extracted_logic": generated_logic}, res_val if res_val else "❌ (Not Found)", selected_shipper, field)
+                                show_field_test_dialog(edited_name, {"logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex, "extracted_logic": generated_logic}, res_val if res_val else "❌ (Not Found)", generated_logic, selected_shipper, field)
                 
                 updated_rules[edited_name] = {
                     "logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex, "extracted_logic": ext_logic
