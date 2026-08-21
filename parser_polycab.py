@@ -44,18 +44,38 @@ def format_date_ddmmyyyy(date_str):
 
 def extract_invoice_details_from_text(pdf_text):
     """
-    यदि मेन इनवॉइस फील्ड्स खाली हों तो PDF टेक्स्ट से Regex द्वारा Invoice No और Date ढूंढता है।
+    PDF टेक्स्ट से 'EXPORTER' जैसे शब्दों को छोड़कर सही इनवॉइस नंबर और डेट ढूंढता है[cite: 13].
     """
     inv_no = ""
     inv_date = ""
     if not pdf_text:
         return inv_no, inv_date
 
-    m_inv = re.search(r'INVOICE\s*(?:NO\.?|NUMBER)?\s*[:\.]?\s*([A-Z0-9]{8,20})', pdf_text, re.IGNORECASE)
-    if m_inv:
-        inv_no = m_inv.group(1).strip()
+    # 1. टेक्स्ट की लाइनों में 'INVOICE' या 'NO' वाले हिस्से को खोजना[cite: 13]
+    lines = pdf_text.split('\n')
+    for line in lines:
+        upper_line = line.upper()
+        if "INVOICE" in upper_line and ("NO" in upper_line or "#" in upper_line or "NUMBER" in upper_line):
+            words = line.split()
+            for w in words:
+                w_clean = w.strip(".,:-/")
+                # 'EXPORTER' या बहुत छोटे शब्दों को छोड़कर सही अल्फा-न्युमेरिक नंबर उठाना[cite: 13]
+                if len(w_clean) >= 6 and w_clean.upper() != "EXPORTER" and any(c.isdigit() for c in w_clean):
+                    inv_no = w_clean
+                    break
+        if inv_no:
+            break
 
-    m_date = re.search(r'(?:DTD\.?|DATE\s*[:\.]?)\s*(\d{1,2}[\.\/\-]\d{1,2}[\.\/\-]\d{2,4}|\d{1,2}[\s\/\-][A-Za-z]{3}[\s\/\-]\d{2,4})', pdf_text, re.IGNORECASE)
+    # 2. अगर लाइन-बाय-लाइन न मिले तो जनरल पैटर्न से खोजना (EXPORTER को छोड़कर)[cite: 13]
+    if not inv_no:
+        matches = re.findall(r'(?:NO\.?|NUMBER)?\s*[:\.]?\s*([A-Z0-9]{8,20})', pdf_text, re.IGNORECASE)
+        for m in matches:
+            if m.upper() != "EXPORTER":
+                inv_no = m.strip()
+                break
+
+    # Invoice Date Extract
+    m_date = re.search(r'(?:DTD\.?|DATE\s*[:\.]?)\s*(\d{1,2}[\.\/\-]\d{1,2}[\.\/\-]\d{2,4}|\d{1,2}[\s\/\-][A-Za-z]{3}[\s\/\-][\d]{2,4})', pdf_text, re.IGNORECASE)
     if m_date:
         inv_date = m_date.group(1).strip()
 
@@ -63,7 +83,7 @@ def extract_invoice_details_from_text(pdf_text):
 
 def extract_polycab_items(pdf_lines, pdf_text=""):
     """
-    Polycab के लिए डेडीकेटेड पार्सर लॉजिक।
+    Polycab के लिए डेडीकेटेड पार्सर लॉजिक[cite: 10].
     """
     parsed_items = []
     current_hs = "85446090"
@@ -97,7 +117,7 @@ def extract_polycab_items(pdf_lines, pdf_text=""):
 
 def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws="", parser_rule=""):
     """
-    एक्सल शीट में Polycab का डेटा डायनेमिकली भरने का फंक्शन।
+    एक्सल शीट में Polycab का डेटा डायनेमिकली भरने का फंक्शन[cite: 10].
     """
     current_row = start_excel_row
     overall_sr = start_overall_sr
@@ -119,10 +139,10 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
 
         # 1. सबसे पहले F, G, H, I, J में पक्का डेटा फिक्स करना
         ws[f"F{current_row}"] = overall_sr          # SR. NO.
-        ws[f"G{current_row}"] = inv_sr_no           # Inv. Sr. No.[cite: 21]
-        ws[f"H{current_row}"] = item_sr             # Item Sr. No.[cite: 21]
-        ws[f"I{current_row}"] = inv_no if inv_no else "INV"  # Invoice No.[cite: 21]
-        ws[f"J{current_row}"] = formatted_date      # Invoice Date (DD/MM/YYYY)[cite: 21]
+        ws[f"G{current_row}"] = inv_sr_no           # Inv. Sr. No.
+        ws[f"H{current_row}"] = item_sr             # Item Sr. No.
+        ws[f"I{current_row}"] = inv_no if inv_no else "INV"  # Invoice No.
+        ws[f"J{current_row}"] = formatted_date      # Invoice Date (DD/MM/YYYY)
 
         for field_name, rule_info in resolved_item_rules.items():
             col = rule_info.get("col", "K").upper()
