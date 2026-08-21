@@ -4,6 +4,7 @@ import json
 import pdfplumber
 import io
 from io import BytesIO
+import re
 
 from pdf_engine import detect_igst_status, extract_header_value
 from test_suite import render_universal_test_suite
@@ -96,10 +97,9 @@ def add_custom_header_field_dialog(selected_shipper):
 def render_shipper_data():
     load_local_shippers()
     
-    st.header("🏢 Add Shipper Name & Visual No-Code Mapping Builder")
-    st.caption("बिना किसी कोडिंग या बार-बार AI के, विजुअल तरीके से पीडीएफ से डेटा कैप्चर करने का स्मार्ट इंजन।")
+    st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
+    st.caption("बिना किसी AI या कोडिंग के, सीधे टेक्स्ट से खुद-ब-खुद रेजेक्स कोड जनरेट करने का लोकल स्मार्ट टूल।")
     
-    # शिपर सेलेक्शन
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
         selected_shipper = st.selectbox("कॉन्फ़िगर करने के लिए शिपर चुनें:", shippers_list, index=None, placeholder="शिपर चुनें...")
@@ -107,9 +107,9 @@ def render_shipper_data():
             st.write(f"### ⚙️ शिपर प्रोफाइल: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
 
-            # 🧪 1. Instant PDF Upload & Visual Text Inspector
+            # 1. PDF Upload & Inspector
             st.write("---")
-            st.subheader("🧪 1. Sample PDF Upload & Visual Text Inspector")
+            st.subheader("🧪 1. Sample PDF Upload & Text Viewer")
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए सैंपल इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             
             if test_pdf:
@@ -123,20 +123,52 @@ def render_shipper_data():
                             pdf_lines.extend(t.split("\n"))
                 st.session_state["cached_pdf_lines"] = pdf_lines
                 st.session_state["cached_pdf_text"] = pdf_text
-                st.success(f"📄 PDF सफलतापूर्वक लोड हो गई है ({len(pdf_lines)} पंक्तियाँ)।")
+                st.success(f"📄 PDF लोड हो गई है ({len(pdf_lines)} पंक्तियाँ)।")
 
-            # 👁️ 2. Visual Text Inspector Box (ताकि आप खुद देखकर तुरंत नियम बना सकें)
             curr_pdf_text = st.session_state.get("cached_pdf_text", "")
             if curr_pdf_text:
-                with st.expander("👁️ View Extracted PDF Raw Text (यहाँ से देखकर आसानी से कीवर्ड या वैल्यू चुनें)", expanded=False):
-                    st.text_area("PDF Raw Text Content:", value=curr_pdf_text[:4000], height=200, key=f"raw_txt_{selected_shipper}")
-                    st.info("💡 टिप: यहाँ से वैल्यू (जैसे इनवॉइस नंबर) को कॉपी करें और नीचे अपने हेडर रूल में सीधे पेस्ट कर दें। इससे आपको कभी कोडिंग या AI की जरूरत नहीं पड़ेगी!")
+                with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू कॉपी करें)", expanded=False):
+                    st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # 🛠️ 3. Header Fields Mapping Rules (Deterministic Regex / Keyword Engine)
+            # 🛠️ 2. ⚡ Local No-Code Regex Generator Box (बिना AI के कोड बनाने का जादुई बॉक्स)
+            st.write("---")
+            st.subheader("⚡ 2. Local No-Code Regex Generator (बिना AI के कोड बनाएं)")
+            st.caption("ऊपर PDF से वैल्यू देखकर यहाँ दर्ज करें, सिस्टम तुरंत उसका पक्का पाइथन रेजेक्स कोड बना देगा:")
+            
+            gen_col1, gen_col2 = st.columns(2)
+            with gen_col1:
+                target_val_input = st.text_input("1. जो वैल्यू निकालनी है वह यहाँ पेस्ट करें (उदा: GJ29XE2627100206):", key=f"t_val_{selected_shipper}")
+            with gen_col2:
+                keyword_input = st.text_input("2. उसके पास का मुख्य कीवर्ड डालें (उदा: INVOICE NO. & DATE):", key=f"t_kw_{selected_shipper}")
+                
+            if st.button("🛠️ Generate Local Python/Regex Code Now", type="secondary", key=f"btn_gen_regex_{selected_shipper}"):
+                if not target_val_input.strip() or not keyword_input.strip():
+                    st.error("कृपया दोनों बॉक्स में वैल्यू और कीवर्ड दर्ज करें!")
+                else:
+                    # लोकल तरीके से बिना किसी AI के सटीक रेजेक्स कोड खुद जनरेट करना
+                    escaped_kw = re.escape(keyword_input.strip())
+                    generated_code = f'import re\nmatch = re.search(r"{escaped_kw}[\\s\\S]*?\\n\\s*([A-Z0-9-]{{5,25}})", text)\nvalue = match.group(1) if match else None'
+                    
+                    st.success("🎉 आपका लोकल रेजेक्स कोड तैयार है! इसे नीचे अपने हेडर रूल में कॉपी कर लें:")
+                    st.code(generated_code, language="python")
+                    
+                    # तुरंत टेस्ट करके भी दिखा दें कि यह काम कर रहा है या नहीं
+                    try:
+                        local_env = {"text": curr_pdf_text, "re": re}
+                        exec(generated_code, {}, local_env)
+                        found_res = local_env.get("value", "Not Found")
+                        if found_res and found_res != "None":
+                            st.info(f"✅ **Test Successful!** इस कोड से यह वैल्यू निकली है: **`{found_res}`**")
+                        else:
+                            st.warning("⚠️ इस कीवर्ड पैटर्न से वैल्यू मैच नहीं हुई। कृपया कीवर्ड थोड़ा सा बदल कर दोबारा प्रयास करें।")
+                    except Exception as ex:
+                        st.error(f"Test Error: {str(ex)}")
+
+            # 🛠️ 3. Header Fields Mapping Rules Table
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
             with c_title:
-                st.subheader("🛠️ 2. Header Fields Mapping & Regex Rules")
+                st.subheader("🛠️ 3. Header Fields Mapping & Regex Rules")
             with c_add_h:
                 if st.button("➕ Add Header Field", type="secondary", use_container_width=True):
                     add_custom_header_field_dialog(selected_shipper)
@@ -168,11 +200,7 @@ def render_shipper_data():
                 with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: GJ29XE...", label_visibility="collapsed")
                 
                 saved_ext_logic = s_val.get("extracted_logic", "")
-                # पॉलीकैब या अन्य के लिए डिफ़ॉल्ट मजबूत रेजेक्स जो बिना AI के सीधे काम करेगा
-                if not saved_ext_logic and ("inv. no" in field.lower() or "invoice no" in field.lower()):
-                    saved_ext_logic = 'import re\nmatch = re.search(r"INVOICE NO\\.\\s*&\\s*DATE[\\s\\S]*?\\n\\s*([A-Z0-9]{10,20})", text)\nvalue = match.group(1) if match else None'
-
-                with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="re.search(...) लॉजिक यहाँ लिखें", label_visibility="collapsed")
+                with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="यहाँ जनरेटेड कोड पेस्ट करें", label_visibility="collapsed")
                 
                 with c8:
                     if st.button("🗑️", key=f"del_h_{field}"):
@@ -188,4 +216,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके रूल्स और लोकल रेजेक्स लॉजिक सफलतापूर्वक गूगल शीट पर सेव हो गए हैं! अब इनवॉइस प्रोसेस करते वक्त कोई API लिमिट नहीं आएगी।")
+                st.success("🎉 आपके सारे रूल्स और लोकल रेजेक्स लॉजिक सफलतापूर्वक गूगल शीट पर सेव हो गए हैं! अब कोई API लिमिट या एरर नहीं आएगी।")
