@@ -5,7 +5,7 @@ import pdfplumber
 import io
 from io import BytesIO
 
-from pdf_engine import detect_igst_status
+from pdf_engine import detect_igst_status, extract_header_value
 from test_suite import render_universal_test_suite
 from ai_engine import ask_local_ai, create_new_parser_file_on_github, WEB_APP_URL
 from ai_parser_agent import render_ai_parser_agent_ui
@@ -78,8 +78,8 @@ def load_local_shippers():
 def ensure_default_shipper():
     load_local_shippers()
 
-@st.dialog("🧪 Live Header Field Test & Self-Correction Verification")
-def show_field_test_dialog(field_name, rule_data, result_val, gen_logic, selected_shipper, field_key):
+@st.dialog("🧪 Live Header Field Dual-Verification & Comparison")
+def show_field_test_dialog(field_name, rule_data, direct_val, regex_val, gen_logic, match_status, selected_shipper, field_key):
     st.write(f"### 🔍 Header Field: **`{field_name}`**")
     st.markdown("#### 📋 Rule Parameters:")
     col_a, col_b = st.columns(2)
@@ -91,22 +91,30 @@ def show_field_test_dialog(field_name, rule_data, result_val, gen_logic, selecte
         st.markdown(f"* **Result Example:** `{rule_data.get('result_example', 'N/A')}`")
         
     st.write("---")
-    st.markdown("#### 🎯 AI Self-Tested & Verified Result:")
-    if "❌" in result_val or not result_val.strip():
-        st.error(f"❌ **Not Found!** Value: `{result_val}`")
-    else:
-        st.success("🎉 **Extracted & Verified Value:**")
-        st.code(result_val, language="text")
+    st.markdown("#### ⚖️ Dual-Extraction Comparison Result:")
+    
+    col_v1, col_v2 = st.columns(2)
+    with col_v1:
+        st.markdown("**📌 Direct AI/Keyword Value:**")
+        st.code(direct_val, language="text")
+    with col_v2:
+        st.markdown("**⚡ Regex Code Extracted Value:**")
+        st.code(regex_val, language="text")
         
-        if gen_logic:
-            st.markdown("#### ⚡ Self-Tested Python/Regex Code (Ready to Copy):")
-            st.code(gen_logic, language="python")
+    if match_status:
+        st.success("✅ **Status: SUCCESS!** Direct value and Regex value match perfectly.")
+    else:
+        st.error("❌ **Status: MISMATCH!** Regex code output does not match direct extraction. Please review the code.")
+        
+    if gen_logic:
+        st.markdown("#### ⚡ Verified Python/Regex Code (Ready to Copy):")
+        st.code(gen_logic, language="python")
         
     st.write("---")
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        if st.button("🔄 Re-check & Self-Correct", use_container_width=True, key=f"rec_h_{field_key}"):
-            st.toast("Re-running AI self-correction check...")
+        if st.button("🔄 Re-check & Verify Again", use_container_width=True, key=f"rec_h_{field_key}"):
+            st.toast("Re-running dual verification...")
             st.rerun()
     with col_btn2:
         if st.button("❌ Close", use_container_width=True, key=f"can_h_{field_key}"):
@@ -167,7 +175,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & AI-Powered Mapping Builder")
-    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced).")
+    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)[cite: 4].")
     
     # 🔑 Gemini API Key Box (Google Sheet Synced)
     with st.expander("🔑 Gemini API Key Settings", expanded=False):
@@ -353,20 +361,20 @@ def render_shipper_data():
                 with c9:
                     if st.button("⚡ Test", key=f"test_btn_{field}"):
                         curr_pdf_text = st.session_state.get("cached_pdf_text", "")
+                        curr_pdf_lines = st.session_state.get("cached_pdf_lines", [])
                         if not curr_pdf_text:
                             st.toast("⚠️ पहले ऊपर PDF अपलोड करें!")
                         else:
-                            with st.spinner("🤖 AI Self-Testing & Verifying Regex Logic..."):
+                            with st.spinner("🤖 AI Dual-Verification Running..."):
+                                # 1. Direct Keyword Extraction
+                                direct_extracted = extract_header_value(curr_pdf_lines, curr_pdf_text, ky, "Right (आगे)", "Exact Word", "", "None", field_label=edited_name, pdf_bytes=st.session_state.get("cached_pdf_bytes"))
+                                
+                                # 2. AI Agent Generated Regex Logic
                                 agent_system_prompt = (
                                     "You are an expert Autonomous Python/Regex Agent for Indian Customs Invoice parsing. "
-                                    "Your task is to:\n"
-                                    "1. Find the exact requested field value from the invoice text.\n"
-                                    "2. Write a Python snippet using `re.search` to extract this value.\n"
-                                    "3. SIMULATE executing your regex against the invoice text internally. Verify if it extracts the exact target value.\n"
-                                    "4. If the regex fails or extracts wrong data, self-correct and rewrite it until it yields 100% accurate results.\n"
-                                    "5. Return strictly in this format:\n"
-                                    "Value: [extracted value]\n"
-                                    "Logic: [tested and verified python/regex code snippet]"
+                                    "Write a Python snippet using `re.search` against variable `text` to extract the requested field. "
+                                    "Store the final extracted string in variable `value`. "
+                                    "Return strictly in this format:\nLogic: [python/regex code snippet]"
                                 )
                                 agent_user_prompt = f"""
                                 Invoice Text Snippet:
@@ -376,38 +384,28 @@ def render_shipper_data():
                                 Keyword: '{ky}'
                                 Prompt Instruction: '{ai_p}'
                                 Expected Result Example: '{res_ex}'
-                                
-                                Task: Self-test and verify the extraction logic. Output ONLY Value and verified Logic.
                                 """
+                                ai_res = ask_local_ai([{"role": "system", "content": agent_system_prompt}, {"role": "user", "content": agent_user_prompt}])
                                 
-                                agent_messages = [
-                                    {"role": "system", "content": agent_system_prompt},
-                                    {"role": "user", "content": agent_user_prompt}
-                                ]
-                                
-                                ai_res = ask_local_ai(agent_messages)
-                                res_val = ""
                                 generated_logic = ""
-                                
-                                if ai_res and "Value:" in ai_res and "Logic:" in ai_res:
-                                    parts = ai_res.split("Logic:")
-                                    res_val = parts[0].replace("Value:", "").strip()
-                                    generated_logic = parts[1].strip()
-                                    
-                                    try:
-                                        clean_code = generated_logic.replace("```python", "").replace("```", "").strip()
-                                        local_env = {"text": curr_pdf_text, "re": re}
-                                        exec(clean_code, {}, local_env)
-                                        test_extracted = local_env.get("value", None)
-                                        if test_extracted:
-                                            res_val = str(test_extracted)
-                                    except Exception:
-                                        pass
+                                if ai_res and "Logic:" in ai_res:
+                                    generated_logic = ai_res.split("Logic:")[1].strip()
                                 else:
-                                    res_val = ai_res.strip() if ai_res else "❌ (Not Found)"
                                     generated_logic = f'import re\nmatch = re.search(r"{ky}[\\s\\S]*?\\n\\s*([A-Z0-9]{10,20})", text)\nvalue = match.group(1) if match else None'
+                                
+                                # 3. Run Regex Code Locally
+                                regex_extracted = ""
+                                try:
+                                    clean_code = generated_logic.replace("```python", "").replace("```", "").strip()
+                                    local_env = {"text": curr_pdf_text, "re": re}
+                                    exec(clean_code, {}, local_env)
+                                    regex_extracted = str(local_env.get("value", ""))
+                                except Exception as e:
+                                    regex_extracted = f"Error: {str(e)}"
+                                    
+                                match_matched = (str(direct_extracted).strip() == str(regex_extracted).strip()) and bool(regex_extracted) and regex_extracted != "None"
 
-                                show_field_test_dialog(edited_name, {"logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex}, res_val, generated_logic, selected_shipper, field)
+                                show_field_test_dialog(edited_name, {"logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex}, direct_extracted, regex_extracted, generated_logic, match_matched, selected_shipper, field)
                 
                 updated_rules[edited_name] = {
                     "logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex, "extracted_logic": ext_logic
