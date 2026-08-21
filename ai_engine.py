@@ -32,6 +32,32 @@ def load_gemini_api_key_from_sheet():
         pass
     return ""
 
+def save_github_pat_to_sheet(pat_key):
+    """GitHub PAT को सीधे Google Sheet पर सेव करने के लिए"""
+    try:
+        payload = {
+            "action": "save_github_pat",
+            "pat_key": pat_key.strip()
+        }
+        response = requests.post(WEB_APP_URL, data=json.dumps(payload), timeout=30)
+        if response.status_code == 200:
+            return True
+        return False
+    except Exception:
+        return False
+
+def load_github_pat_from_sheet():
+    """Google Sheet से सेव किया गया GitHub PAT फेच करने के लिए"""
+    try:
+        response = requests.get(WEB_APP_URL, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, dict):
+                return data.get("github_pat", "")
+    except Exception:
+        pass
+    return ""
+
 def push_all_to_sheet(shippers_json_payload):
     """शिपर का डेटा और रूल्स गूगल शीट (Shipper_JSON_Database) पर सेव करने के लिए"""
     try:
@@ -97,7 +123,6 @@ def update_parser_file_on_github(parser_file_name, new_code_content, github_toke
         "Accept": "application/vnd.github.v3+json"
     }
     
-    # 1. पहले फाइल का मौजूदा SHA प्राप्त करना जरूरी होता है (GitHub API requirement for updating files)
     try:
         get_res = requests.get(url, headers=headers)
         file_sha = ""
