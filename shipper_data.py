@@ -98,7 +98,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
-    st.caption("टैम्पलेट अपलोड, कीवर्ड, और वर्ड पोजीशन के आधार पर बिना AI के 100% सटीक मैपिंग टूल।")
+    st.caption("टैम्पलेट अपलोड, कीवर्ड, और वर्ड पोजीशन के आधार पर बिना AI के 100% ऑटोमैटिक मैपिंग टूल।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -107,7 +107,7 @@ def render_shipper_data():
             st.write(f"### ⚙️ शिपर प्रोफाइल: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
 
-            # 📁 1. टेम्पलेट फ़ाइल अपलोड (Google Sheet Synced) - RESTORED
+            # 📁 1. टेम्पलेट फ़ाइल अपलोड
             st.write("---")
             st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड (Full Job Excel Template)")
             
@@ -145,7 +145,7 @@ def render_shipper_data():
                             else:
                                 st.error("❌ अपलोड फेल हो गया!")
 
-            # 🧪 2. Instant PDF Upload & Text Inspector
+            # 🧪 2. PDF Upload & Text Inspector
             st.write("---")
             st.subheader("🧪 2. Sample PDF Upload & Text Viewer")
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए सैंपल इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
@@ -168,10 +168,10 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # 🛠️ 3. ⚡ Local No-Code Regex & Word Position Generator Box
+            # ⚡ 3. Auto-Apply & Save Generator Box (एक क्लिक पर सीधा शिपर रूल में सेव होगा)
             st.write("---")
-            st.subheader("⚡ 3. Keyword + Word Position Regex Generator")
-            st.caption("कीवर्ड और उसका वर्ड पोजीशन नंबर देकर तुरंत पक्का पाइथन कोड बनाएं:")
+            st.subheader("⚡ 3. Smart Auto-Apply & Save Generator")
+            st.caption("कीवर्ड और वर्ड पोजीशन दें, और सीधे उस फील्ड को चुनें जिसमें यह लॉजिक परमानेंट सेव करना है:")
             
             gen_col1, gen_col2, gen_col3 = st.columns([2, 2, 1])
             with gen_col1:
@@ -180,10 +180,16 @@ def render_shipper_data():
                 keyword_input = st.text_input("2. मुख्य कीवर्ड (उदा: INVOICE NO. & DATE):", key=f"t_kw_{selected_shipper}")
             with gen_col3:
                 word_offset = st.number_input("3. Word Index (+आगे):", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
+            
+            # किस फील्ड पर यह रूल अप्लाई करना है उसका चयन
+            mapping_keys = list(shipper_info.get("mapping_rules", {}).keys())
+            target_field_to_update = st.selectbox("4. यह लॉजिक किस हेडर फील्ड (Field Name) पर सेव करना है?", mapping_keys if mapping_keys else ["Inv. No."], key=f"target_f_{selected_shipper}")
                 
-            if st.button("🛠️ Generate Position-Based Python Code", type="secondary", key=f"btn_gen_regex_{selected_shipper}"):
+            if st.button("⚡ Auto-Apply & Save to Shipper Rule", type="primary", key=f"btn_auto_save_{selected_shipper}"):
                 if not target_val_input.strip() or not keyword_input.strip():
                     st.error("कृपया वैल्यू और कीवर्ड दोनों दर्ज करें!")
+                elif not target_field_to_update:
+                    st.error("कृपया कोई हेडर फील्ड चुनें!")
                 else:
                     escaped_kw = re.escape(keyword_input.strip())
                     generated_code = (
@@ -194,17 +200,25 @@ def render_shipper_data():
                         f'value = match.group(1) if match else None'
                     )
                     
-                    st.success("🎉 आपका पोजीशन-बेस्ड रेजेक्स कोड तैयार है!")
-                    st.code(generated_code, language="python")
+                    # सीधे उस शिपर के मैपिंग रूल में एक्स्ट्रैक्टेड लॉजिक और रिजल्ट एग्जांपल को सेव कर दें[cite: 3]
+                    shipper_info["mapping_rules"][target_field_to_update]["extracted_logic"] = generated_code
+                    shipper_info["mapping_rules"][target_field_to_update]["result_example"] = target_val_input.strip()
+                    shipper_info["mapping_rules"][target_field_to_update]["keyword"] = keyword_input.strip()
                     
+                    # गूगल शीट और लोकल JSON पर परमानेंट सेव[cite: 3]
+                    save_local_shippers()
+                    
+                    st.success(f"🎉 सफलता! '{target_field_to_update}' के लिए रेजेक्स कोड ऑटोमैटिक जनरेट होकर गूगल शीट पर परमानेंट सेव हो गया है!")
+                    
+                    # तुरंत लाइव टेस्ट करके दिखाएं[cite: 3]
                     try:
                         local_env = {"text": curr_pdf_text, "re": re}
                         exec(generated_code, {}, local_env)
                         found_res = local_env.get("value", "Not Found")
                         if found_res and found_res != "None":
-                            st.info(f"✅ **Test Successful!** इस पोजीशन के हिसाब से वैल्यू निकली है: **`{found_res}`**")
+                            st.info(f"✅ **Live Test Passed:** एक्सट्रेक्ट हुई वैल्यू है -> **`{found_res}`**")
                         else:
-                            st.warning("⚠️ इस पोजीशन पर वैल्यू मैच नहीं हुई। कृपया Word Index (नंबर) को कम या ज्यादा करके दोबारा जनरेट करें।")
+                            st.warning("⚠️ कोड सेव हो गया है, लेकिन इस PDF टेक्स्ट में मैच नहीं मिला। कृपया कीवर्ड चेक करें।")
                     except Exception as ex:
                         st.error(f"Test Error: {str(ex)}")
 
@@ -244,7 +258,7 @@ def render_shipper_data():
                 with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: GJ29XE...", label_visibility="collapsed")
                 
                 saved_ext_logic = s_val.get("extracted_logic", "")
-                with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="यहाँ जनरेटेड कोड पेस्ट करें", label_visibility="collapsed")
+                with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="यहाँ जनरेटेड कोड सेव होगा", label_visibility="collapsed")
                 
                 with c8:
                     if st.button("🗑️", key=f"del_h_{field}"):
@@ -260,4 +274,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स और टेम्पलेट सेटिंग्स सफलतापूर्वक गूगल शीट पर सिंक हो गए हैं!")
+                st.success("🎉 आपके सारे रूल्स और सेटिंग्स सफलतापूर्वक गूगल शीट पर सिंक हो गए हैं!")
