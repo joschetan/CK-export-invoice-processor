@@ -83,6 +83,46 @@ def create_new_parser_file_on_github(parser_name, github_token, repo_owner="josc
     except Exception as e:
         return False, f"Connection Error: {str(e)}"
 
+def update_parser_file_on_github(parser_file_name, new_code_content, github_token, repo_owner="joschetan", repo_name="CK-export-invoice-processor"):
+    """
+    GitHub पर मौजूदा पार्सर फाइल के कोड को AI द्वारा सुधारे गए नए कोड से अपडेट (Commit/Push) करता है।
+    """
+    clean_name = str(parser_file_name).strip().lower()
+    if not clean_name.endswith(".py"):
+        clean_name += ".py"
+        
+    url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{clean_name}"
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    # 1. पहले फाइल का मौजूदा SHA प्राप्त करना जरूरी होता है (GitHub API requirement for updating files)
+    try:
+        get_res = requests.get(url, headers=headers)
+        file_sha = ""
+        if get_res.status_code == 200:
+            file_sha = get_res.json().get("sha", "")
+            
+        encoded_content = base64.b64encode(new_code_content.encode('utf-8')).decode('utf-8')
+        
+        payload = {
+            "message": f"AI Auto-fix parser code for {clean_name}",
+            "content": encoded_content,
+            "branch": "main"
+        }
+        if file_sha:
+            payload["sha"] = file_sha
+            
+        put_res = requests.put(url, headers=headers, json=payload)
+        if put_res.status_code in [200, 201]:
+            return True, f"सफलता! फाइल `{clean_name}` का अपडेटेड कोड सीधे GitHub पर पुश हो गया है।"
+        else:
+            err_msg = put_res.json().get('message', 'Unknown error')
+            return False, f"GitHub Update Error: {err_msg}"
+    except Exception as e:
+        return False, f"Connection Error: {str(e)}"
+
 def ask_local_ai(messages):
     """
     Google Gemini API के माध्यम से डेटा एक्सट्रैक्ट करने का सुपर-फास्ट इंजन।
