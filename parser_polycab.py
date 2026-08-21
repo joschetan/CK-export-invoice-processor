@@ -44,30 +44,21 @@ def format_date_ddmmyyyy(date_str):
 
 def extract_invoice_details_from_text(pdf_text):
     """
-    PDF टेक्स्ट से शुद्ध रूप से इनवॉइस नंबर और डेट एक्सट्रेक्ट करता है।
+    PDF टेक्स्ट से शुद्ध रूप से इनवॉइस नंबर और डेट एक्सट्रेक्ट करता है (EXPORTER को पूरी तरह नजरअंदाज करते हुए)।
     """
     inv_no = ""
     inv_date = ""
     if not pdf_text:
         return inv_no, inv_date
 
-    # 1. टेक्स्ट की लाइनों से इनवॉइस नंबर खोजना
-    lines = pdf_text.split('\n')
-    for line in lines:
-        upper_line = line.upper()
-        if "INVOICE" in upper_line and ("NO" in upper_line or "#" in upper_line or "NUMBER" in upper_line):
-            words = line.split()
-            for w in words:
-                w_clean = w.strip(".,:-/")
-                if len(w_clean) >= 6 and any(c.isdigit() for c in w_clean):
-                    inv_no = w_clean
-                    break
-        if inv_no:
-            break
+    # 1. सीधे सुरक्षित पैटर्न से इनवॉइस नंबर खोजना (जो 'EXPORTER' या फालतू शब्दों को न पकड़े)
+    m_inv = re.search(r'(?:INVOICE\s*NO\.?\s*&\s*DATE|INVOICE\s*NO\.?)\s*[\r\n]+\s*([A-Z0-9\-]{8,25})', pdf_text, re.IGNORECASE)
+    if m_inv:
+        inv_no = m_inv.group(1).strip()
 
-    # 2. जनरल पैटर्न से खोजना
     if not inv_no:
-        matches = re.findall(r'(?:NO\.?|NUMBER)?\s*[:\.]?\s*([A-Z0-9]{8,20})', pdf_text, re.IGNORECASE)
+        # यदि ऊपर से न मिले तो 'GJ' या सामान्य इनवॉइस पैटर्न ढूंढें
+        matches = re.findall(r'\b(GJ[A-Z0-9\-]{10,20})\b', pdf_text)
         if matches:
             inv_no = matches[0].strip()
 
@@ -80,7 +71,7 @@ def extract_invoice_details_from_text(pdf_text):
 
 def extract_polycab_items(pdf_lines, pdf_text=""):
     """
-    Polycab के लिए शुद्ध डेटा आधारित पार्सर लॉजिक[cite: 10].
+    Polycab के लिए शुद्ध डेटा आधारित पार्सर लॉजिक[cite: 4].
     """
     parsed_items = []
     current_hs = ""
@@ -107,7 +98,7 @@ def extract_polycab_items(pdf_lines, pdf_text=""):
 
 def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws="", parser_rule=""):
     """
-    एक्सल शीट में Polycab का डेटा भरने का फंक्शन (बिना किसी हार्डकोडेड डिफ़ॉल्ट के)[cite: 10].
+    एक्सल शीट में Polycab का डेटा भरने का फंक्शन[cite: 4].
     """
     current_row = start_excel_row
     overall_sr = start_overall_sr
@@ -130,8 +121,11 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
         ws[f"F{current_row}"] = overall_sr          # SR. NO.
         ws[f"G{current_row}"] = inv_sr_no           # Inv. Sr. No.
         ws[f"H{current_row}"] = item_sr             # Item Sr. No.
-        ws[f"I{current_row}"] = inv_no if inv_no else ""  # Invoice No.
-        ws[f"J{current_row}"] = formatted_date      # Invoice Date (DD/MM/YYYY)
+        
+        # केवल तभी लिखें जब डिफ़ॉल्ट इनवॉइस नंबर उपलब्ध हो और वह 'EXPORTER' न हो
+        if inv_no and "EXPORTER" not in str(inv_no).upper():
+            ws[f"I{current_row}"] = inv_no
+            ws[f"J{current_row}"] = formatted_date      
 
         for field_name, rule_info in resolved_item_rules.items():
             col = rule_info.get("col", "K").upper()
@@ -160,8 +154,10 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
 
             ws[cell_target] = val_to_write
 
-        ws[f"I{current_row}"] = inv_no if inv_no else ""
-        ws[f"J{current_row}"] = formatted_date
+        # यदि पार्सर के पास सही इनवॉइस नंबर है तो उसे सुरक्षित रखें
+        if inv_no and "EXPORTER" not in str(inv_no).upper():
+            ws[f"I{current_row}"] = inv_no
+            ws[f"J{current_row}"] = formatted_date
 
         current_row += 1
         overall_sr += 1
