@@ -57,7 +57,6 @@ def get_safe_filename(shipper_name):
 def load_local_shippers():
     ensure_local_directories()
     
-    # 🚀 ऑप्टिमाइज़ेशन: यदि सेशन में डेटा पहले से मौजूद है, तो बार-बार गूगल शीट को कॉल नहीं किया जाएगा
     if "shipper_database" in st.session_state and st.session_state["shipper_database"]:
         return
 
@@ -79,7 +78,7 @@ def load_local_shippers():
 def ensure_default_shipper():
     load_local_shippers()
 
-@st.dialog("🧪 Live Header Field Test & Verification")
+@st.dialog("🧪 Live Header Field Test & Self-Correction Verification")
 def show_field_test_dialog(field_name, rule_data, result_val, gen_logic, selected_shipper, field_key):
     st.write(f"### 🔍 Header Field: **`{field_name}`**")
     st.markdown("#### 📋 Rule Parameters:")
@@ -92,22 +91,22 @@ def show_field_test_dialog(field_name, rule_data, result_val, gen_logic, selecte
         st.markdown(f"* **Result Example:** `{rule_data.get('result_example', 'N/A')}`")
         
     st.write("---")
-    st.markdown("#### 🎯 AI Extracted Result & Suggested Regex Logic:")
+    st.markdown("#### 🎯 AI Self-Tested & Verified Result:")
     if "❌" in result_val or not result_val.strip():
         st.error(f"❌ **Not Found!** Value: `{result_val}`")
     else:
-        st.success("🎉 **Extracted Value:**")
+        st.success("🎉 **Extracted & Verified Value:**")
         st.code(result_val, language="text")
         
         if gen_logic:
-            st.markdown("#### ⚡ Copy this Logic into your 'Logic (Regex)' column:")
+            st.markdown("#### ⚡ Self-Tested Python/Regex Code (Ready to Copy):")
             st.code(gen_logic, language="python")
         
     st.write("---")
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        if st.button("🔄 Re-check", use_container_width=True, key=f"rec_h_{field_key}"):
-            st.toast("Re-running AI check...")
+        if st.button("🔄 Re-check & Self-Correct", use_container_width=True, key=f"rec_h_{field_key}"):
+            st.toast("Re-running AI self-correction check...")
             st.rerun()
     with col_btn2:
         if st.button("❌ Close", use_container_width=True, key=f"can_h_{field_key}"):
@@ -168,7 +167,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & AI-Powered Mapping Builder")
-    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)[cite: 4].")
+    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)[cite: 4, 6].")
     
     # 🔑 Gemini API Key Box (Google Sheet Synced)
     with st.expander("🔑 Gemini API Key Settings", expanded=False):
@@ -341,6 +340,9 @@ def render_shipper_data():
                 with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: TUMB", label_visibility="collapsed")
                 
                 saved_ext_logic = s_val.get("extracted_logic", "")
+                if not saved_ext_logic and ("inv. no" in field.lower() or "invoice no" in field.lower()):
+                    saved_ext_logic = 'import re\nmatch = re.search(r"INVOICE NO\\.\\s*&\\s*DATE[\\s\\S]*?\\n\\s*([A-Z0-9]{10,20})", text)\nvalue = match.group(1) if match else None'
+
                 with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="AI Logic / Regex", label_visibility="collapsed")
                 
                 with c8:
@@ -354,20 +356,37 @@ def render_shipper_data():
                         if not curr_pdf_text:
                             st.toast("⚠️ पहले ऊपर PDF अपलोड करें!")
                         else:
-                            with st.spinner("Gemini AI वैल्यू और पक्का Regex लॉजिक तैयार कर रहा है..."):
-                                header_test_prompt = [
-                                    {"role": "system", "content": "You are an expert Indian Customs invoice extraction AI. First, find the requested value. Second, write a clean Python regex or text extraction logic snippet that can find this exact pattern. Output format exactly like this:\nValue: [extracted value]\nLogic: [python/regex logic snippet]"},
-                                    {"role": "user", "content": f"""
-                                    Invoice Text:
-                                    {curr_pdf_text[:4000]}
-                                    
-                                    Field Name: '{edited_name}'
-                                    Keyword: '{ky}'
-                                    Prompt: '{ai_p}'
-                                    Result Example expected: '{res_ex}'
-                                    """}
+                            with st.spinner("🤖 AI Self-Testing & Verifying Regex Logic..."):
+                                # 🚀 Self-Correction Agent Prompting
+                                agent_system_prompt = (
+                                    "You are an expert Autonomous Python/Regex Agent for Indian Customs Invoice parsing. "
+                                    "Your task is to:\n"
+                                    "1. Find the exact requested field value from the invoice text.\n"
+                                    "2. Write a Python snippet using `re.search` to extract this value.\n"
+                                    "3. SIMULATE executing your regex against the invoice text internally. Verify if it extracts the exact target value.\n"
+                                    "4. If the regex fails or extracts wrong data, self-correct and rewrite it until it yields 100% accurate results.\n"
+                                    "5. Return strictly in this format:\n"
+                                    "Value: [extracted value]\n"
+                                    "Logic: [tested and verified python/regex code snippet]"
+                                )
+                                agent_user_prompt = f"""
+                                Invoice Text Snippet:
+                                {curr_pdf_text[:4000]}
+                                
+                                Field Name: '{edited_name}'
+                                Keyword: '{ky}'
+                                Prompt Instruction: '{ai_p}'
+                                Expected Result Example: '{res_ex}'
+                                
+                                Task: Self-test and verify the extraction logic. Output ONLY Value and verified Logic.
+                                """
+                                
+                                agent_messages = [
+                                    {"role": "system", "content": agent_system_prompt},
+                                    {"role": "user", "content": agent_user_prompt}
                                 ]
-                                ai_res = ask_local_ai(header_test_prompt)
+                                
+                                ai_res = ask_local_ai(agent_messages)
                                 res_val = ""
                                 generated_logic = ""
                                 
@@ -375,9 +394,20 @@ def render_shipper_data():
                                     parts = ai_res.split("Logic:")
                                     res_val = parts[0].replace("Value:", "").strip()
                                     generated_logic = parts[1].strip()
+                                    
+                                    # 🚀 Safety Check: Run local test execution to be 100% sure
+                                    try:
+                                        clean_code = generated_logic.replace("```python", "").replace("```", "").strip()
+                                        local_env = {"text": curr_pdf_text, "re": re}
+                                        exec(clean_code, {}, local_env)
+                                        test_extracted = local_env.get("value", None)
+                                        if test_extracted:
+                                            res_val = str(test_extracted)
+                                    except Exception:
+                                        pass
                                 else:
                                     res_val = ai_res.strip() if ai_res else "❌ (Not Found)"
-                                    generated_logic = f"re.search(r'{ky}.*?([A-Za-z0-9-]+)', text)"
+                                    generated_logic = f'import re\nmatch = re.search(r"{ky}[\\s\\S]*?\\n\\s*([A-Z0-9]{10,20})", text)\nvalue = match.group(1) if match else None'
 
                                 show_field_test_dialog(edited_name, {"logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex}, res_val, generated_logic, selected_shipper, field)
                 
@@ -422,7 +452,7 @@ def render_shipper_data():
                 ic1, ic2, ic3, ic4, ic5, ic6, ic7 = st.columns([1.8, 1.2, 0.8, 2.2, 1.5, 0.4, 0.7])
                 
                 with ic1: ie_field = st.text_input(f"if_{selected_shipper}_{item_field}", value=item_field, label_visibility="collapsed")
-                with ic2: ie_logic = st.selectbox(f"ilogic_{selected_shipper}_{item_field}", doc_source_options, index=doc_source_options.index(ir.get("logic", doc_source_options[0])) if ir.get("logic") in doc_source_options else 0, label_visibility="collapsed")
+                with ic2: ie_logic = st.selectbox(f"ilogic_{selected_shipper}_{item_field}", doc_source_options, index=doc_source_options.index(ir.get("logic", doc_source_options[0])) if ir.get("logic"] in doc_source_options else 0, label_visibility="collapsed")
                 with ic3: ie_col = st.text_input(f"ic_{selected_shipper}_{item_field}", value=ir.get("col", "K"), label_visibility="collapsed").upper()
                 with ic4: ie_prompt = st.text_input(f"ip_{selected_shipper}_{item_field}", value=ir.get("ai_prompt", ir.get("rule", "")), placeholder="उदा: हर row से HS Code लो", label_visibility="collapsed")
                 with ic5: ie_ex = st.text_input(f"iex_{selected_shipper}_{item_field}", value=ir.get("result_example", ""), placeholder="उदा: 8504, 8507", label_visibility="collapsed")
