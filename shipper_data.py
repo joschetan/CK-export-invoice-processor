@@ -57,21 +57,24 @@ def get_safe_filename(shipper_name):
 def load_local_shippers():
     ensure_local_directories()
     
-    if "shipper_database" not in st.session_state or not st.session_state["shipper_database"]:
-        sheet_data = fetch_data_from_google_sheet()
-        shippers_dict = sheet_data.get("shippers", {}) if isinstance(sheet_data, dict) else {}
-        if shippers_dict:
-            st.session_state["shipper_database"] = shippers_dict
-        else:
-            json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path, "r", encoding="utf-8") as f:
-                        saved_data = json.load(f)
-                        if isinstance(saved_data, dict) and saved_data:
-                            st.session_state["shipper_database"] = saved_data
-                except Exception:
-                    pass
+    # 🚀 ऑप्टिमाइज़ेशन: यदि सेशन में डेटा पहले से मौजूद है, तो बार-बार गूगल शीट को कॉल नहीं किया जाएगा
+    if "shipper_database" in st.session_state and st.session_state["shipper_database"]:
+        return
+
+    sheet_data = fetch_data_from_google_sheet()
+    shippers_dict = sheet_data.get("shippers", {}) if isinstance(sheet_data, dict) else {}
+    if shippers_dict:
+        st.session_state["shipper_database"] = shippers_dict
+    else:
+        json_path = os.path.join(LOCAL_DATA_DIR, "shippers_rules.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    saved_data = json.load(f)
+                    if isinstance(saved_data, dict) and saved_data:
+                        st.session_state["shipper_database"] = saved_data
+            except Exception:
+                pass
 
 def ensure_default_shipper():
     load_local_shippers()
@@ -337,7 +340,6 @@ def render_shipper_data():
                 with c5: ai_p = st.text_input(f"ai_{field}", value=s_val.get("ai_prompt", ""), placeholder="उदा: कीवर्ड के आगे", label_visibility="collapsed")
                 with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: TUMB", label_visibility="collapsed")
                 
-                # 🚀 फिक्स: यहाँ गूगल शीट से आने वाली 'extracted_logic' वैल्यू को सही से लोड किया गया है
                 saved_ext_logic = s_val.get("extracted_logic", "")
                 with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="AI Logic / Regex", label_visibility="collapsed")
                 
