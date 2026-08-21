@@ -44,14 +44,14 @@ def format_date_ddmmyyyy(date_str):
 
 def extract_invoice_details_from_text(pdf_text):
     """
-    PDF टेक्स्ट से 'EXPORTER' जैसे शब्दों को छोड़कर सही इनवॉइस नंबर और डेट ढूंढता है.
+    PDF टेक्स्ट से शुद्ध रूप से इनवॉइस नंबर और डेट एक्सट्रेक्ट करता है।
     """
     inv_no = ""
     inv_date = ""
     if not pdf_text:
         return inv_no, inv_date
 
-    # 1. टेक्स्ट की लाइनों में 'INVOICE' या 'NO' वाले हिस्से को खोजना
+    # 1. टेक्स्ट की लाइनों से इनवॉइस नंबर खोजना
     lines = pdf_text.split('\n')
     for line in lines:
         upper_line = line.upper()
@@ -59,20 +59,17 @@ def extract_invoice_details_from_text(pdf_text):
             words = line.split()
             for w in words:
                 w_clean = w.strip(".,:-/")
-                # 'EXPORTER' या बहुत छोटे शब्दों को छोड़कर सही अल्फा-न्युमेरिक नंबर उठाना
-                if len(w_clean) >= 6 and w_clean.upper() != "EXPORTER" and any(c.isdigit() for c in w_clean):
+                if len(w_clean) >= 6 and any(c.isdigit() for c in w_clean):
                     inv_no = w_clean
                     break
         if inv_no:
             break
 
-    # 2. अगर लाइन-बाय-लाइन न मिले तो जनरल पैटर्न से खोजना (EXPORTER को छोड़कर)
+    # 2. जनरल पैटर्न से खोजना
     if not inv_no:
         matches = re.findall(r'(?:NO\.?|NUMBER)?\s*[:\.]?\s*([A-Z0-9]{8,20})', pdf_text, re.IGNORECASE)
-        for m in matches:
-            if m.upper() != "EXPORTER":
-                inv_no = m.strip()
-                break
+        if matches:
+            inv_no = matches[0].strip()
 
     # Invoice Date Extract
     m_date = re.search(r'(?:DTD\.?|DATE\s*[:\.]?)\s*(\d{1,2}[\.\/\-]\d{1,2}[\.\/\-]\d{2,4}|\d{1,2}[\s\/\-][A-Za-z]{3}[\s\/\-][\d]{2,4})', pdf_text, re.IGNORECASE)
@@ -83,7 +80,7 @@ def extract_invoice_details_from_text(pdf_text):
 
 def extract_polycab_items(pdf_lines, pdf_text=""):
     """
-    Polycab के लिए शुद्ध और वास्तविक डेटा आधारित पार्सर लॉजिक।
+    Polycab के लिए शुद्ध डेटा आधारित पार्सर लॉजिक[cite: 10].
     """
     parsed_items = []
     current_hs = ""
@@ -91,7 +88,6 @@ def extract_polycab_items(pdf_lines, pdf_text=""):
     for line in pdf_lines:
         line_str = line.strip()
 
-        # यदि PDF में कोई वैध HSN कोड लाइन मिलती है उसे ट्रैक करना
         hs_match = re.search(r'\b\d{8}\b', line_str)
         if hs_match:
             current_hs = hs_match.group(0)
@@ -111,7 +107,7 @@ def extract_polycab_items(pdf_lines, pdf_text=""):
 
 def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, inv_sr_no=1, start_overall_sr=1, start_excel_row=2, default_invoice_no="", default_invoice_date="", pdf_text="", lut_kws="", paid_kws="", parser_rule=""):
     """
-    एक्सल शीट में Polycab का डेटा डायनेमिकली भरने का फंक्शन (बिना किसी हार्डकोडेड डिफ़ॉल्ट के)।
+    एक्सल शीट में Polycab का डेटा भरने का फंक्शन (बिना किसी हार्डकोडेड डिफ़ॉल्ट के)[cite: 10].
     """
     current_row = start_excel_row
     overall_sr = start_overall_sr
