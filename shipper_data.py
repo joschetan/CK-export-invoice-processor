@@ -89,7 +89,7 @@ def show_field_test_dialog(field_name, rule_data, result_val, selected_shipper, 
         st.markdown(f"* **Result Example:** `{rule_data.get('result_example', 'N/A')}`")
         
     st.write("---")
-    st.markdown("#### 🎯 AI Extracted Result:")
+    st.markdown("#### 🎯 AI Extracted Result & Generated Logic:")
     if "❌" in result_val or not result_val.strip():
         st.error(f"❌ **Not Found!** Value: `{result_val}`")
     else:
@@ -156,7 +156,7 @@ def add_custom_header_field_dialog(selected_shipper):
         else:
             rules = st.session_state["shipper_database"][selected_shipper].setdefault("mapping_rules", {})
             rules[new_field.strip()] = {
-                "logic": doc_source, "keyword": "", "cell": "", "ai_prompt": "", "result_example": ""
+                "logic": doc_source, "keyword": "", "cell": "", "ai_prompt": "", "result_example": "", "extracted_logic": ""
             }
             save_local_shippers()
             st.success(f"🎉 फ़ील्ड '{new_field}' गूगल शीट पर सिंक हो गया!")
@@ -166,7 +166,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & AI-Powered Mapping Builder")
-    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)।")
+    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)[cite: 4].")
     
     # 🔑 Gemini API Key Box (Google Sheet Synced)
     with st.expander("🔑 Gemini API Key Settings", expanded=False):
@@ -302,7 +302,7 @@ def render_shipper_data():
                 st.session_state["cached_pdf_text"] = pdf_text
                 st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)।")
 
-            # 🛠️ 3. Header Fields Mapping Rules
+            # 🛠️ 3. Header Fields Mapping Rules (अब 'Logic' कॉलम के साथ)
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
             with c_title:
@@ -316,41 +316,43 @@ def render_shipper_data():
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
             
             if current_rules:
-                h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([1.5, 1.2, 1.5, 0.8, 1.8, 1.5, 0.4, 0.7])
+                h1, h2, h3, h4, h5, h6, h7, h8, h9 = st.columns([1.3, 1.0, 1.2, 0.6, 1.4, 1.2, 1.5, 0.4, 0.6])
                 with h1: st.markdown("**Field Name**")
                 with h2: st.markdown("**Source Doc**")
                 with h3: st.markdown("**Keyword**")
                 with h4: st.markdown("**Cell**")
                 with h5: st.markdown("**🤖 AI Prompt**")
-                with h6: st.markdown("**Result Example**")
-                with h7: st.markdown("**Del**")
-                with h8: st.markdown("**Test**")
+                with h6: st.markdown("**Result Ex**")
+                with h7: st.markdown("**⚡ Logic (Regex)**")
+                with h8: st.markdown("**Del**")
+                with h9: st.markdown("**Test**")
 
             for field in list(current_rules.keys()):
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.5, 1.2, 1.5, 0.8, 1.8, 1.5, 0.4, 0.7])
+                c1, c2, c3, c4, c5, c6, c7, c8, c9 = st.columns([1.3, 1.0, 1.2, 0.6, 1.4, 1.2, 1.5, 0.4, 0.6])
                 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
                 with c2: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=doc_source_options.index(s_val.get("logic", doc_source_options[0])) if s_val.get("logic") in doc_source_options else 0, label_visibility="collapsed") 
                 with c3: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 with c5: ai_p = st.text_input(f"ai_{field}", value=s_val.get("ai_prompt", ""), placeholder="उदा: कीवर्ड के आगे", label_visibility="collapsed")
-                with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: ICD TUMB", label_visibility="collapsed")
+                with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: TUMB", label_visibility="collapsed")
+                with c7: ext_logic = st.text_input(f"elogic_{field}", value=s_val.get("extracted_logic", ""), placeholder="AI Logic / Regex", label_visibility="collapsed")
                 
-                with c7:
+                with c8:
                     if st.button("🗑️", key=f"del_h_{field}"):
                         del shipper_info["mapping_rules"][field]
                         save_local_shippers()
                         st.rerun()
-                with c8:
+                with c9:
                     if st.button("⚡ Test", key=f"test_btn_{field}"):
                         curr_pdf_text = st.session_state.get("cached_pdf_text", "")
                         if not curr_pdf_text:
                             st.toast("⚠️ पहले ऊपर PDF अपलोड करें!")
                         else:
-                            with st.spinner("Gemini AI डेटा ढूँढ रहा है..."):
+                            with st.spinner("Gemini AI डेटा और पक्का लॉजिक ढूंढ रहा है..."):
                                 header_test_prompt = [
-                                    {"role": "system", "content": "You are an expert Indian Customs invoice data extraction AI. Extract the exact requested value based on the user's keyword, prompt instruction, and Result Example. Return ONLY the extracted value without any extra words."},
+                                    {"role": "system", "content": "You are an expert Indian Customs invoice data extraction AI. Extract the requested value and also write a robust Python/Regex snippet or extraction logic that python/pdfplumber can execute reliably. Return the response strictly in JSON format with keys: 'extracted_value' and 'extracted_logic'."},
                                     {"role": "user", "content": f"""
                                     Invoice Text:
                                     {curr_pdf_text[:4000]}
@@ -360,14 +362,30 @@ def render_shipper_data():
                                     Prompt: '{ai_p}'
                                     Result Example expected: '{res_ex}'
                                     
-                                    Task: Find the value near the keyword matching the example. Return ONLY the value.
+                                    Task: Find the value and formulate a reliable extraction logic/regex. Return JSON: {{"extracted_value": "...", "extracted_logic": "..."}}
                                     """}
                                 ]
-                                res_val = ask_local_ai(header_test_prompt)
-                                show_field_test_dialog(edited_name, {"logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex}, res_val if res_val else "❌ (Not Found)", selected_shipper, field)
+                                ai_res = ask_local_ai(header_test_prompt)
+                                res_val = ""
+                                generated_logic = ""
+                                try:
+                                    import json, re
+                                    clean_json = re.sub(r'```json|```', '', ai_res).strip()
+                                    parsed_res = json.loads(clean_json)
+                                    res_val = parsed_res.get("extracted_value", "")
+                                    generated_logic = parsed_res.get("extracted_logic", "")
+                                except:
+                                    res_val = ai_res
+                                    generated_logic = f"# Regex/Logic based on keyword: {ky}"
+                                    
+                                # अगर AI ने लॉजिक ढूंढ लिया है तो उसे ऑटोमैटिकली सेशन में अपडेट करना
+                                if generated_logic:
+                                    current_rules[field]["extracted_logic"] = generated_logic
+
+                                show_field_test_dialog(edited_name, {"logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex, "extracted_logic": generated_logic}, res_val if res_val else "❌ (Not Found)", selected_shipper, field)
                 
                 updated_rules[edited_name] = {
-                    "logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex
+                    "logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex, "extracted_logic": ext_logic
                 }
             shipper_info["mapping_rules"] = updated_rules
 
