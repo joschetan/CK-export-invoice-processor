@@ -17,22 +17,27 @@ st.set_page_config(
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqhvmY6iJHP1ZooKuwDlj2VE4cht_FBgFyem9xDRFlbjuNw/exec"
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
-@st.cache_data(show_spinner=False)
 def fetch_all_from_sheet():
-    """गूगल शीट से JSON डेटा, टेम्पलेट्स, API Key और Exchange Rates एक साथ फेच करता है"""
+    """गूगल शीट से JSON डेटा, टेम्पलेट्स, API Key और Exchange Rates एक साथ फेच करता है (Session State Caching के साथ)"""
+    if "gsheet_master_cache" in st.session_state and st.session_state["gsheet_master_cache"] is not None:
+        return st.session_state["gsheet_master_cache"]
+        
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=20)
         if response.status_code == 200:
             res_text = response.text.strip()
             if res_text.startswith("<"):
                 return None
-            return response.json()
+            data = response.json()
+            st.session_state["gsheet_master_cache"] = data
+            return data
     except Exception:
         pass
     return None
 
 def clear_sheet_cache():
-    fetch_all_from_sheet.clear()
+    if "gsheet_master_cache" in st.session_state:
+        st.session_state["gsheet_master_cache"] = None
 
 def save_exchange_rates_to_sheet(ex_data):
     try:
