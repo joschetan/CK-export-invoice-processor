@@ -3,6 +3,8 @@ import pandas as pd
 import requests
 import json
 import base64
+from io import BytesIO
+import openpyxl
 
 # 📌 1. Mukhya Page Configuration
 st.set_page_config(
@@ -16,17 +18,21 @@ WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwEsmWdnkVW3H7_fD99vPMrqh
 SPREADSHEET_ID = "182qRuH7R0jZqWVKHCg_oAG1SK5CUSkQpxVPxH2O8QUQ"
 
 @st.cache_data(show_spinner=False)
-def fetch_all_from_sheet_app():
+def fetch_all_from_sheet():
+    """गूगल शीट से JSON डेटा, टेम्पलेट्स, API Key और Exchange Rates एक साथ फेच करता है"""
     try:
         response = requests.get(f"{WEB_APP_URL}?action=get_data", timeout=20)
         if response.status_code == 200:
+            res_text = response.text.strip()
+            if res_text.startswith("<"):
+                return None
             return response.json()
     except Exception:
         pass
-    return {}
+    return None
 
-def clear_app_cache():
-    fetch_all_from_sheet_app.clear()
+def clear_sheet_cache():
+    fetch_all_from_sheet.clear()
 
 def save_exchange_rates_to_sheet(ex_data):
     try:
@@ -36,7 +42,7 @@ def save_exchange_rates_to_sheet(ex_data):
         }
         res = requests.post(WEB_APP_URL, data=json.dumps(payload), timeout=30)
         if res.status_code == 200:
-            clear_app_cache()
+            clear_sheet_cache()
             return True
         return False
     except Exception:
@@ -128,9 +134,9 @@ with st.sidebar:
         </div>
     """, unsafe_allow_html=True)
 
-    # Session State & Google Sheet Fetch for Exchange Rates (Always syncs with Sheet)
+    # Session State & Google Sheet Fetch for Exchange Rates
     if "exchange_rates" not in st.session_state or not isinstance(st.session_state["exchange_rates"], dict):
-        sheet_full_data = fetch_all_from_sheet_app()
+        sheet_full_data = fetch_all_from_sheet()
         sheet_ex = sheet_full_data.get("exchange_rates", None) if isinstance(sheet_full_data, dict) else None
         
         if sheet_ex and isinstance(sheet_ex, dict):
@@ -202,7 +208,6 @@ with st.sidebar:
                         if c in all_parsed:
                             ex_data["rates"][c] = all_parsed[c]
                     
-                    # Save to Google Sheet permanently and clear cache
                     save_exchange_rates_to_sheet(ex_data)
                     st.session_state["processed_ex_file_id"] = file_signature
                     
