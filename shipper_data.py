@@ -167,7 +167,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & AI-Powered Mapping Builder")
-    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced)[cite: 4, 6].")
+    st.caption("मिनिमलिस्ट AI-संचालित हेडर और आइटम टेबल मैपिंग इंजन (Google Sheet Synced).")
     
     # 🔑 Gemini API Key Box (Google Sheet Synced)
     with st.expander("🔑 Gemini API Key Settings", expanded=False):
@@ -357,7 +357,6 @@ def render_shipper_data():
                             st.toast("⚠️ पहले ऊपर PDF अपलोड करें!")
                         else:
                             with st.spinner("🤖 AI Self-Testing & Verifying Regex Logic..."):
-                                # 🚀 Self-Correction Agent Prompting
                                 agent_system_prompt = (
                                     "You are an expert Autonomous Python/Regex Agent for Indian Customs Invoice parsing. "
                                     "Your task is to:\n"
@@ -395,7 +394,6 @@ def render_shipper_data():
                                     res_val = parts[0].replace("Value:", "").strip()
                                     generated_logic = parts[1].strip()
                                     
-                                    # 🚀 Safety Check: Run local test execution to be 100% sure
                                     try:
                                         clean_code = generated_logic.replace("```python", "").replace("```", "").strip()
                                         local_env = {"text": curr_pdf_text, "re": re}
@@ -452,7 +450,7 @@ def render_shipper_data():
                 ic1, ic2, ic3, ic4, ic5, ic6, ic7 = st.columns([1.8, 1.2, 0.8, 2.2, 1.5, 0.4, 0.7])
                 
                 with ic1: ie_field = st.text_input(f"if_{selected_shipper}_{item_field}", value=item_field, label_visibility="collapsed")
-                with ic2: ie_logic = st.selectbox(f"ilogic_{selected_shipper}_{item_field}", doc_source_options, index=doc_source_options.index(ir.get("logic", doc_source_options[0])) if ir.get("logic"] in doc_source_options else 0, label_visibility="collapsed")
+                with ic2: ie_logic = st.selectbox(f"ilogic_{selected_shipper}_{item_field}", doc_source_options, index=doc_source_options.index(ir.get("logic", doc_source_options[0])) if ir.get("logic") in doc_source_options else 0, label_visibility="collapsed")
                 with ic3: ie_col = st.text_input(f"ic_{selected_shipper}_{item_field}", value=ir.get("col", "K"), label_visibility="collapsed").upper()
                 with ic4: ie_prompt = st.text_input(f"ip_{selected_shipper}_{item_field}", value=ir.get("ai_prompt", ir.get("rule", "")), placeholder="उदा: हर row से HS Code लो", label_visibility="collapsed")
                 with ic5: ie_ex = st.text_input(f"iex_{selected_shipper}_{item_field}", value=ir.get("result_example", ""), placeholder="उदा: 8504, 8507", label_visibility="collapsed")
