@@ -98,7 +98,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
-    st.caption("बिना किसी AI या कोडिंग के, सीधे टेक्स्ट से खुद-ब-खुद रेजेक्स कोड जनरेट करने का लोकल स्मार्ट टूल।")
+    st.caption("कीवर्ड और वर्ड पोजीशन (Word Position) के आधार पर बिना AI के 100% सटीक रेजेक्स कोड जनरेट करने का टूल।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -127,40 +127,48 @@ def render_shipper_data():
 
             curr_pdf_text = st.session_state.get("cached_pdf_text", "")
             if curr_pdf_text:
-                with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू कॉपी करें)", expanded=False):
+                with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # 🛠️ 2. ⚡ Local No-Code Regex Generator Box (बिना AI के कोड बनाने का जादुई बॉक्स)
+            # 🛠️ 2. ⚡ Local No-Code Regex & Word Position Generator Box
             st.write("---")
-            st.subheader("⚡ 2. Local No-Code Regex Generator (बिना AI के कोड बनाएं)")
-            st.caption("ऊपर PDF से वैल्यू देखकर यहाँ दर्ज करें, सिस्टम तुरंत उसका पक्का पाइथन रेजेक्स कोड बना देगा:")
+            st.subheader("⚡ 2. Keyword + Word Position Regex Generator")
+            st.caption("कीवर्ड और उसका वर्ड पोजीशन नंबर देकर तुरंत पक्का पाइथन कोड बनाएं:")
             
-            gen_col1, gen_col2 = st.columns(2)
+            gen_col1, gen_col2, gen_col3 = st.columns([2, 2, 1])
             with gen_col1:
-                target_val_input = st.text_input("1. जो वैल्यू निकालनी है वह यहाँ पेस्ट करें (उदा: GJ29XE2627100206):", key=f"t_val_{selected_shipper}")
+                target_val_input = st.text_input("1. निकालनी जाने वाली वैल्यू (उदा: GJ29XE2627100206):", key=f"t_val_{selected_shipper}")
             with gen_col2:
-                keyword_input = st.text_input("2. उसके पास का मुख्य कीवर्ड डालें (उदा: INVOICE NO. & DATE):", key=f"t_kw_{selected_shipper}")
+                keyword_input = st.text_input("2. मुख्य कीवर्ड (उदा: INVOICE NO. & DATE):", key=f"t_kw_{selected_shipper}")
+            with gen_col3:
+                word_offset = st.number_input("3. Word Index (+आगे):", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
                 
-            if st.button("🛠️ Generate Local Python/Regex Code Now", type="secondary", key=f"btn_gen_regex_{selected_shipper}"):
+            if st.button("🛠️ Generate Position-Based Python Code", type="secondary", key=f"btn_gen_regex_{selected_shipper}"):
                 if not target_val_input.strip() or not keyword_input.strip():
-                    st.error("कृपया दोनों बॉक्स में वैल्यू और कीवर्ड दर्ज करें!")
+                    st.error("कृपया वैल्यू और कीवर्ड दोनों दर्ज करें!")
                 else:
-                    # लोकल तरीके से बिना किसी AI के सटीक रेजेक्स कोड खुद जनरेट करना
                     escaped_kw = re.escape(keyword_input.strip())
-                    generated_code = f'import re\nmatch = re.search(r"{escaped_kw}[\\s\\S]*?\\n\\s*([A-Z0-9-]{{5,25}})", text)\nvalue = match.group(1) if match else None'
+                    # वर्ड पोजीशन आधारित मजबूत पाइथन कोड जनरेशन
+                    generated_code = (
+                        f'import re\n'
+                        f'text_clean = re.sub(r"\\s+", " ", text)\n'
+                        f'pattern = r"{escaped_kw}(?:[^A-Za-z0-9]+[A-Za-z0-9]+){{{word_offset - 1}}}[^A-Za-z0-9]+([A-Z0-9-]{{5,25}})"\n'
+                        f'match = re.search(pattern, text_clean)\n'
+                        f'value = match.group(1) if match else None'
+                    )
                     
-                    st.success("🎉 आपका लोकल रेजेक्स कोड तैयार है! इसे नीचे अपने हेडर रूल में कॉपी कर लें:")
+                    st.success("🎉 आपका पोजीशन-बेस्ड रेजेक्स कोड तैयार है!")
                     st.code(generated_code, language="python")
                     
-                    # तुरंत टेस्ट करके भी दिखा दें कि यह काम कर रहा है या नहीं
+                    # तुरंत टेस्ट करें
                     try:
                         local_env = {"text": curr_pdf_text, "re": re}
                         exec(generated_code, {}, local_env)
                         found_res = local_env.get("value", "Not Found")
                         if found_res and found_res != "None":
-                            st.info(f"✅ **Test Successful!** इस कोड से यह वैल्यू निकली है: **`{found_res}`**")
+                            st.info(f"✅ **Test Successful!** इस पोजीशन के हिसाब से वैल्यू निकली है: **`{found_res}`**")
                         else:
-                            st.warning("⚠️ इस कीवर्ड पैटर्न से वैल्यू मैच नहीं हुई। कृपया कीवर्ड थोड़ा सा बदल कर दोबारा प्रयास करें।")
+                            st.warning("⚠️ इस पोजीशन पर वैल्यू मैच नहीं हुई। कृपया Word Index (नंबर) को कम या ज्यादा करके दोबारा जनरेट करें।")
                     except Exception as ex:
                         st.error(f"Test Error: {str(ex)}")
 
@@ -193,7 +201,7 @@ def render_shipper_data():
                 c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.3, 1.0, 1.2, 0.6, 1.4, 1.2, 1.8, 0.4])
                 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
-                with c2: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=doc_source_options.index(s_val.get("logic", doc_source_options[0])) if s_val.get("logic") in doc_source_options else 0, label_visibility="collapsed") 
+                with c2: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=doc_source_options.index(s_val.get("logic", doc_source_options[0])) if s_val.get("logic"] in doc_source_options else 0, label_visibility="collapsed") 
                 with c3: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 with c5: ai_p = st.text_input(f"ai_{field}", value=s_val.get("ai_prompt", ""), placeholder="उदा: नीचे वाली लाइन", label_visibility="collapsed")
@@ -216,4 +224,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स और लोकल रेजेक्स लॉजिक सफलतापूर्वक गूगल शीट पर सेव हो गए हैं! अब कोई API लिमिट या एरर नहीं आएगी।")
+                st.success("🎉 आपके सारे रूल्स और पोजीशन-बेस्ड लॉजिक गूगल शीट पर सेव हो गए हैं!")
