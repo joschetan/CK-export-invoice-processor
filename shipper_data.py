@@ -148,7 +148,6 @@ def render_shipper_data():
                     st.error("कृपया वैल्यू और कीवर्ड दोनों दर्ज करें!")
                 else:
                     escaped_kw = re.escape(keyword_input.strip())
-                    # वर्ड पोजीशन आधारित मजबूत पाइथन कोड जनरेशन
                     generated_code = (
                         f'import re\n'
                         f'text_clean = re.sub(r"\\s+", " ", text)\n'
@@ -160,7 +159,6 @@ def render_shipper_data():
                     st.success("🎉 आपका पोजीशन-बेस्ड रेजेक्स कोड तैयार है!")
                     st.code(generated_code, language="python")
                     
-                    # तुरंत टेस्ट करें
                     try:
                         local_env = {"text": curr_pdf_text, "re": re}
                         exec(generated_code, {}, local_env)
@@ -201,7 +199,7 @@ def render_shipper_data():
                 c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.3, 1.0, 1.2, 0.6, 1.4, 1.2, 1.8, 0.4])
                 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
-                with c2: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=doc_source_options.index(s_val.get("logic", doc_source_options[0])) if s_val.get("logic"] in doc_source_options else 0, label_visibility="collapsed") 
+                with c2: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=doc_source_options.index(s_val.get("logic", doc_source_options[0])) if s_val.get("logic") in doc_source_options else 0, label_visibility="collapsed") 
                 with c3: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 with c5: ai_p = st.text_input(f"ai_{field}", value=s_val.get("ai_prompt", ""), placeholder="उदा: नीचे वाली लाइन", label_visibility="collapsed")
