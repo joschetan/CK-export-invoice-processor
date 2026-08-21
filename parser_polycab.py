@@ -117,7 +117,7 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
     for idx, item in enumerate(parsed_items):
         item_sr = idx + 1
 
-        # 🚀 Fix: Column I और J में सही मान सेट करना (ताकि 'EXPORTER' या गलत डेटा न आए)
+        # 1. सबसे पहले F, G, H, I, J में पक्का डेटा फिक्स करना
         ws[f"F{current_row}"] = overall_sr          # SR. NO.
         ws[f"G{current_row}"] = inv_sr_no           # Inv. Sr. No.[cite: 21]
         ws[f"H{current_row}"] = item_sr             # Item Sr. No.[cite: 21]
@@ -129,7 +129,7 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
             r_type = rule_info.get("type", "")
             r_val = rule_info.get("rule", "")
 
-            # 🛑 Important: Column I और J को डायनेमिक रूल्स से ओवरराइट होने से बचाना
+            # 🛑 Absolute Guard: कॉलम I और J पर किसी भी अन्य नियम को चलने ही न दें
             if col in ["I", "J"]:
                 continue
 
@@ -152,6 +152,10 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
                     val_to_write = r_val
 
             ws[cell_target] = val_to_write
+
+        # 🛡️ Double Protection: लूप खत्म होने के बाद भी आखिरी बार सुनिश्चित करना कि कॉलम I और J ओवरराइट न हों
+        ws[f"I{current_row}"] = inv_no if inv_no else "INV"
+        ws[f"J{current_row}"] = formatted_date
 
         current_row += 1
         overall_sr += 1
