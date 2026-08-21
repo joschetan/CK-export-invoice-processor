@@ -98,7 +98,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
-    st.caption("कीवर्ड और वर्ड पोजीशन (Word Position) के आधार पर बिना AI के 100% सटीक रेजेक्स कोड जनरेट करने का टूल।")
+    st.caption("टैम्पलेट अपलोड, कीवर्ड, और वर्ड पोजीशन के आधार पर बिना AI के 100% सटीक मैपिंग टूल।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -107,9 +107,47 @@ def render_shipper_data():
             st.write(f"### ⚙️ शिपर प्रोफाइल: **{selected_shipper}**")
             shipper_info = st.session_state["shipper_database"][selected_shipper]
 
-            # 1. PDF Upload & Inspector
+            # 📁 1. टेम्पलेट फ़ाइल अपलोड (Google Sheet Synced) - RESTORED
             st.write("---")
-            st.subheader("🧪 1. Sample PDF Upload & Text Viewer")
+            st.subheader("📁 1. टेम्पलेट फ़ाइल अपलोड (Full Job Excel Template)")
+            
+            t_bytes = load_template_bytes_from_sheet(selected_shipper)
+            has_saved_template = t_bytes is not None and len(t_bytes) > 0
+            
+            if has_saved_template:
+                st.success(f"✅ 'Full Job Excel Format File (Template)' गूगल शीट पर अपलोडेड एवं सुरक्षित है।")
+                col_rep, col_del = st.columns([3, 1])
+                with col_rep:
+                    f_replace = st.file_uploader("🔄 Replace Template (नई एक्सेल फाइल चुनें):", type=["xlsx", "xls"], key=f"repl_tpl_{selected_shipper}")
+                    if f_replace is not None:
+                        if st.button("🚀 Confirm & Replace", type="primary", key=f"btn_repl_{selected_shipper}"):
+                            with st.spinner("⏳ गूगल शीट पर टेम्पलेट अपलोड हो रही है..."):
+                                if push_template_file_to_sheet(selected_shipper, f_replace.getvalue()):
+                                    st.success("🎉 टेम्पलेट सफलतापूर्वक गूगल शीट पर रिप्लेस हो गई!")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ अपलोड फेल हो गया!")
+                with col_del:
+                    st.write("##") 
+                    if st.button("🗑️ Delete Template", type="secondary", use_container_width=True, key=f"btn_del_tpl_{selected_shipper}"):
+                        push_template_file_to_sheet(selected_shipper, b"")
+                        st.success("🗑️ टेम्पलेट डिलीट हो गई!")
+                        st.rerun()
+            else:
+                st.info("ℹ️ इस शिपर के लिए अभी कोई टेम्पलेट अपलोड नहीं की गई है।")
+                f_upload = st.file_uploader("➡️ Blank Full Job Excel Format File (Template) चुनें", type=["xlsx", "xls"], key=f"tpl_{selected_shipper}")
+                if f_upload is not None:
+                    if st.button("🚀 Save Template to Google Sheet", type="primary", use_container_width=True, key=f"btn_upload_tpl_{selected_shipper}"):
+                        with st.spinner("⏳ गूगल शीट पर टेम्पलेट अपलोड हो रही है..."):
+                            if push_template_file_to_sheet(selected_shipper, f_upload.getvalue()):
+                                st.success("🎉 टेम्पलेट एक्सेल फाइल सफलतापर्वक गूगल शीट पर सेव हो गई!")
+                                st.rerun()
+                            else:
+                                st.error("❌ अपलोड फेल हो गया!")
+
+            # 🧪 2. Instant PDF Upload & Text Inspector
+            st.write("---")
+            st.subheader("🧪 2. Sample PDF Upload & Text Viewer")
             test_pdf = st.file_uploader("➡️ टेस्ट करने के लिए सैंपल इनवॉइस PDF अपलोड करें", type=["pdf"], key=f"test_pdf_{selected_shipper}")
             
             if test_pdf:
@@ -130,9 +168,9 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # 🛠️ 2. ⚡ Local No-Code Regex & Word Position Generator Box
+            # 🛠️ 3. ⚡ Local No-Code Regex & Word Position Generator Box
             st.write("---")
-            st.subheader("⚡ 2. Keyword + Word Position Regex Generator")
+            st.subheader("⚡ 3. Keyword + Word Position Regex Generator")
             st.caption("कीवर्ड और उसका वर्ड पोजीशन नंबर देकर तुरंत पक्का पाइथन कोड बनाएं:")
             
             gen_col1, gen_col2, gen_col3 = st.columns([2, 2, 1])
@@ -170,11 +208,11 @@ def render_shipper_data():
                     except Exception as ex:
                         st.error(f"Test Error: {str(ex)}")
 
-            # 🛠️ 3. Header Fields Mapping Rules Table
+            # 🛠️ 4. Header Fields Mapping Rules Table
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
             with c_title:
-                st.subheader("🛠️ 3. Header Fields Mapping & Regex Rules")
+                st.subheader("🛠️ 4. Header Fields Mapping & Regex Rules")
             with c_add_h:
                 if st.button("➕ Add Header Field", type="secondary", use_container_width=True):
                     add_custom_header_field_dialog(selected_shipper)
@@ -222,4 +260,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स और पोजीशन-बेस्ड लॉजिक गूगल शीट पर सेव हो गए हैं!")
+                st.success("🎉 आपके सारे रूल्स और टेम्पलेट सेटिंग्स सफलतापूर्वक गूगल शीट पर सिंक हो गए हैं!")
