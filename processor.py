@@ -20,7 +20,7 @@ def render_processor():
     ensure_default_shipper()
     
     st.header("📤 Invoice Processing Zone (Multi-Document)")
-    st.caption("इनवॉइस PDF या Excel के साथ-साथ GST Invoice और DEEC Declaration अपलोड करने और पर्टिकुलर सेल/कॉलम में भेजने का ज़ोन।")
+    st.caption("इनवॉइस PDF या Excel के साथ-साथ GST Invoice और DEEC Declaration अपलोड करने और पर्टिकुलर सेल/कॉलम में भेजने का ज़ोन.")
     
     # 🚀 1. शिपर लिस्ट को अल्फाबेटिकल (A से Z) क्रम में सॉर्ट किया गया है
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
@@ -141,6 +141,10 @@ def render_processor():
                             fallback_val = r_info.get("fallback", "").strip()
                             doc_source = r_info.get("logic", "Main Invoice")
                             
+                            # 🚀 चेक करें कि क्या इस फील्ड के लिए कोई कस्टम 'extracted_logic' (Python/Regex) सेव है
+                            extracted_logic = r_info.get("extracted_logic", "").strip()
+                            found_val = None
+                            
                             target_lines, target_full_text = pdf_lines, pdf_text
                             if "gst" in doc_source.lower() and gst_file:
                                 target_lines = gst_text.split("\n")
@@ -149,10 +153,22 @@ def render_processor():
                                 target_lines = deec_text.split("\n")
                                 target_full_text = deec_text
                                 
-                            pdf_bytes = st.session_state.get("cached_pdf_bytes", None)
-                            found_val = extract_header_value(target_lines, target_full_text, kw, pos, mode, stop_kw, flt, field_label=field, pdf_bytes=pdf_bytes)
+                            # यदि कस्टम लॉजिक उपलब्ध है, तो उसे सीधे रन करें
+                            if extracted_logic:
+                                try:
+                                    clean_code = extracted_logic.replace("```python", "").replace("```", "").strip()
+                                    local_vars = {"text": target_full_text, "lines": target_lines, "re": re}
+                                    exec(clean_code, {}, local_vars)
+                                    found_val = local_vars.get("value", None)
+                                except Exception as e:
+                                    found_val = None
+                                    
+                            # यदि कस्टम लॉजिक से वैल्यू न मिले, तो डिफ़ॉल्ट एक्सट्रैक्शन मेथड इस्तेमाल करें
+                            if not found_val or not str(found_val).strip():
+                                pdf_bytes = st.session_state.get("cached_pdf_bytes", None)
+                                found_val = extract_header_value(target_lines, target_full_text, kw, pos, mode, stop_kw, flt, field_label=field, pdf_bytes=pdf_bytes)
                             
-                            if not found_val or not found_val.strip():
+                            if not found_val or not str(found_val).strip():
                                 if fallback_val:
                                     found_val = fallback_val
                                     
@@ -183,10 +199,10 @@ def render_processor():
                                     if inv_sr_number == 1: first_inv_no = found_val
                             
                             if "date" in field.lower() or "dt" in field.lower():
-                                d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', found_val)
+                                d_match = re.search(r'\b\d{2}[./-]\d{2}[./-]\d{4}\b', str(found_val))
                                 if d_match:
                                     current_inv_date = d_match.group(0).replace(".", "/").replace("-", "/")
-                                elif found_val and not found_val.lower().startswith("inv"):
+                                elif found_val and not str(found_val).lower().startswith("inv"):
                                     current_inv_date = found_val
 
                         ws[f"AH{summary_row}"] = inv_sr_number
@@ -215,7 +231,7 @@ def render_processor():
                                 "rule": actual_rule_val
                             }
 
-                        # 🚀 सटीक पार्सर कॉलिंग (Vapi Welspun, Polycab, BKT या Welspun)
+                        # 🚀 सटीक पार्सर कॉलिंग (Vapi Welspun, Polycab, BKT या Welspun)[cite: 4]
                         if assigned_parser == "parser_bkt":
                             parsed_items = extract_bkt_items(pdf_lines)
                         elif assigned_parser == "parser_polycab":
