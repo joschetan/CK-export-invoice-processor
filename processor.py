@@ -22,11 +22,9 @@ def render_processor():
     st.header("📤 Invoice Processing Zone (Multi-Document)")
     st.caption("इनवॉइस PDF या Excel के साथ-साथ GST Invoice और DEEC Declaration अपलोड करने और पर्टिकुलर सेल/कॉलम में भेजने का ज़ोन.")
     
-    # 🚀 1. शिपर लिस्ट को अल्फाबेटिकल (A से Z) क्रम में सॉर्ट किया गया है
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     
     if shippers_list:
-        # 🚀 2. index=None और placeholder से यह डिफ़ॉल्ट रूप से blank रहेगा और टाइप करके भी खोजा जा सकेगा
         selected_shipper = st.selectbox(
             "किस शिपर का इनवॉइस प्रोसेस करना है?", 
             shippers_list, 
@@ -80,7 +78,6 @@ def render_processor():
                     rules = shipper_info.get("mapping_rules", {})
                     item_table_rules = shipper_info.get("item_table_rules", {})
                     
-                    # 🚀 शिपर के हिसाब से असाइंड पार्सर रूल पढ़ें
                     assigned_parser = shipper_info.get("item_table_rule_name", "parser_welspun").strip().lower()
                     
                     igst_cfg = shipper_info.get("igst_config", {})
@@ -141,7 +138,6 @@ def render_processor():
                             fallback_val = r_info.get("fallback", "").strip()
                             doc_source = r_info.get("logic", "Main Invoice")
                             
-                            # 🚀 चेक करें कि क्या इस फील्ड के लिए कोई कस्टम 'extracted_logic' (Python/Regex) सेव है
                             extracted_logic = r_info.get("extracted_logic", "").strip()
                             found_val = None
                             
@@ -153,17 +149,17 @@ def render_processor():
                                 target_lines = deec_text.split("\n")
                                 target_full_text = deec_text
                                 
-                            # यदि कस्टम लॉजिक उपलब्ध है, तो उसे सीधे रन करें
+                            # 🚀 मजबूत और क्लीन रेजेक्स एक्सेक्यूशन (Markdown और एस्केप न्यूलाइन फिक्स के साथ)
                             if extracted_logic:
                                 try:
                                     clean_code = extracted_logic.replace("```python", "").replace("```", "").strip()
+                                    clean_code = clean_code.replace(r"\n", "\n") # एस्केप न्यूलाइन को ठीक करना
                                     local_vars = {"text": target_full_text, "lines": target_lines, "re": re}
                                     exec(clean_code, {}, local_vars)
                                     found_val = local_vars.get("value", None)
                                 except Exception as e:
                                     found_val = None
                                     
-                            # यदि कस्टम लॉजिक से वैल्यू न मिले, तो डिफ़ॉल्ट एक्सट्रैक्शन मेथड इस्तेमाल करें
                             if not found_val or not str(found_val).strip():
                                 pdf_bytes = st.session_state.get("cached_pdf_bytes", None)
                                 found_val = extract_header_value(target_lines, target_full_text, kw, pos, mode, stop_kw, flt, field_label=field, pdf_bytes=pdf_bytes)
@@ -231,7 +227,6 @@ def render_processor():
                                 "rule": actual_rule_val
                             }
 
-                        # 🚀 सटीक पार्सर कॉलिंग (Vapi Welspun, Polycab, BKT या Welspun)[cite: 4]
                         if assigned_parser == "parser_bkt":
                             parsed_items = extract_bkt_items(pdf_lines)
                         elif assigned_parser == "parser_polycab":
@@ -243,7 +238,6 @@ def render_processor():
                         else:
                             parsed_items = extract_welspun_items(pdf_lines, pdf_text=pdf_text)
                         
-                        # 🚀 मैपिंग फंक्शन कॉलिंग
                         if assigned_parser == "parser_polycab":
                             ws, overall_item_sr, excel_write_row = map_polycab_items_to_excel_dynamic(
                                 ws, parsed_items, resolved_item_rules,
