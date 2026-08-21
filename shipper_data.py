@@ -348,9 +348,6 @@ def render_shipper_data():
                 with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: TUMB", label_visibility="collapsed")
                 
                 saved_ext_logic = s_val.get("extracted_logic", "")
-                if not saved_ext_logic and ("inv. no" in field.lower() or "invoice no" in field.lower()):
-                    saved_ext_logic = 'import re\nmatch = re.search(r"INVOICE NO\\.\\s*&\\s*DATE[\\s\\S]*?\\n\\s*([A-Z0-9]{10,20})", text)\nvalue = match.group(1) if match else None'
-
                 with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="AI Logic / Regex", label_visibility="collapsed")
                 
                 with c8:
@@ -365,15 +362,15 @@ def render_shipper_data():
                         if not curr_pdf_text:
                             st.toast("⚠️ पहले ऊपर PDF अपलोड करें!")
                         else:
-                            with st.spinner("🤖 AI Dual-Verification Running..."):
+                            with st.spinner("🤖 Autonomous AI Agent Self-Correcting & Verifying..."):
                                 # 1. Direct Keyword Extraction
                                 direct_extracted = extract_header_value(curr_pdf_lines, curr_pdf_text, ky, "Right (आगे)", "Exact Word", "", "None", field_label=edited_name, pdf_bytes=st.session_state.get("cached_pdf_bytes"))
                                 
-                                # 2. AI Agent Generated Regex Logic
+                                # 2. Autonomous Self-Correction Agent Loop
                                 agent_system_prompt = (
                                     "You are an expert Autonomous Python/Regex Agent for Indian Customs Invoice parsing. "
                                     "Write a Python snippet using `re.search` against variable `text` to extract the requested field. "
-                                    "Store the final extracted string in variable `value`. "
+                                    "CRITICAL REQUIREMENT: You MUST assign the final extracted string to a variable named `value` (e.g., `value = match.group(1)`). "
                                     "Return strictly in this format:\nLogic: [python/regex code snippet]"
                                 )
                                 agent_user_prompt = f"""
@@ -384,24 +381,42 @@ def render_shipper_data():
                                 Keyword: '{ky}'
                                 Prompt Instruction: '{ai_p}'
                                 Expected Result Example: '{res_ex}'
+                                
+                                Task: Write robust Python regex code to extract this field. Ensure 'value' is assigned.
                                 """
-                                ai_res = ask_local_ai([{"role": "system", "content": agent_system_prompt}, {"role": "user", "content": agent_user_prompt}])
+                                
+                                agent_messages = [
+                                    {"role": "system", "content": agent_system_prompt},
+                                    {"role": "user", "content": agent_user_prompt}
+                                ]
                                 
                                 generated_logic = ""
-                                if ai_res and "Logic:" in ai_res:
-                                    generated_logic = ai_res.split("Logic:")[1].strip()
-                                else:
-                                    generated_logic = f'import re\nmatch = re.search(r"{ky}[\\s\\S]*?\\n\\s*([A-Z0-9]{10,20})", text)\nvalue = match.group(1) if match else None'
-                                
-                                # 3. Run Regex Code Locally
                                 regex_extracted = ""
-                                try:
-                                    clean_code = generated_logic.replace("```python", "").replace("```", "").strip()
-                                    local_env = {"text": curr_pdf_text, "re": re}
-                                    exec(clean_code, {}, local_env)
-                                    regex_extracted = str(local_env.get("value", ""))
-                                except Exception as e:
-                                    regex_extracted = f"Error: {str(e)}"
+                                max_retries = 3
+                                
+                                # 🔄 Self-Correction Loop
+                                for attempt in range(max_retries):
+                                    ai_res = ask_local_ai(agent_messages)
+                                    if ai_res and "Logic:" in ai_res:
+                                        generated_logic = ai_res.split("Logic:")[1].strip()
+                                    else:
+                                        generated_logic = ai_res.strip() if ai_res else f'import re\nmatch = re.search(r"{ky}[\\s\\S]*?\\n\\s*([A-Z0-9]{10,20})", text)\nvalue = match.group(1) if match else None'
+                                    
+                                    try:
+                                        clean_code = generated_logic.replace("```python", "").replace("```", "").strip()
+                                        local_env = {"text": curr_pdf_text, "re": re}
+                                        exec(clean_code, {}, local_env)
+                                        regex_extracted = str(local_env.get("value", ""))
+                                        
+                                        if regex_extracted and regex_extracted != "None" and regex_extracted != "NoneType" and "Error" not in regex_extracted:
+                                            break
+                                        else:
+                                            agent_messages.append({"role": "assistant", "content": f"Logic:\n{generated_logic}"})
+                                            agent_messages.append({"role": "user", "content": "Attempt failed or 'value' was empty/not assigned. Please self-correct the regex pattern and try again."})
+                                    except Exception as e:
+                                        regex_extracted = f"Error: {str(e)}"
+                                        agent_messages.append({"role": "assistant", "content": f"Logic:\n{generated_logic}"})
+                                        agent_messages.append({"role": "user", "content": f"The code failed with error: {str(e)}. Fix syntax or regex and try again."})
                                     
                                 match_matched = (str(direct_extracted).strip() == str(regex_extracted).strip()) and bool(regex_extracted) and regex_extracted != "None"
 
