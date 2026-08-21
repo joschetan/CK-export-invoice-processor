@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import json
 from io import BytesIO
-from ai_engine import ask_local_ai, load_gemini_api_key
+from ai_engine import ask_local_ai, load_gemini_api_key_from_sheet, update_parser_file_on_github
 
 def get_parser_file_path(parser_rule_name):
     clean_name = str(parser_rule_name).strip().lower()
@@ -22,7 +22,7 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
         col_t1, col_t2 = st.columns([1, 3])
         with col_t1:
             if st.button("⚡ Test AI Connection", key=f"top_test_btn_{selected_shipper}", type="secondary"):
-                saved_key = load_gemini_api_key()
+                saved_key = load_gemini_api_key_from_sheet()
                 if saved_key:
                     st.session_state["ai_tested"] = True
                 else:
@@ -38,6 +38,9 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
     current_parser_name = shipper_info.get("item_table_rule_name", "parser_welspun")
     parser_file_path = get_parser_file_path(current_parser_name)
     
+    # 🔑 GitHub PAT Input for AI Code Pushing
+    github_pat_for_agent = st.text_input("🔑 GitHub Personal Access Token (PAT) - AI Code Auto-Update के लिए:", type="password", key=f"gha_pat_{selected_shipper}", placeholder="ghp_...")
+
     # 📸 स्क्रीनशॉट / इमेज अपलोड करने का विजुअल बॉक्स
     col_up1, col_up2 = st.columns([2, 1])
     with col_up1:
@@ -53,14 +56,13 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
     chat_key = f"ai_chat_history_{selected_shipper}"
     if chat_key not in st.session_state:
         st.session_state[chat_key] = [
-            {"role": "assistant", "content": f"नमस्ते! मैं आपका Gemini AI पार्सर एजेंट हूँ। वर्तमान शिपर **'{selected_shipper}'** के लिए एक्टिव पार्सर फाइल **`{current_parser_name}.py`** है। आप ऊपर स्क्रीनशॉट अपलोड कर सकते हैं या सीधे चैट में निर्देश दे सकते हैं।"}
-        ]
+            {"role": "assistant", "content": f"नमस्ते! मैं आपका Gemini AI पार्सर एजेंट हूँ। वर्तमान शिपर **'{selected_shipper}'** के लिए एक्टिव पार्सर फाइल **`{current_parser_name}.py`** है। आप ऊपर स्क्रीनशॉट अपलोड कर सकते हैं या सीधे चैट में निर्देश दे सकते हैं।"}]
         
     for msg in st.session_state[chat_key]:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
             
-    user_prompt = st.chat_input(f"Gemini से बोलें (उदा: इस स्क्रीनशॉट के हिसाब से Qty का कोड सुधारो)...", key=f"chat_input_{selected_shipper}")
+    user_prompt = st.chat_input(f"Gemini से बोलें (उदा: कॉलम I और J में इनवॉइस नंबर/डेट गलत आ रही है, पार्सर कोड सुधारो)...", key=f"chat_input_{selected_shipper}")
     
     if user_prompt:
         st.session_state[chat_key].append({"role": "user", "content": user_prompt})
@@ -99,7 +101,7 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
             Here are the current mapping rules and configuration for this shipper:
             {shipper_context}
             
-            Your job is to understand the user's request, modify the Python code or rules accordingly, and provide:
+            Your job is to understand the user's request (e.g., fixing Column I/J invoice number/date extraction logic), modify the Python code accordingly, and provide:
             1. A clear explanation of what was changed.
             2. The complete updated Python code block wrapped in ```python ... ```.
             """
@@ -118,14 +120,25 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
                 st.write(ai_response)
                 
             if "```python" in ai_response and parser_file_path:
-                if st.button("💾 Apply & Save Changes to Parser File", type="primary", key=f"save_ai_code_{selected_shipper}"):
+                if st.button("💾 Apply & Save to Local & GitHub", type="primary", key=f"save_ai_code_{selected_shipper}"):
                     try:
                         parts = ai_response.split("```python")
                         if len(parts) > 1:
                             code_block = parts[1].split("```")[0].strip()
+                            
+                            # 1. Local Machine पर सेव करना
                             with open(parser_file_path, "w", encoding="utf-8") as pf:
                                 pf.write(code_block)
-                            st.success(f"🎉 सफलता! फाइल `{parser_file_path}` में नया कोड सफलतापूर्वक सेव हो गया है!")
+                            
+                            # 2. सीधे GitHub पर पुश/कमिट करना (अगर टोकन दिया गया है)
+                            if github_pat_for_agent.strip():
+                                success, msg = update_parser_file_on_github(current_parser_name, code_block, github_pat_for_agent.strip())
+                                if success:
+                                    st.success(f"🎉 सफलता! लोकल फाइल और GitHub दोनों जगह कोड अपडेट हो गया है! ({msg})")
+                                else:
+                                    st.warning(f"⚠️ लोकल सेव हो गया, लेकिन GitHub अपडेट में एरर: {msg}")
+                            else:
+                                st.success(f"🎉 सफलता! फाइल `{parser_file_path}` में नया कोड लोकल रूप से सेव हो गया है (GitHub टोकन नहीं दिया गया था)।")
                             st.rerun()
                     except Exception as e:
                         st.error(f"फाइल सेव करने में एरर: {str(e)}")
