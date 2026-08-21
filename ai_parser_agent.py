@@ -78,6 +78,17 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
             
     user_prompt = st.chat_input(f"Gemini से बोलें (उदा: कॉलम I और J में इनवॉइस नंबर/डेट गलत आ रही है, पार्सर कोड सुधारो)...", key=f"chat_input_{selected_shipper}")
     
+    # Session state to hold AI generated code block for editing/viewing box
+    code_box_key = f"ai_generated_code_{selected_shipper}"
+    if code_box_key not in st.session_state:
+        st.session_state[code_box_key] = ""
+        if parser_file_path and os.path.exists(parser_file_path):
+            try:
+                with open(parser_file_path, "r", encoding="utf-8") as f:
+                    st.session_state[code_box_key] = f.read()
+            except:
+                pass
+
     if user_prompt:
         st.session_state[chat_key].append({"role": "user", "content": user_prompt})
         with st.chat_message("user"):
@@ -86,13 +97,7 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
                 st.image(uploaded_ss, width=250)
             
         with st.spinner("Gemini AI पार्सर फाइल और आपके डेटा का विश्लेषण कर रहा है..."):
-            parser_code_content = ""
-            if parser_file_path and os.path.exists(parser_file_path):
-                try:
-                    with open(parser_file_path, "r", encoding="utf-8") as f:
-                        parser_code_content = f.read()
-                except Exception as e:
-                    parser_code_content = f"# Error reading file: {str(e)}"
+            parser_code_content = st.session_state[code_box_key]
                     
             cached_pdf_text = st.session_state.get("cached_pdf_text", "कोई PDF टेस्ट के लिए अपलोड नहीं की गई है।")
             shipper_context = json.dumps(shipper_info, indent=2)
@@ -115,7 +120,7 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
             Here are the current mapping rules and configuration for this shipper:
             {shipper_context}
             
-            Your job is to understand the user's request (e.g., fixing Column I/J invoice number/date extraction logic), modify the Python code accordingly, and provide:
+            Your job is to understand the user's request, write robust Python code / Regex matching logic that pdfplumber and python regex can execute reliably without failing, and provide:
             1. A clear explanation of what was changed.
             2. The complete updated Python code block wrapped in ```python ... ```.
             """
@@ -133,27 +138,46 @@ def render_ai_parser_agent_ui(selected_shipper, shipper_info):
             with st.chat_message("assistant"):
                 st.write(ai_response)
                 
-            if "```python" in ai_response and parser_file_path:
-                if st.button("💾 Apply & Save to Local & GitHub", type="primary", key=f"save_ai_code_{selected_shipper}"):
-                    try:
-                        parts = ai_response.split("```python")
-                        if len(parts) > 1:
-                            code_block = parts[1].split("```")[0].strip()
-                            
-                            # 1. Local Machine पर सेव करना
-                            with open(parser_file_path, "w", encoding="utf-8") as pf:
-                                pf.write(code_block)
-                            
-                            # 2. सीधे गूगल शीट से फेच किया गया PAT उपयोग करके GitHub पर पुश करना
-                            active_pat = load_github_pat_from_sheet()
-                            if active_pat.strip():
-                                success, msg = update_parser_file_on_github(current_parser_name, code_block, active_pat.strip())
-                                if success:
-                                    st.success(f"🎉 सफलता! लोकल फाइल और GitHub दोनों जगह कोड अपडेट हो गया है! ({msg})")
-                                else:
-                                    st.warning(f"⚠️ लोकल सेव हो गया, लेकिन GitHub अपडेट में एरर: {msg}")
-                            else:
-                                st.success(f"🎉 सफलता! फाइल `{parser_file_path}` में नया कोड लोकल रूप से सेव हो गया है (Google Sheet पर GitHub PAT सेट नहीं है)।")
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"फाइल सेव करने में एरर: {str(e)}")
+            # Extract code block and update session state for the box
+            if "```python" in ai_response:
+                parts = ai_response.split("```python")
+                if len(parts) > 1:
+                    code_block = parts[1].split("```")[0].strip()
+                    st.session_state[code_box_key] = code_block
+
+    # 🛠️ Dedicated Code / Regex Inspection & Edit Box
+    st.markdown("---")
+    st.subheader("🛠️ AI Generated Parser Code / Regex Inspector Box")
+    st.caption("AI द्वारा सुधारा गया या जनरेट किया गया यह कोड सीधे यहाँ दिखेगा। आप इसमें बदलाव भी कर सकते हैं और नीचे दिए गए बटन से सेव कर सकते हैं।")
+    
+    edited_code_input = st.text_area(
+        "Parser Code & Regex Logic:", 
+        value=st.session_state[code_box_key], 
+        height=300, 
+        key=f"text_area_code_{selected_shipper}"
+    )
+    st.session_state[code_box_key] = edited_code_input
+
+    if parser_file_path and st.button("💾 Apply & Save to Local & GitHub", type="primary", key=f"save_ai_code_{selected_shipper}"):
+        try:
+            code_block = st.session_state[code_box_key].strip()
+            if code_block:
+                # 1. Local Machine पर सेव करना
+                with open(parser_file_path, "w", encoding="utf-8") as pf:
+                    pf.write(code_block)
+                
+                # 2. सीधे गूगल शीट से फेच किया गया PAT उपयोग करके GitHub पर पुश करना
+                active_pat = load_github_pat_from_sheet()
+                if active_pat.strip():
+                    success, msg = update_parser_file_on_github(current_parser_name, code_block, active_pat.strip())
+                    if success:
+                        st.success(f"🎉 सफलता! लोकल फाइल और GitHub दोनों जगह कोड अपडेट हो गया है! ({msg})")
+                    else:
+                        st.warning(f"⚠️ लोकल सेव हो गया, लेकिन GitHub अपडेट में एरर: {msg}")
+                else:
+                    st.success(f"🎉 सफलता! फाइल `{parser_file_path}` में नया कोड लोकल रूप से सेव हो गया है (Google Sheet पर GitHub PAT सेट नहीं है)।")
+                st.rerun()
+            else:
+                st.error("❌ कोड बॉक्स खाली है!")
+        except Exception as e:
+            st.error(f"फाइल सेव करने में एरर: {str(e)}")
