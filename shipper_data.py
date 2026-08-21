@@ -336,7 +336,10 @@ def render_shipper_data():
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 with c5: ai_p = st.text_input(f"ai_{field}", value=s_val.get("ai_prompt", ""), placeholder="उदा: कीवर्ड के आगे", label_visibility="collapsed")
                 with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: TUMB", label_visibility="collapsed")
-                with c7: ext_logic = st.text_input(f"elogic_{field}", value=s_val.get("extracted_logic", ""), placeholder="AI Logic / Regex", label_visibility="collapsed")
+                
+                # 🚀 फिक्स: यहाँ गूगल शीट से आने वाली 'extracted_logic' वैल्यू को सही से लोड किया गया है
+                saved_ext_logic = s_val.get("extracted_logic", "")
+                with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="AI Logic / Regex", label_visibility="collapsed")
                 
                 with c8:
                     if st.button("🗑️", key=f"del_h_{field}"):
