@@ -98,7 +98,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
-    st.caption("पहले टेस्ट करें, रिजल्ट जांचें, और फिर एक क्लिक पर सेव करें!")
+    st.caption("पहले टेस्ट करें, रिजल्ट जांचें, और फिर सही फील्ड पर सेव करें!")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -168,10 +168,10 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # ⚡ 3. Safe Test & Save Generator Box
+            # ⚡ 3. Safe Test & Save Generator Box (पूर्ण विकल्प के साथ)
             st.write("---")
             st.subheader("⚡ 3. Smart Test & Save Generator")
-            st.caption("पहले 'Test Extraction' दबाकर रिजल्ट चेक करें, संतुष्ट होने पर ही सेव करें:")
+            st.caption("पहले 'Test Extraction First' दबाकर रिजल्ट जांचें, फिर नीचे सही फील्ड चुनकर सेव करें:")
             
             gen_col1, gen_col2, gen_col3 = st.columns([2, 2, 1])
             with gen_col1:
@@ -181,51 +181,48 @@ def render_shipper_data():
             with gen_col3:
                 word_offset = st.number_input("3. Word Index (+आगे):", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
             
+            # टेस्ट बटन
+            test_state_key = f"tested_code_{selected_shipper}"
+            if st.button("🧪 Test Extraction First", type="secondary", key=f"btn_test_{selected_shipper}"):
+                if not keyword_input.strip():
+                    st.error("कृपया कीवर्ड दर्ज करें!")
+                else:
+                    escaped_kw = re.escape(keyword_input.strip())
+                    generated_code = (
+                        f'import re\n'
+                        f'text_clean = re.sub(r"\\s+", " ", text)\n'
+                        f'pattern = r"{escaped_kw}(?:[^A-Za-z0-9]+[A-Za-z0-9]+){{{word_offset - 1}}}[^A-Za-z0-9]+([0-9A-Z\\-/\\.]{{2,25}})"\n'
+                        f'match = re.search(pattern, text_clean)\n'
+                        f'value = match.group(1) if match else None'
+                    )
+                    st.session_state[test_state_key] = generated_code
+                    
+                    try:
+                        local_env = {"text": curr_pdf_text, "re": re}
+                        exec(generated_code, {}, local_env)
+                        found_res = local_env.get("value", "Not Found")
+                        if found_res and found_res != "None":
+                            st.success(f"✅ **Test Result Found:** 👉 **`{found_res}`** (यदि यह सही है, तो नीचे फील्ड चुनकर 'Confirm & Save' दबाएं)")
+                        else:
+                            st.warning("⚠️ इस कीवर्ड और पोजीशन पर वैल्यू नहीं मिली। कृपया इंडेक्स या कीवर्ड बदल कर दोबारा टेस्ट करें।")
+                    except Exception as ex:
+                        st.error(f"Test Error: {str(ex)}")
+
+            # 4. फील्ड सेलेक्शन और सेव बटन (नीचे वाला विकल्प)
             mapping_keys = list(shipper_info.get("mapping_rules", {}).keys())
             target_field_to_update = st.selectbox("4. यह लॉजिक किस हेडर फील्ड (Field Name) पर सेव करना है?", mapping_keys if mapping_keys else ["Inv. Dt."], key=f"target_f_{selected_shipper}")
                 
-            # सेशन स्टेट में अस्थायी कोड और टेस्ट रिजल्ट होल्ड करने के लिए
-            test_state_key = f"tested_code_{selected_shipper}"
-            
-            c_test, c_save = st.columns(2)
-            with c_test:
-                if st.button("🧪 1. Test Extraction First", type="secondary", use_container_width=True, key=f"btn_test_{selected_shipper}"):
-                    if not keyword_input.strip():
-                        st.error("कृपया कीवर्ड दर्ज करें!")
-                    else:
-                        escaped_kw = re.escape(keyword_input.strip())
-                        generated_code = (
-                            f'import re\n'
-                            f'text_clean = re.sub(r"\\s+", " ", text)\n'
-                            f'pattern = r"{escaped_kw}(?:[^A-Za-z0-9]+[A-Za-z0-9]+){{{word_offset - 1}}}[^A-Za-z0-9]+([0-9A-Z\\-/\\.]{{2,25}})"\n'
-                            f'match = re.search(pattern, text_clean)\n'
-                            f'value = match.group(1) if match else None'
-                        )
-                        st.session_state[test_state_key] = generated_code
-                        
-                        try:
-                            local_env = {"text": curr_pdf_text, "re": re}
-                            exec(generated_code, {}, local_env)
-                            found_res = local_env.get("value", "Not Found")
-                            if found_res and found_res != "None":
-                                st.success(f"✅ **Test Result Found:** 👉 **`{found_res}`** (यदि यह सही है, तो नीचे 'Confirm & Save' दबाएं)")
-                            else:
-                                st.warning("⚠️ इस कीवर्ड और पोजीशन पर वैल्यू नहीं मिली। कृपया इंडेक्स या कीवर्ड बदल कर दोबारा टेस्ट करें।")
-                        except Exception as ex:
-                            st.error(f"Test Error: {str(ex)}")
-
-            with c_save:
-                if st.button("💾 2. Confirm & Save to Shipper Rule", type="primary", use_container_width=True, key=f"btn_save_tested_{selected_shipper}"):
-                    if test_state_key in st.session_state and st.session_state[test_state_key]:
-                        final_code_to_save = st.session_state[test_state_key]
-                        shipper_info["mapping_rules"][target_field_to_update]["extracted_logic"] = final_code_to_save
-                        shipper_info["mapping_rules"][target_field_to_update]["result_example"] = target_val_input.strip()
-                        shipper_info["mapping_rules"][target_field_to_update]["keyword"] = keyword_input.strip()
-                        
-                        save_local_shippers()
-                        st.success(f"🎉 सफलता! '{target_field_to_update}' के लिए रूल गूगल शीट पर परमानेंट सेव हो गया है!")
-                    else:
-                        st.warning("⚠️ कृपया पहले 'Test Extraction First' बटन दबाकर रिजल्ट वैलिडेट करें!")
+            if st.button("💾 Confirm & Save to Shipper Rule", type="primary", use_container_width=True, key=f"btn_save_tested_{selected_shipper}"):
+                if test_state_key in st.session_state and st.session_state[test_state_key]:
+                    final_code_to_save = st.session_state[test_state_key]
+                    shipper_info["mapping_rules"][target_field_to_update]["extracted_logic"] = final_code_to_save
+                    shipper_info["mapping_rules"][target_field_to_update]["result_example"] = target_val_input.strip()
+                    shipper_info["mapping_rules"][target_field_to_update]["keyword"] = keyword_input.strip()
+                    
+                    save_local_shippers()
+                    st.success(f"🎉 सफलता! '{target_field_to_update}' के लिए रूल गूगल शीट पर परमानेंट सेव हो गया है!")
+                else:
+                    st.warning("⚠️ कृपया पहले ऊपर 'Test Extraction First' बटन दबाकर रिजल्ट वैलिडेट करें!")
 
             # 🛠️ 4. Header Fields Mapping Rules Table
             st.write("---")
