@@ -98,7 +98,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
-    st.caption("हेडर रेजेक्स टेस्ट, सेव और डाइनैमिक आइटम टेबल मैपिंग का पूर्ण टूल।")
+    st.caption("कीवर्ड, पोजीशन (आगे/नीचे) और वर्ड इंडेक्स के जरिए स्मार्ट टेस्ट और सेव टूल।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -168,33 +168,53 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # ⚡ 3. Smart Test & Save Generator Box
+            # ⚡ 3. Smart Test & Save Generator Box (आगे या नीचे विकल्प के साथ)
             st.write("---")
             st.subheader("⚡ 3. Smart Test & Save Generator")
-            st.caption("पहले 'Test Extraction First' दबाकर रिजल्ट जांचें, फिर नीचे सही फील्ड चुनकर सेव करें:")
+            st.caption("कीवर्ड, दिशा (आगे/नीचे) और वर्ड इंडेक्स सेट करके पहले टेस्ट करें, फिर सेव करें:")
             
-            gen_col1, gen_col2, gen_col3 = st.columns([2, 2, 1])
+            gen_col1, gen_col2, gen_col3, gen_col4 = st.columns([1.5, 1.5, 1.0, 1.0])
             with gen_col1:
-                target_val_input = st.text_input("1. निकालनी जाने वाली वैल्यू (उदा: 02-07-2026):", key=f"t_val_{selected_shipper}")
+                target_val_input = st.text_input("1. टारगेट वैल्यू:", key=f"t_val_{selected_shipper}")
             with gen_col2:
-                keyword_input = st.text_input("2. मुख्य कीवर्ड (उदा: DTD.):", key=f"t_kw_{selected_shipper}")
+                keyword_input = st.text_input("2. मुख्य कीवर्ड:", key=f"t_kw_{selected_shipper}")
             with gen_col3:
-                word_offset = st.number_input("3. Word Index (+आगे):", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
+                pos_direction = st.selectbox("3. दिशा:", ["Right (आगे)", "Below (नीचे)"], key=f"t_dir_{selected_shipper}")
+            with gen_col4:
+                word_offset = st.number_input("4. Word Index:", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
             
             test_state_key = f"tested_code_{selected_shipper}"
             
+            # टेस्ट बटन
             if st.button("🧪 Test Extraction First", type="secondary", key=f"btn_test_{selected_shipper}"):
                 if not keyword_input.strip():
                     st.error("कृपया कीवर्ड दर्ज करें!")
                 else:
                     escaped_kw = re.escape(keyword_input.strip())
-                    generated_code = (
-                        f'import re\n'
-                        f'text_clean = re.sub(r"\\s+", " ", text)\n'
-                        f'pattern = r"{escaped_kw}(?:[^A-Za-z0-9]+[A-Za-z0-9]+){{{word_offset - 1}}}[^A-Za-z0-9]+([0-9A-Z\\-/\\.]{{2,25}})"\n'
-                        f'match = re.search(pattern, text_clean)\n'
-                        f'value = match.group(1) if match else None'
-                    )
+                    if "Below" in pos_direction:
+                        # यदि कीवर्ड के नीचे वाली लाइन से वैल्यू निकालनी हो
+                        generated_code = (
+                            f'import re\n'
+                            f'lines = text.split("\\n")\n'
+                            f'found_line = ""\n'
+                            f'for idx, l in enumerate(lines):\n'
+                            f'    if re.search(r"{escaped_kw}", l, re.IGNORECASE):\n'
+                            f'        if idx + 1 < len(lines):\n'
+                            f'            found_line = lines[idx + 1].strip()\n'
+                            f'            break\n'
+                            f'words = found_line.split()\n'
+                            f'value = words[{word_offset - 1}] if len(words) >= {word_offset} else (found_line if found_line else None)'
+                        )
+                    else:
+                        # यदि कीवर्ड के आगे (Right) से निकालनी हो
+                        generated_code = (
+                            f'import re\n'
+                            f'text_clean = re.sub(r"\\s+", " ", text)\n'
+                            f'pattern = r"{escaped_kw}(?:[^A-Za-z0-9]+[A-Za-z0-9]+){{{word_offset - 1}}}[^A-Za-z0-9]+([0-9A-Z\\-/\\.]{{2,25}})"\n'
+                            f'match = re.search(pattern, text_clean)\n'
+                            f'value = match.group(1) if match else None'
+                        )
+                        
                     st.session_state[test_state_key] = generated_code
                     
                     try:
@@ -208,8 +228,9 @@ def render_shipper_data():
                     except Exception as ex:
                         st.error(f"Test Error: {str(ex)}")
 
+            # 4. फील्ड सेलेक्शन और सेव बटन
             mapping_keys = list(shipper_info.get("mapping_rules", {}).keys())
-            target_field_to_update = st.selectbox("4. यह लॉजिक किस हेडर फील्ड (Field Name) पर सेव करना है?", mapping_keys if mapping_keys else ["Inv. Dt."], key=f"target_f_{selected_shipper}")
+            target_field_to_update = st.selectbox("5. यह लॉजिक किस हेडर फील्ड (Field Name) पर सेव करना है?", mapping_keys if mapping_keys else ["Inv. No."], key=f"target_f_{selected_shipper}")
                 
             if st.button("💾 Confirm & Save to Shipper Rule", type="primary", use_container_width=True, key=f"btn_save_tested_{selected_shipper}"):
                 if test_state_key in st.session_state and st.session_state[test_state_key]:
@@ -217,6 +238,7 @@ def render_shipper_data():
                     shipper_info["mapping_rules"][target_field_to_update]["extracted_logic"] = final_code_to_save
                     shipper_info["mapping_rules"][target_field_to_update]["result_example"] = target_val_input.strip()
                     shipper_info["mapping_rules"][target_field_to_update]["keyword"] = keyword_input.strip()
+                    shipper_info["mapping_rules"][target_field_to_update]["position"] = pos_direction
                     
                     save_local_shippers()
                     st.success(f"🎉 सफलता! '{target_field_to_update}' के लिए रूल गूगल शीट पर परमानेंट सेव हो गया है!")
@@ -272,11 +294,10 @@ def render_shipper_data():
                 }
             shipper_info["mapping_rules"] = updated_rules
 
-            # 🛠️ 5. Dynamic Item Table Rules & Mapping Table (डाइनैमिक और आइटम टेबल रूल्स)
+            # 🛠️ 5. Dynamic Item Table Rules & Mapping Table
             st.write("---")
             st.subheader("📋 5. Dynamic Item Table Rules & Mapping")
             
-            # पार्सर चयन
             current_parser_name = shipper_info.get("item_table_rule_name", "parser_welspun")
             parser_options = ["parser_welspun", "parser_polycab", "parser_bkt", "parser_vapi_welspun"]
             selected_parser = st.selectbox(
