@@ -168,7 +168,7 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # ⚡ 3. Safe Test & Save Generator Box (पूर्ण विकल्प के साथ)
+            # ⚡ 3. Smart Test & Save Generator Box (पूर्ण विकल्प के साथ)
             st.write("---")
             st.subheader("⚡ 3. Smart Test & Save Generator")
             st.caption("पहले 'Test Extraction First' दबाकर रिजल्ट जांचें, फिर नीचे सही फील्ड चुनकर सेव करें:")
@@ -181,8 +181,9 @@ def render_shipper_data():
             with gen_col3:
                 word_offset = st.number_input("3. Word Index (+आगे):", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
             
-            # टेस्ट बटन
             test_state_key = f"tested_code_{selected_shipper}"
+            
+            # टेस्ट बटन
             if st.button("🧪 Test Extraction First", type="secondary", key=f"btn_test_{selected_shipper}"):
                 if not keyword_input.strip():
                     st.error("कृपया कीवर्ड दर्ज करें!")
@@ -208,7 +209,7 @@ def render_shipper_data():
                     except Exception as ex:
                         st.error(f"Test Error: {str(ex)}")
 
-            # 4. फील्ड सेलेक्शन और सेव बटन (नीचे वाला विकल्प)
+            # 4. फील्ड सेलेक्शन और सेव बटन (अब यह हमेशा नीचे दिखाई देगा)
             mapping_keys = list(shipper_info.get("mapping_rules", {}).keys())
             target_field_to_update = st.selectbox("4. यह लॉजिक किस हेडर फील्ड (Field Name) पर सेव करना है?", mapping_keys if mapping_keys else ["Inv. Dt."], key=f"target_f_{selected_shipper}")
                 
