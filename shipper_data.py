@@ -98,7 +98,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
-    st.caption("पहले टेस्ट करें, रिजल्ट जांचें, और फिर सही फील्ड पर सेव करें!")
+    st.caption("हेडर रेजेक्स टेस्ट, सेव और डाइनैमिक आइटम टेबल मैपिंग का पूर्ण टूल।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -183,7 +183,6 @@ def render_shipper_data():
             
             test_state_key = f"tested_code_{selected_shipper}"
             
-            # टेस्ट बटन
             if st.button("🧪 Test Extraction First", type="secondary", key=f"btn_test_{selected_shipper}"):
                 if not keyword_input.strip():
                     st.error("कृपया कीवर्ड दर्ज करें!")
@@ -209,7 +208,6 @@ def render_shipper_data():
                     except Exception as ex:
                         st.error(f"Test Error: {str(ex)}")
 
-            # 4. फील्ड सेलेक्शन और सेव बटन (अब यह हमेशा साफ़-साफ़ नीचे दिखाई देगा)
             mapping_keys = list(shipper_info.get("mapping_rules", {}).keys())
             target_field_to_update = st.selectbox("4. यह लॉजिक किस हेडर फील्ड (Field Name) पर सेव करना है?", mapping_keys if mapping_keys else ["Inv. Dt."], key=f"target_f_{selected_shipper}")
                 
@@ -274,9 +272,65 @@ def render_shipper_data():
                 }
             shipper_info["mapping_rules"] = updated_rules
 
-            # 🛠️ 5. IGST Config & Dynamic Settings Section
+            # 🛠️ 5. Dynamic Item Table Rules & Mapping Table (डाइनैमिक और आइटम टेबल रूल्स)
             st.write("---")
-            st.subheader("⚙️ 5. IGST & Lut Configuration")
+            st.subheader("📋 5. Dynamic Item Table Rules & Mapping")
+            
+            # पार्सर चयन
+            current_parser_name = shipper_info.get("item_table_rule_name", "parser_welspun")
+            parser_options = ["parser_welspun", "parser_polycab", "parser_bkt", "parser_vapi_welspun"]
+            selected_parser = st.selectbox(
+                "इस शिपर के लिए आइटम पार्सर चुनें:", 
+                parser_options, 
+                index=parser_options.index(current_parser_name) if current_parser_name in parser_options else 0,
+                key=f"parser_sel_{selected_shipper}"
+            )
+            shipper_info["item_table_rule_name"] = selected_parser
+
+            item_rules = shipper_info.setdefault("item_table_rules", {})
+            updated_item_rules = {}
+            
+            if item_rules:
+                it_c1, it_c2, it_c3, it_c4, it_c5, it_c6 = st.columns([1.5, 0.8, 1.5, 1.8, 1.8, 0.5])
+                with it_c1: st.markdown("**Item Field Name**")
+                with it_c2: st.markdown("**Excel Col**")
+                with it_c3: st.markdown("**Source Type**")
+                with it_c4: st.markdown("**Extraction Rule / Keyword**")
+                with it_c5: st.markdown("**Result Example**")
+                with it_c6: st.markdown("**Del**")
+
+            source_type_opts = ["PDF Row Item", "Header Field Mapping", "Constant Text", "DEEC Declaration (PDF/Excel)", "GST Invoice (PDF/Excel)"]
+
+            for it_field, it_val in list(item_rules.items()):
+                ic1, ic2, ic3, ic4, ic5, ic6 = st.columns([1.5, 0.8, 1.5, 1.8, 1.8, 0.5])
+                
+                with ic1: edited_it_name = st.text_input(f"it_name_{it_field}", value=it_field, label_visibility="collapsed")
+                with ic2: it_col = st.text_input(f"it_col_{it_field}", value=it_val.get("col", "K"), label_visibility="collapsed")
+                
+                saved_type = it_val.get("type", "PDF Row Item")
+                if saved_type not in source_type_opts: saved_type = source_type_opts[0]
+                with ic3: it_type = st.selectbox(f"it_type_{it_field}", source_type_opts, index=source_type_opts.index(saved_type), label_visibility="collapsed")
+                
+                with ic4: it_rule = st.text_input(f"it_rule_{it_field}", value=it_val.get("rule", ""), placeholder="उदा: HSN / Description", label_visibility="collapsed")
+                with ic5: it_ex = st.text_input(f"it_ex_{it_field}", value=it_val.get("result_example", ""), placeholder="उदा: 8544...", label_visibility="collapsed")
+                
+                with ic6:
+                    if st.button("🗑️", key=f"del_it_{it_field}"):
+                        del shipper_info["item_table_rules"][it_field]
+                        save_local_shippers()
+                        st.rerun()
+                
+                updated_item_rules[edited_it_name] = {
+                    "col": it_col.upper(),
+                    "type": it_type,
+                    "rule": it_rule,
+                    "result_example": it_ex
+                }
+            shipper_info["item_table_rules"] = updated_item_rules
+
+            # 🛠️ 6. IGST & Lut Configuration
+            st.write("---")
+            st.subheader("⚙️ 6. IGST & Lut Configuration")
             igst_cfg = shipper_info.setdefault("igst_config", {})
             c_igst1, c_igst2 = st.columns(2)
             with c_igst1:
@@ -290,4 +344,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save All Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स, डायनेमिक सेटिंग्स और IGST कॉन्फ़िगरेशन सफलतापूर्वक गूगल शीट पर सिंक हो गए हैं!")
+                st.success("🎉 आपके सारे रूल्स, डाइनैमिक आइटम टेबल मैपिंग और IGST कॉन्फ़िगरेशन सफलतापूर्वक गूगल शीट पर सिंक हो गए हैं!")
