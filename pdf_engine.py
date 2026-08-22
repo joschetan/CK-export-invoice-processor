@@ -74,14 +74,13 @@ def apply_rule_filter(raw_text, mode, stop_kw, flt, keyword=""):
 def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, filter_type, field_label="", pdf_bytes=None):
     raw_t = ""
     
-    # 📦 SMART BOX EXTRACTION ENGINE (डब्बे के अंदर की सटीक सीमा)
-    if position == "📦 Extract Inside Box (डब्बे के अंदर का टेक्स्ट)" and pdf_bytes and keyword:
+    # 📦 SMART DYNAMIC ANCHOR & BOX EXTRACTION ENGINE
+    if keyword and pdf_bytes and ("Box" in str(position) or "डब्बा" in str(position)):
         try:
             with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
                 page = pdf.pages[0]
                 words = page.extract_words()
                 
-                # 1. कीवर्ड की पोजीशन ढूँढना
                 kw_word = None
                 for w in words:
                     if keyword.lower() in w['text'].lower():
@@ -92,55 +91,38 @@ def extract_header_value(pdf_lines, pdf_text, keyword, position, mode, stop_kw, 
                     kw_x0 = kw_word['x0']
                     kw_y0 = kw_word['top']
                     
-                    # 2. उस डिब्बे की हदों (Box Boundaries) का अनुमान लगाना 
                     box_x0 = kw_x0 - 5
-                    box_x1 = kw_x0 + 260  # एक मानक डिब्बे की चौड़ाई सीमा
+                    box_x1 = kw_x0 + 300 
                     box_y0 = kw_y0 - 2
-                    box_y1 = kw_y0 + 130  # डिब्बे की अधिकतम ऊँचाई नीचे की तरफ
+                    box_y1 = kw_y0 + 100 
                     
-                    # 3. सिर्फ उसी डिब्बे की बाउंड्री के अंदर आने वाले शब्दों को चुनना
                     block_words = []
                     for w in words:
                         if box_x0 <= w['x0'] <= box_x1 and box_y0 <= w['top'] <= box_y1:
-                            block_words.append(w)
+                            if keyword.lower() not in w['text'].lower():
+                                block_words.append(w)
                     
-                    # 4. लाइनों को Y-Axis के हिसाब से जोड़ना
-                    lines_dict = {}
-                    for w in block_words:
-                        line_y = round(w['top'] / 4) * 4
-                        lines_dict.setdefault(line_y, []).append(w)
-                        
-                    sorted_y = sorted(lines_dict.keys())
-                    result_lines = []
-                    stop_markers = ["notify:", "pre-carriage", "vessel", "port of", "place of", "terms of", "buyer's order"]
-                    
-                    for y in sorted_y:
-                        line_words = sorted(lines_dict[y], key=lambda x: x['x0'])
-                        line_text = " ".join([w['text'] for w in line_words]).strip()
-                        if not line_text: continue
-                        
-                        lower_lt = line_text.lower()
-                        if any(marker in lower_lt for marker in stop_markers if marker not in keyword.lower()):
-                            break
-                        result_lines.append(line_text)
-                        
-                    if result_lines:
-                        return "\n".join(result_lines).strip()
+                    if block_words:
+                        sorted_words = sorted(block_words, key=lambda x: (round(x['top']/6)*6, x['x0']))
+                        extracted_phrase = " ".join([w['text'] for w in sorted_words]).strip()
+                        if extracted_phrase:
+                            extracted_phrase = re.sub(r'^[:\-\s]+', '', extracted_phrase)
+                            return apply_rule_filter(extracted_phrase, mode, stop_kw, filter_type, keyword)
         except Exception:
             pass
 
-    # --- सामान्य बैकअप लॉजिक ---
+    # --- सामान्य लाइन-बाय-लाइन बैकअप लॉजिक ---
     if filter_type == "Exact Keyword Paste (If Found)":
         raw_t = pdf_text
     elif keyword:
         for line_i, line in enumerate(pdf_lines):
             if keyword.lower() in line.lower():
-                if position == "Right (आगे)":
+                if "Right" in str(position) or position == "Right (आगे)":
                     start_idx = line.lower().find(keyword.lower()) + len(keyword)
                     raw_t = line[start_idx:].strip()
                     if raw_t.startswith(":"): raw_t = raw_t[1:].strip()
                     if raw_t: break
-                elif position == "Below (नीचे)":
+                elif "Below" in str(position) or position == "Below (नीचे)":
                     if line_i + 1 < len(pdf_lines):
                         raw_t = pdf_lines[line_i + 1].strip()
                         if raw_t: break
@@ -166,3 +148,4 @@ def detect_igst_status(pdf_text, lut_keywords="", paid_keywords=""):
     for kw in custom_paid_kws:
         if kw in text_lower: return "P" 
     return "UNKNOWN"
+```[cite: 3]
