@@ -168,7 +168,7 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # ⚡ 3. Smart Test & Save Generator Box (पूर्ण विकल्प के साथ)
+            # ⚡ 3. Smart Test & Save Generator Box
             st.write("---")
             st.subheader("⚡ 3. Smart Test & Save Generator")
             st.caption("पहले 'Test Extraction First' दबाकर रिजल्ट जांचें, फिर नीचे सही फील्ड चुनकर सेव करें:")
@@ -209,7 +209,7 @@ def render_shipper_data():
                     except Exception as ex:
                         st.error(f"Test Error: {str(ex)}")
 
-            # 4. फील्ड सेलेक्शन और सेव बटन (अब यह हमेशा नीचे दिखाई देगा)
+            # 4. फील्ड सेलेक्शन और सेव बटन (अब यह हमेशा साफ़-साफ़ नीचे दिखाई देगा)
             mapping_keys = list(shipper_info.get("mapping_rules", {}).keys())
             target_field_to_update = st.selectbox("4. यह लॉजिक किस हेडर फील्ड (Field Name) पर सेव करना है?", mapping_keys if mapping_keys else ["Inv. Dt."], key=f"target_f_{selected_shipper}")
                 
@@ -274,7 +274,20 @@ def render_shipper_data():
                 }
             shipper_info["mapping_rules"] = updated_rules
 
+            # 🛠️ 5. IGST Config & Dynamic Settings Section
+            st.write("---")
+            st.subheader("⚙️ 5. IGST & Lut Configuration")
+            igst_cfg = shipper_info.setdefault("igst_config", {})
+            c_igst1, c_igst2 = st.columns(2)
+            with c_igst1:
+                lut_kws = st.text_input("LUT Keywords (कॉमा से अलग करें):", value=igst_cfg.get("lut_keywords", "LUT, UNDER LUT, UNDER BOND"), key=f"lut_{selected_shipper}")
+            with c_igst2:
+                paid_kws = st.text_input("Paid Keywords (कॉमा से अलग करें):", value=igst_cfg.get("paid_keywords", "SUPPLY MEANT FOR EXPORT ON PAYMENT OF IGST."), key=f"paid_{selected_shipper}")
+            
+            igst_cfg["lut_keywords"] = lut_kws
+            igst_cfg["paid_keywords"] = paid_kws
+
             st.write("---")
             if st.button("💾 Save All Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स और सेटिंग्स सफलतापूर्वक गूगल शीट पर सिंक हो गए हैं!")
+                st.success("🎉 आपके सारे रूल्स, डायनेमिक सेटिंग्स और IGST कॉन्फ़िगरेशन सफलतापूर्वक गूगल शीट पर सिंक हो गए हैं!")
