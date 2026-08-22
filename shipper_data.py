@@ -98,7 +98,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
-    st.caption("कीवर्ड, पोजीशन (आगे/नीचे) और वर्ड इंडेक्स के जरिए स्मार्ट टेस्ट और सेव टूल।")
+    st.caption("कीवर्ड, बॉक्स एक्सट्रैक्शन और पोजीशन के जरिए स्मार्ट टेस्ट और सेव टूल।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -168,31 +168,51 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # ⚡ 3. Smart Test & Save Generator Box (आगे या नीचे विकल्प के साथ)
+            # ⚡ 3. Smart Test & Save Generator Box (बॉक्स एक्सट्रैक्शन विकल्प के साथ)
             st.write("---")
-            st.subheader("⚡ 3. Smart Test & Save Generator")
-            st.caption("कीवर्ड, दिशा (आगे/नीचे) और वर्ड इंडेक्स सेट करके पहले टेस्ट करें, फिर सेव करें:")
+            st.subheader("⚡ 3. Smart Test & Save Generator (Box & Position)")
+            st.caption("कीवर्ड, दिशा (आगे/नीचे/डब्बा) और वर्ड इंडेक्स सेट करके टेस्ट करें:")
             
-            gen_col1, gen_col2, gen_col3, gen_col4 = st.columns([1.5, 1.5, 1.0, 1.0])
+            gen_col1, gen_col2, gen_col3, gen_col4 = st.columns([1.5, 1.5, 1.2, 0.8])
             with gen_col1:
                 target_val_input = st.text_input("1. टारगेट वैल्यू:", key=f"t_val_{selected_shipper}")
             with gen_col2:
                 keyword_input = st.text_input("2. मुख्य कीवर्ड:", key=f"t_kw_{selected_shipper}")
             with gen_col3:
-                pos_direction = st.selectbox("3. दिशा:", ["Right (आगे)", "Below (नीचे)"], key=f"t_dir_{selected_shipper}")
+                pos_direction = st.selectbox("3. दिशा / तरीका:", ["Right (आगे)", "Below (नीचे)", "📦 Extract Inside Box (डब्बा)"], key=f"t_dir_{selected_shipper}")
             with gen_col4:
-                word_offset = st.number_input("4. Word Index:", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
+                word_offset = st.number_input("4. Index:", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
             
             test_state_key = f"tested_code_{selected_shipper}"
             
-            # टेस्ट बटन
             if st.button("🧪 Test Extraction First", type="secondary", key=f"btn_test_{selected_shipper}"):
                 if not keyword_input.strip():
                     st.error("कृपया कीवर्ड दर्ज करें!")
                 else:
                     escaped_kw = re.escape(keyword_input.strip())
-                    if "Below" in pos_direction:
-                        # यदि कीवर्ड के नीचे वाली लाइन से वैल्यू निकालनी हो
+                    pdf_bytes_cache = st.session_state.get("cached_pdf_bytes", None)
+                    
+                    if "Box" in pos_direction and pdf_bytes_cache:
+                        # इंजन के स्मार्ट बॉक्स एक्सट्रैक्शन का उपयोग
+                        try:
+                            extracted_box_val = extract_header_value(
+                                st.session_state.get("cached_pdf_lines", []), 
+                                curr_pdf_text, 
+                                keyword_input.strip(), 
+                                "📦 Extract Inside Box (डब्बे के अंदर का टेक्स्ट)", 
+                                "Exact Word", 
+                                "", 
+                                "None", 
+                                pdf_bytes=pdf_bytes_cache
+                            )
+                            generated_code = (
+                                f'import pdfplumber, io, re\n'
+                                f'# Smart Box Extraction Logic for "{keyword_input.strip()}"\n'
+                                f'value = """{extracted_box_val}""".strip()'
+                            )
+                        except Exception:
+                            generated_code = f'value = None'
+                    elif "Below" in pos_direction:
                         generated_code = (
                             f'import re\n'
                             f'lines = text.split("\\n")\n'
@@ -206,13 +226,12 @@ def render_shipper_data():
                             f'value = words[{word_offset - 1}] if len(words) >= {word_offset} else (found_line if found_line else None)'
                         )
                     else:
-                        # यदि कीवर्ड के आगे (Right) से निकालनी हो
                         generated_code = (
                             f'import re\n'
                             f'text_clean = re.sub(r"\\s+", " ", text)\n'
-                            f'pattern = r"{escaped_kw}(?:[^A-Za-z0-9]+[A-Za-z0-9]+){{{word_offset - 1}}}[^A-Za-z0-9]+([0-9A-Z\\-/\\.]{{2,25}})"\n'
+                            f'pattern = r"{escaped_kw}(?:[^A-Za-z0-9]+[A-Za-z0-9]+){{{word_offset - 1}}}[^A-Za-z0-9]+([0-9A-Z\\-/\\., ]{{2,35}})"\n'
                             f'match = re.search(pattern, text_clean)\n'
-                            f'value = match.group(1) if match else None'
+                            f'value = match.group(1).strip() if match else None'
                         )
                         
                     st.session_state[test_state_key] = generated_code
@@ -222,9 +241,9 @@ def render_shipper_data():
                         exec(generated_code, {}, local_env)
                         found_res = local_env.get("value", "Not Found")
                         if found_res and found_res != "None":
-                            st.success(f"✅ **Test Result Found:** 👉 **`{found_res}`** (यदि यह सही है, तो नीचे फील्ड चुनकर 'Confirm & Save' दबाएं)")
+                            st.success(f"✅ **Test Result Found:** 👉 **`{found_res}`** (यदि सही है, तो नीचे फील्ड चुनकर सेव करें)")
                         else:
-                            st.warning("⚠️ इस कीवर्ड और पोजीशन पर वैल्यू नहीं मिली। कृपया इंडेक्स या कीवर्ड बदल कर दोबारा टेस्ट करें।")
+                            st.warning("⚠️ इस विधि से वैल्यू नहीं मिली। कृपया तरीका या कीवर्ड बदल कर देखें।")
                     except Exception as ex:
                         st.error(f"Test Error: {str(ex)}")
 
@@ -278,7 +297,7 @@ def render_shipper_data():
                 with c3: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
                 with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 with c5: ai_p = st.text_input(f"ai_{field}", value=s_val.get("ai_prompt", ""), placeholder="उदा: नीचे वाली लाइन", label_visibility="collapsed")
-                with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: 02-07-2026", label_visibility="collapsed")
+                with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: MONREALE", label_visibility="collapsed")
                 
                 saved_ext_logic = s_val.get("extracted_logic", "")
                 with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="यहाँ लॉजिक सेव है", label_visibility="collapsed")
