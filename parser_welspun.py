@@ -103,7 +103,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
         
         nums = item.get("nums", [])
 
-        # 🚀 1. Handle Consignee / Buyer Box / Extract fields (BW, BY etc. multi-line mapping)[cite: 16]
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type_raw = str(r_info.get("type", "PDF Row Item")).strip()
@@ -138,7 +137,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
                     else:
                         ws[f"{col_letter}{curr_row}"] = ""
 
-        # 🚀 2. Commodity Sr (BR) & Name of Commodity (BS) mapping[cite: 16]
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             f_lower = field_name.lower()
@@ -154,7 +152,6 @@ def map_items_to_excel_dynamic(ws, parsed_items, item_rules, inv_sr_no=1, start_
             elif "sr" in f_lower or f_lower == "sr." or rule_val_lower in ["(1)", "sr", "serial"] or col_letter == "BR":
                 ws[cell_ref] = item.get("commodity_sr", "")
 
-        # 🚀 3. Standard PDF Row Item Numeric & Other columns mapping (Including Column S for DBK)[cite: 16]
         for field_name, r_info in item_rules.items():
             col_letter = r_info.get("col", "").strip().upper()
             rule_type_raw = str(r_info.get("type", "PDF Row Item")).strip()
