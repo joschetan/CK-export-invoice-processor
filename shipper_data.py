@@ -7,12 +7,9 @@ from io import BytesIO
 import re
 
 from pdf_engine import detect_igst_status, extract_header_value
-from test_suite import render_universal_test_suite
-from ai_engine import ask_local_ai, create_new_parser_file_on_github, WEB_APP_URL
-from ai_parser_agent import render_ai_parser_agent_ui
 from google_sheet_sync import (
     fetch_all_from_sheet, push_rules_to_sheet, push_template_file_to_sheet, 
-    load_template_bytes_from_sheet, save_gemini_api_key_to_sheet, load_gemini_api_key_from_sheet
+    load_template_bytes_from_sheet
 )
 import requests
 
@@ -88,17 +85,46 @@ def add_custom_header_field_dialog(selected_shipper):
         else:
             rules = st.session_state["shipper_database"][selected_shipper].setdefault("mapping_rules", {})
             rules[new_field.strip()] = {
-                "logic": doc_source, "keyword": "", "cell": "", "ai_prompt": "", "result_example": "", "extracted_logic": ""
+                "logic": doc_source, "extraction_mode": "Right (आगे का शब्द)", "keyword": "", "cell": "", "result_example": "", "extracted_logic": ""
             }
             save_local_shippers()
             st.success(f"🎉 फ़ील्ड '{new_field}' गूगल शीट पर सिंक हो गया!")
             st.rerun()
 
+@st.dialog("➕ Add New Table Column Rule")
+def add_custom_table_column_dialog(selected_shipper):
+    st.write("यहाँ नया आइटम टेबल कॉलम जोड़ें:")
+    col_name = st.text_input("Item Field Name (उदा: Description, HSN Code, Qty):")
+    target_excel_col = st.text_input("Excel Column (उदा: C, F, H):", value="K")
+    source_type_opts = [
+        "PDF Row Item", 
+        "Extract After Keyword (MID/SEARCH)", 
+        "Extract Between Two Words", 
+        "Header Field Mapping", 
+        "Constant Text"
+    ]
+    sel_source_type = st.selectbox("Source Type / Mode:", source_type_opts)
+    
+    if st.button("Confirm & Add Column", type="primary"):
+        if not col_name.strip():
+            st.error("कॉलम नाम खाली नहीं हो सकता!")
+        else:
+            item_rules = st.session_state["shipper_database"][selected_shipper].setdefault("item_table_rules", {})
+            item_rules[col_name.strip()] = {
+                "col": target_excel_col.strip().upper(),
+                "type": sel_source_type,
+                "rule": "",
+                "result_example": ""
+            }
+            save_local_shippers()
+            st.success(f"🎉 कॉलम '{col_name}' सफलतापर्वक जोड़ दिया गया है!")
+            st.rerun()
+
 def render_shipper_data():
     load_local_shippers()
     
-    st.header("🏢 Add Shipper Name & No-Code Visual Mapping Builder")
-    st.caption("कीवर्ड, बॉक्स एक्सट्रैक्शन और पोजीशन के जरिए स्मार्ट टेस्ट और सेव टूल।")
+    st.header("🏢 Shipper Rules & Advanced Extraction Manager")
+    st.caption("एक्सेल फॉर्मूलों और ग्लोबल लॉजिक्स (INDEX-MATCH, MID, SEARCH, TRIM) पर आधारित स्मार्ट मैपिंग टूल।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -168,107 +194,11 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # ⚡ 3. Smart Test & Save Generator Box (बॉक्स एक्सट्रैक्शन विकल्प के साथ)
-            st.write("---")
-            st.subheader("⚡ 3. Smart Test & Save Generator (Box & Position)")
-            st.caption("कीवर्ड, दिशा (आगे/नीचे/डब्बा) और वर्ड इंडेक्स सेट करके टेस्ट करें:")
-            
-            gen_col1, gen_col2, gen_col3, gen_col4 = st.columns([1.5, 1.5, 1.2, 0.8])
-            with gen_col1:
-                target_val_input = st.text_input("1. टारगेट वैल्यू:", key=f"t_val_{selected_shipper}")
-            with gen_col2:
-                keyword_input = st.text_input("2. मुख्य कीवर्ड:", key=f"t_kw_{selected_shipper}")
-            with gen_col3:
-                pos_direction = st.selectbox("3. दिशा / तरीका:", ["Right (आगे)", "Below (नीचे)", "📦 Extract Inside Box (डब्बा)"], key=f"t_dir_{selected_shipper}")
-            with gen_col4:
-                word_offset = st.number_input("4. Index:", min_value=1, max_value=20, value=1, key=f"t_off_{selected_shipper}")
-            
-            test_state_key = f"tested_code_{selected_shipper}"
-            
-            if st.button("🧪 Test Extraction First", type="secondary", key=f"btn_test_{selected_shipper}"):
-                if not keyword_input.strip():
-                    st.error("कृपया कीवर्ड दर्ज करें!")
-                else:
-                    escaped_kw = re.escape(keyword_input.strip())
-                    pdf_bytes_cache = st.session_state.get("cached_pdf_bytes", None)
-                    
-                    if "Box" in pos_direction and pdf_bytes_cache:
-                        # इंजन के स्मार्ट बॉक्स एक्सट्रैक्शन का उपयोग
-                        try:
-                            extracted_box_val = extract_header_value(
-                                st.session_state.get("cached_pdf_lines", []), 
-                                curr_pdf_text, 
-                                keyword_input.strip(), 
-                                "📦 Extract Inside Box (डब्बे के अंदर का टेक्स्ट)", 
-                                "Exact Word", 
-                                "", 
-                                "None", 
-                                pdf_bytes=pdf_bytes_cache
-                            )
-                            generated_code = (
-                                f'import pdfplumber, io, re\n'
-                                f'# Smart Box Extraction Logic for "{keyword_input.strip()}"\n'
-                                f'value = """{extracted_box_val}""".strip()'
-                            )
-                        except Exception:
-                            generated_code = f'value = None'
-                    elif "Below" in pos_direction:
-                        generated_code = (
-                            f'import re\n'
-                            f'lines = text.split("\\n")\n'
-                            f'found_line = ""\n'
-                            f'for idx, l in enumerate(lines):\n'
-                            f'    if re.search(r"{escaped_kw}", l, re.IGNORECASE):\n'
-                            f'        if idx + 1 < len(lines):\n'
-                            f'            found_line = lines[idx + 1].strip()\n'
-                            f'            break\n'
-                            f'words = found_line.split()\n'
-                            f'value = words[{word_offset - 1}] if len(words) >= {word_offset} else (found_line if found_line else None)'
-                        )
-                    else:
-                        generated_code = (
-                            f'import re\n'
-                            f'text_clean = re.sub(r"\\s+", " ", text)\n'
-                            f'pattern = r"{escaped_kw}(?:[^A-Za-z0-9]+[A-Za-z0-9]+){{{word_offset - 1}}}[^A-Za-z0-9]+([0-9A-Z\\-/\\., ]{{2,35}})"\n'
-                            f'match = re.search(pattern, text_clean)\n'
-                            f'value = match.group(1).strip() if match else None'
-                        )
-                        
-                    st.session_state[test_state_key] = generated_code
-                    
-                    try:
-                        local_env = {"text": curr_pdf_text, "re": re}
-                        exec(generated_code, {}, local_env)
-                        found_res = local_env.get("value", "Not Found")
-                        if found_res and found_res != "None":
-                            st.success(f"✅ **Test Result Found:** 👉 **`{found_res}`** (यदि सही है, तो नीचे फील्ड चुनकर सेव करें)")
-                        else:
-                            st.warning("⚠️ इस विधि से वैल्यू नहीं मिली। कृपया तरीका या कीवर्ड बदल कर देखें।")
-                    except Exception as ex:
-                        st.error(f"Test Error: {str(ex)}")
-
-            # 4. फील्ड सेलेक्शन और सेव बटन
-            mapping_keys = list(shipper_info.get("mapping_rules", {}).keys())
-            target_field_to_update = st.selectbox("5. यह लॉजिक किस हेडर फील्ड (Field Name) पर सेव करना है?", mapping_keys if mapping_keys else ["Inv. No."], key=f"target_f_{selected_shipper}")
-                
-            if st.button("💾 Confirm & Save to Shipper Rule", type="primary", use_container_width=True, key=f"btn_save_tested_{selected_shipper}"):
-                if test_state_key in st.session_state and st.session_state[test_state_key]:
-                    final_code_to_save = st.session_state[test_state_key]
-                    shipper_info["mapping_rules"][target_field_to_update]["extracted_logic"] = final_code_to_save
-                    shipper_info["mapping_rules"][target_field_to_update]["result_example"] = target_val_input.strip()
-                    shipper_info["mapping_rules"][target_field_to_update]["keyword"] = keyword_input.strip()
-                    shipper_info["mapping_rules"][target_field_to_update]["position"] = pos_direction
-                    
-                    save_local_shippers()
-                    st.success(f"🎉 सफलता! '{target_field_to_update}' के लिए रूल गूगल शीट पर परमानेंट सेव हो गया है!")
-                else:
-                    st.warning("⚠️ कृपया पहले ऊपर 'Test Extraction First' बटन दबाकर रिजल्ट वैलिडेट करें!")
-
-            # 🛠️ 4. Header Fields Mapping Rules Table
+            # 🛠️ 3. Header Fields Mapping & Advanced Regex/Logic Rules Table
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
             with c_title:
-                st.subheader("🛠️ 4. Header Fields Mapping & Regex Rules")
+                st.subheader("🛠️ 3. Header Fields Mapping & Smart Modes")
             with c_add_h:
                 if st.button("➕ Add Header Field", type="secondary", use_container_width=True):
                     add_custom_header_field_dialog(selected_shipper)
@@ -277,50 +207,70 @@ def render_shipper_data():
             updated_rules = {}
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
             
+            # आपके एक्सेल फॉर्मूलों पर आधारित स्मार्ट एक्सट्रैक्शन मोड्स
+            extraction_mode_options = [
+                "Right (आगे का शब्द)", 
+                "Below (नीचे की लाइन)", 
+                "Relative Offset Index (MATCH + 1)", 
+                "Extract After Keyword (MID/SEARCH)", 
+                "Between Two Words", 
+                "📦 Extract Inside Box (डब्बा)"
+            ]
+            
             if current_rules:
-                h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([1.3, 1.0, 1.2, 0.6, 1.4, 1.2, 1.8, 0.4])
+                h1, h2, h3, h4, h5, h6, h7 = st.columns([1.4, 1.1, 1.5, 1.3, 0.6, 1.6, 0.4])
                 with h1: st.markdown("**Field Name**")
                 with h2: st.markdown("**Source Doc**")
-                with h3: st.markdown("**Keyword**")
-                with h4: st.markdown("**Cell**")
-                with h5: st.markdown("**Prompt**")
-                with h6: st.markdown("**Result Ex**")
-                with h7: st.markdown("**⚡ Local Python/Regex Logic**")
-                with h8: st.markdown("**Del**")
+                with h3: st.markdown("**Extraction Mode**")
+                with h4: st.markdown("**Keyword / Anchor**")
+                with h5: st.markdown("**Cell**")
+                with h6: st.markdown("**Result Example**")
+                with h7: st.markdown("**Del**")
 
             for field in list(current_rules.keys()):
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.3, 1.0, 1.2, 0.6, 1.4, 1.2, 1.8, 0.4])
+                c1, c2, c3, c4, c5, c6, c7 = st.columns([1.4, 1.1, 1.5, 1.3, 0.6, 1.6, 0.4])
                 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
                 with c2: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=doc_source_options.index(s_val.get("logic", doc_source_options[0])) if s_val.get("logic") in doc_source_options else 0, label_visibility="collapsed") 
-                with c3: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
-                with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
-                with c5: ai_p = st.text_input(f"ai_{field}", value=s_val.get("ai_prompt", ""), placeholder="उदा: नीचे वाली लाइन", label_visibility="collapsed")
-                with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: MONREALE", label_visibility="collapsed")
                 
-                saved_ext_logic = s_val.get("extracted_logic", "")
-                with c7: ext_logic = st.text_input(f"elogic_{field}", value=saved_ext_logic, placeholder="यहाँ लॉजिक सेव है", label_visibility="collapsed")
+                saved_mode = s_val.get("extraction_mode", extraction_mode_options[0])
+                if saved_mode not in extraction_mode_options: saved_mode = extraction_mode_options[0]
+                with c3: ext_mode = st.selectbox(f"mode_{field}", extraction_mode_options, index=extraction_mode_options.index(saved_mode), label_visibility="collapsed")
                 
-                with c8:
+                with c4: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), placeholder="कीवर्ड या मार्कर", label_visibility="collapsed")
+                with c5: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), placeholder="AH2", label_visibility="collapsed")
+                with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: 109 / MONREALE", label_visibility="collapsed")
+                
+                with c7:
                     if st.button("🗑️", key=f"del_h_{field}"):
                         del shipper_info["mapping_rules"][field]
                         save_local_shippers()
                         st.rerun()
                 
                 updated_rules[edited_name] = {
-                    "logic": final_logic, "keyword": ky, "cell": cl, "ai_prompt": ai_p, "result_example": res_ex, "extracted_logic": ext_logic
+                    "logic": final_logic, 
+                    "extraction_mode": ext_mode, 
+                    "keyword": ky, 
+                    "cell": cl, 
+                    "result_example": res_ex,
+                    "extracted_logic": s_val.get("extracted_logic", "")
                 }
             shipper_info["mapping_rules"] = updated_rules
 
-            # 🛠️ 5. Dynamic Item Table Rules & Mapping Table
+            # 🛠️ 4. Dynamic Item Table Rules & Mapping Table
             st.write("---")
-            st.subheader("📋 5. Dynamic Item Table Rules & Mapping")
+            c_it_title, c_it_add = st.columns([7, 3])
+            with c_it_title:
+                st.subheader("📋 4. Dynamic Item Table Rules & Mapping")
+            with c_it_add:
+                if st.button("➕ Add Table Column", type="secondary", use_container_width=True):
+                    add_custom_table_column_dialog(selected_shipper)
             
             current_parser_name = shipper_info.get("item_table_rule_name", "parser_welspun")
             parser_options = ["parser_welspun", "parser_polycab", "parser_bkt", "parser_vapi_welspun"]
             selected_parser = st.selectbox(
-                "इस शिपर के लिए आइटम पार्सर चुनें:", 
+                "इस शिपर के लिए मुख्य आइटम पार्सर चुनें:", 
                 parser_options, 
                 index=parser_options.index(current_parser_name) if current_parser_name in parser_options else 0,
                 key=f"parser_sel_{selected_shipper}"
@@ -331,18 +281,26 @@ def render_shipper_data():
             updated_item_rules = {}
             
             if item_rules:
-                it_c1, it_c2, it_c3, it_c4, it_c5, it_c6 = st.columns([1.5, 0.8, 1.5, 1.8, 1.8, 0.5])
+                it_c1, it_c2, it_c3, it_c4, it_c5, it_c6 = st.columns([1.5, 0.8, 1.8, 2.0, 1.5, 0.5])
                 with it_c1: st.markdown("**Item Field Name**")
                 with it_c2: st.markdown("**Excel Col**")
-                with it_c3: st.markdown("**Source Type**")
-                with it_c4: st.markdown("**Extraction Rule / Keyword**")
+                with it_c3: st.markdown("**Source Type / Mode**")
+                with it_c4: st.markdown("**Rule / Keyword / Formula Hint**")
                 with it_c5: st.markdown("**Result Example**")
                 with it_c6: st.markdown("**Del**")
 
-            source_type_opts = ["PDF Row Item", "Header Field Mapping", "Constant Text", "DEEC Declaration (PDF/Excel)", "GST Invoice (PDF/Excel)"]
+            source_type_opts = [
+                "PDF Row Item", 
+                "Extract After Keyword (MID/SEARCH)", 
+                "Extract Between Two Words", 
+                "Header Field Mapping", 
+                "Constant Text",
+                "DEEC Declaration (PDF/Excel)", 
+                "GST Invoice (PDF/Excel)"
+            ]
 
             for it_field, it_val in list(item_rules.items()):
-                ic1, ic2, ic3, ic4, ic5, ic6 = st.columns([1.5, 0.8, 1.5, 1.8, 1.8, 0.5])
+                ic1, ic2, ic3, ic4, ic5, ic6 = st.columns([1.5, 0.8, 1.8, 2.0, 1.5, 0.5])
                 
                 with ic1: edited_it_name = st.text_input(f"it_name_{it_field}", value=it_field, label_visibility="collapsed")
                 with ic2: it_col = st.text_input(f"it_col_{it_field}", value=it_val.get("col", "K"), label_visibility="collapsed")
@@ -351,7 +309,7 @@ def render_shipper_data():
                 if saved_type not in source_type_opts: saved_type = source_type_opts[0]
                 with ic3: it_type = st.selectbox(f"it_type_{it_field}", source_type_opts, index=source_type_opts.index(saved_type), label_visibility="collapsed")
                 
-                with ic4: it_rule = st.text_input(f"it_rule_{it_field}", value=it_val.get("rule", ""), placeholder="उदा: HSN / Description", label_visibility="collapsed")
+                with ic4: it_rule = st.text_input(f"it_rule_{it_field}", value=it_val.get("rule", ""), placeholder="कीवर्ड या सर्च स्ट्रिंग", label_visibility="collapsed")
                 with ic5: it_ex = st.text_input(f"it_ex_{it_field}", value=it_val.get("result_example", ""), placeholder="उदा: 8544...", label_visibility="collapsed")
                 
                 with ic6:
@@ -368,9 +326,9 @@ def render_shipper_data():
                 }
             shipper_info["item_table_rules"] = updated_item_rules
 
-            # 🛠️ 6. IGST & Lut Configuration
+            # 🛠️ 5. IGST & Lut Configuration
             st.write("---")
-            st.subheader("⚙️ 6. IGST & Lut Configuration")
+            st.subheader("⚙️ 5. IGST & Lut Configuration")
             igst_cfg = shipper_info.setdefault("igst_config", {})
             c_igst1, c_igst2 = st.columns(2)
             with c_igst1:
@@ -384,4 +342,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save All Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स, डाइनैमिक आइटम टेबल मैपिंग और IGST कॉन्फ़िगरेशन सफलतापूर्वक गूगल शीट पर सिंक हो गए हैं!")
+                st.success("🎉 आपके सारे रूल्स, एडवांस्ड एक्सट्रैक्शन मोड्स और मैपिंग गूगल शीट पर सफलतापूर्वक सिंक हो गए हैं!")
