@@ -8,11 +8,11 @@ from parser_bkt import extract_bkt_items
 
 def render_universal_test_suite(selected_shipper):
     st.markdown("---")
-    st.header("🚀 Master Test Engine (All Rules Validator)")
+    st.header("🚀 Comprehensive Test Suite & Validator")
     st.caption("एक क्लिक में सभी हेडर और आइटम रूल्स को रन करें और नीचे टेबल में देखें कि किस कीवर्ड से क्या एक्सट्रैक्ट हुआ है।")
 
     if "cached_pdf_lines" not in st.session_state or not st.session_state["cached_pdf_lines"]:
-        st.info("💡 कृपया पहले Section 2 में अपनी इनवॉइस PDF अपलोड करें, फिर यहाँ मास्टर टेस्ट रन करें।")
+        st.info("💡 कृपया पहले Section 2 में अपनी इनवॉइस PDF अपलोड करें, फिर यहाँ टेस्ट रन करें।")
         return
 
     pdf_lines = st.session_state.get("cached_pdf_lines", [])
@@ -24,7 +24,7 @@ def render_universal_test_suite(selected_shipper):
     item_rules = shipper_info.get("item_table_rules", {})
     assigned_parser = shipper_info.get("item_table_rule_name", "parser_welspun").strip().lower()
 
-    if st.button("⚡ Run Master Test for All Rules", type="primary", use_container_width=True):
+    if st.button("🚀 Run Comprehensive Test Suite", type="primary", use_container_width=True, key="btn_comprehensive_test_suite"):
         master_results = []
         
         # 1. Test Header Rules
@@ -89,7 +89,7 @@ def render_universal_test_suite(selected_shipper):
         
         if master_results:
             df_master = pd.DataFrame(master_results)
-            st.success("🎉 Master Test Completed Successfully!")
+            st.success("🎉 Test Suite Completed Successfully!")
             st.dataframe(df_master, use_container_width=True)
         else:
             st.warning("⚠️ जाँचने के लिए कोई रूल्स उपलब्ध नहीं हैं।")
