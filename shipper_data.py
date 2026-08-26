@@ -104,17 +104,10 @@ def add_custom_table_column_dialog(selected_shipper):
     st.write("यहाँ नया आइटम टेबल कॉलम जोड़ें:")
     col_name = st.text_input("Item Field Name (उदा: Description, HSN Code, Qty):")
     target_excel_col = st.text_input("Excel Column (उदा: C, F, H):", value="K")
-    source_type_opts = [
-        "PDF Row Item", 
-        "Extract After Keyword (MID/SEARCH)", 
-        "Extract Between Two Words", 
-        "Header Field Mapping", 
-        "Constant Text",
-        "DEEC Declaration (PDF/Excel)", 
-        "GST Invoice (PDF/Excel)"
-    ]
-    sel_source_type = st.selectbox("Source Type / Mode:", source_type_opts)
-    
+    doc_source = st.selectbox(
+        "यह डॉक्यूमेंट सोर्स चुनें:",
+        ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
+    )
     if st.button("Confirm & Add Column", type="primary"):
         if not col_name.strip():
             st.error("कॉलम नाम खाली नहीं हो सकता!")
@@ -122,10 +115,13 @@ def add_custom_table_column_dialog(selected_shipper):
             item_rules = st.session_state["shipper_database"][selected_shipper].setdefault("item_table_rules", {})
             item_rules[col_name.strip()] = {
                 "col": target_excel_col.strip().upper(),
-                "type": sel_source_type,
+                "logic": doc_source,
+                "rule": "",
+                "position": "Right (आगे का शब्द)",
+                "cell": "",
                 "match_mode": "Exact Word",
                 "filter": "None",
-                "rule": "",
+                "fallback": "",
                 "result_example": ""
             }
             save_local_shippers()
@@ -136,7 +132,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Shipper Rules & Advanced Extraction Manager")
-    st.caption("हेडर और आइटम टेबल दोनों के लिए एडवांस ड्रॉपडाउन, फिल्टर्स और मास्टर टेस्ट बटन्स के साथ।")
+    st.caption("हेडर और आइटम टेबल दोनों को एक जैसी उन्नत और समान संरचना (Identical Layout) में ढाला गया है।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -207,6 +203,11 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
+            doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
+            position_options = ["Right (आगे का शब्द)", "Below (नीचे की लाइन)", "📦 Extract Inside Box (डब्बा)"]
+            match_mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
+            filter_options = ["None", "Text Inside", "Numbers Only", "Letters Only", "Container", "Clean Date", "Exact Keyword", "Remove All"]
+
             # 🛠️ 3. Header Fields Mapping Table
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
@@ -218,11 +219,6 @@ def render_shipper_data():
             
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
-            
-            doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
-            position_options = ["Right (आगे का शब्द)", "Below (नीचे की लाइन)", "📦 Extract Inside Box (डब्बा)"]
-            match_mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
-            filter_options = ["None", "Text Inside", "Numbers Only", "Letters Only", "Container", "Clean Date", "Exact Keyword", "Remove All"]
 
             if current_rules:
                 h1, h2, h3, h4, h5, h6, h7, h8, h9, h10 = st.columns([1.2, 1.2, 1.0, 0.6, 1.1, 1.0, 1.0, 1.0, 0.4, 0.6])
@@ -329,7 +325,7 @@ def render_shipper_data():
                     for k, v in test_res_dict.items():
                         st.markdown(f"• **{k}** 👉 `value: {v}`")
 
-            # 🛠️ 4. Dynamic Item Table Rules & Mapping Table (अब हेडर जैसी एडवांस सुविधाओं के साथ)
+            # 🛠️ 4. Dynamic Item Table Rules & Mapping Table (अब हेडर जैसी हूबहू 10-कॉलम संरचना के साथ)
             st.write("---")
             c_it_title, c_it_add = st.columns([7, 3])
             with c_it_title:
@@ -350,76 +346,75 @@ def render_shipper_data():
 
             item_rules = shipper_info.setdefault("item_table_rules", {})
             updated_item_rules = {}
-            
-            source_type_opts = [
-                "PDF Row Item", 
-                "Extract After Keyword (MID/SEARCH)", 
-                "Extract Between Two Words", 
-                "Header Field Mapping", 
-                "Constant Text",
-                "DEEC Declaration (PDF/Excel)", 
-                "GST Invoice (PDF/Excel)"
-            ]
 
             if item_rules:
-                # आइटम टेबल के लिए भी एडवांस कॉलम लेआउट (Field | Col | Source | Match Mode | Filter | Rule | Del | Test)
-                it_c1, it_c2, it_c3, it_c4, it_c5, it_c6, it_c7, it_c8 = st.columns([1.2, 0.6, 1.4, 1.1, 1.0, 1.3, 0.4, 0.6])
-                with it_c1: st.markdown("**Item Field**")
-                with it_c2: st.markdown("**Col**")
-                with it_c3: st.markdown("**Source Type**")
-                with it_c4: st.markdown("**Match Mode**")
-                with it_c5: st.markdown("**Filter**")
-                with it_c6: st.markdown("**Rule / Keyword**")
-                with it_c7: st.markdown("**Del**")
-                with it_c8: st.markdown("**Test**")
+                # आइटम टेबल के लिए भी ठीक हेडर जैसी 10-कॉलम समान संरचना
+                it_h1, it_h2, it_h3, it_h4, it_h5, it_h6, it_h7, it_h8, it_h9, it_h10 = st.columns([1.2, 1.2, 1.0, 0.6, 1.1, 1.0, 1.0, 1.0, 0.4, 0.6])
+                with it_h1: st.markdown("**Item Field**")
+                with it_h2: st.markdown("**Rule / Keyword**")
+                with it_h3: st.markdown("**Position**")
+                with it_h4: st.markdown("**Excel Col**")
+                with it_h5: st.markdown("**Match Mode**")
+                with it_h6: st.markdown("**Filter**")
+                with it_h7: st.markdown("**Source**")
+                with it_h8: st.markdown("**Fallback**")
+                with it_h9: st.markdown("**Del**")
+                with it_h10: st.markdown("**Test**")
 
             if f"it_test_results_{selected_shipper}" not in st.session_state:
                 st.session_state[f"it_test_results_{selected_shipper}"] = {}
 
             for it_field, it_val in list(item_rules.items()):
-                ic1, ic2, ic3, ic4, ic5, ic6, ic7, ic8 = st.columns([1.2, 0.6, 1.4, 1.1, 1.0, 1.3, 0.4, 0.6])
+                ic1, ic2, ic3, ic4, ic5, ic6, ic7, ic8, ic9, ic10 = st.columns([1.2, 1.2, 1.0, 0.6, 1.1, 1.0, 1.0, 1.0, 0.4, 0.6])
                 
                 with ic1: edited_it_name = st.text_input(f"it_name_{it_field}", value=it_field, label_visibility="collapsed")
-                with ic2: it_col = st.text_input(f"it_col_{it_field}", value=it_val.get("col", "K"), label_visibility="collapsed")
+                with ic2: it_rule = st.text_input(f"it_rule_{it_field}", value=it_val.get("rule", ""), label_visibility="collapsed")
                 
-                saved_type = it_val.get("type", source_type_opts[0])
-                if saved_type not in source_type_opts: saved_type = source_type_opts[0]
-                with ic3: it_type = st.selectbox(f"it_type_{it_field}", source_type_opts, index=source_type_opts.index(saved_type), label_visibility="collapsed")
+                saved_it_pos = it_val.get("position", position_options[0])
+                if saved_it_pos not in position_options: saved_it_pos = position_options[0]
+                with ic3: it_pos = st.selectbox(f"it_pos_{it_field}", position_options, index=position_options.index(saved_it_pos), label_visibility="collapsed")
+                
+                with ic4: it_col = st.text_input(f"it_col_{it_field}", value=it_val.get("col", "K"), label_visibility="collapsed")
                 
                 saved_it_mode = it_val.get("match_mode", match_mode_options[0])
                 if saved_it_mode not in match_mode_options: saved_it_mode = match_mode_options[0]
-                with ic4: it_mode = st.selectbox(f"it_mode_{it_field}", match_mode_options, index=match_mode_options.index(saved_it_mode), label_visibility="collapsed")
+                with ic5: it_mode = st.selectbox(f"it_mode_{it_field}", match_mode_options, index=match_mode_options.index(saved_it_mode), label_visibility="collapsed")
                 
                 saved_it_flt = it_val.get("filter", filter_options[0])
                 if saved_it_flt not in filter_options: saved_it_flt = filter_options[0]
-                with ic5: it_flt = st.selectbox(f"it_flt_{it_field}", filter_options, index=filter_options.index(saved_it_flt), label_visibility="collapsed")
+                with ic6: it_flt = st.selectbox(f"it_flt_{it_field}", filter_options, index=filter_options.index(saved_it_flt), label_visibility="collapsed")
                 
-                with ic6: it_rule = st.text_input(f"it_rule_{it_field}", value=it_val.get("rule", ""), placeholder="कीवर्ड या सर्च स्ट्रिंग", label_visibility="collapsed")
+                saved_it_logic = it_val.get("logic", doc_source_options[0])
+                if saved_it_logic not in doc_source_options: saved_it_logic = doc_source_options[0]
+                with ic7: it_logic = st.selectbox(f"it_logic_{it_field}", doc_source_options, index=doc_source_options.index(saved_it_logic), label_visibility="collapsed")
                 
-                with ic7:
+                with ic8: it_fallback = st.text_input(f"it_fb_{it_field}", value=it_val.get("fallback", ""), placeholder="अगर ब्लैंक हो", label_visibility="collapsed")
+                
+                with ic9:
                     if st.button("🗑️", key=f"del_it_{it_field}"):
                         del shipper_info["item_table_rules"][it_field]
                         save_local_shippers()
                         st.rerun()
                 
-                with ic8:
+                with ic10:
                     if st.button("⚡ Test", key=f"test_it_{it_field}"):
                         if not curr_pdf_text:
                             st.error("कृपया पहले सैंपल PDF अपलोड करें!")
                         else:
-                            # आइटम टेबल के लिए क्विक टेस्ट रन लॉजिक
                             pdf_b_cache = st.session_state.get("cached_pdf_bytes", None)
                             res = extract_header_value(
-                                curr_pdf_lines, curr_pdf_text, it_rule, "Below (नीचे की लाइन)", it_mode, "", it_flt, field_label=edited_it_name, pdf_bytes=pdf_b_cache
+                                curr_pdf_lines, curr_pdf_text, it_rule, it_pos, it_mode, "", it_flt, field_label=edited_it_name, pdf_bytes=pdf_b_cache
                             )
                             st.session_state[f"it_test_results_{selected_shipper}"][edited_it_name] = res
 
                 updated_item_rules[edited_it_name] = {
                     "col": it_col.upper(),
-                    "type": it_type,
+                    "logic": it_logic,
+                    "rule": it_rule,
+                    "position": it_pos,
                     "match_mode": it_mode,
                     "filter": it_flt,
-                    "rule": it_rule,
+                    "fallback": it_fallback,
                     "result_example": it_val.get("result_example", "")
                 }
             shipper_info["item_table_rules"] = updated_item_rules
@@ -436,7 +431,7 @@ def render_shipper_data():
                         val = extract_header_value(
                             curr_pdf_lines, curr_pdf_text, 
                             col_rule.get("rule", ""), 
-                            "Below (नीचे की लाइन)", 
+                            col_rule.get("position", ""), 
                             col_rule.get("match_mode", ""), 
                             "", 
                             col_rule.get("filter", ""), 
@@ -472,4 +467,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save All Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स, आइटम टेबल के एडवांस मोड्स और मास्टर टेस्ट फीचर्स गूगल शीट पर सफलतापूर्वक सिंक हो गए हैं!")
+                st.success("🎉 आपके सारे रूल्स, आइटम टेबल और हेडर दोनों की एक जैसी समान संरचना के साथ गूगल शीट पर सफलतापूर्वक सिंक हो गए हैं!")
