@@ -74,9 +74,9 @@ def ensure_default_shipper():
 @st.dialog("➕ Add New Custom Header Field")
 def add_custom_header_field_dialog(selected_shipper):
     st.write("यहाँ नया हेडर फ़ील्ड जोड़ें:")
-    new_field = st.text_input("Field Name (उदा: Invoice No, GST Inv No):")
+    new_field = st.text_input("Field Name (उदा: Invoice No, Amount):")
     doc_source = st.selectbox(
-        "यह डेटा किस डॉक्यूमेंट से लिया जाएगा?",
+        "यह डॉक्यूमेंट सोर्स चुनें:",
         ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
     )
     if st.button("Confirm & Add Field", type="primary"):
@@ -85,10 +85,18 @@ def add_custom_header_field_dialog(selected_shipper):
         else:
             rules = st.session_state["shipper_database"][selected_shipper].setdefault("mapping_rules", {})
             rules[new_field.strip()] = {
-                "logic": doc_source, "extraction_mode": "Right (आगे का शब्द)", "keyword": "", "cell": "", "result_example": "", "extracted_logic": ""
+                "logic": doc_source, 
+                "keyword": "", 
+                "position": "Right (आगे)", 
+                "cell": "", 
+                "match_mode": "Exact Word", 
+                "stop_kw": "", 
+                "filter": "None", 
+                "fallback": "", 
+                "result_example": ""
             }
             save_local_shippers()
-            st.success(f"🎉 फ़ील्ड '{new_field}' गूगल शीट पर सिंक हो गया!")
+            st.success(f"🎉 फ़ील्ड '{new_field}' सफलतापर्वक जोड़ दिया गया है!")
             st.rerun()
 
 @st.dialog("➕ Add New Table Column Rule")
@@ -98,10 +106,10 @@ def add_custom_table_column_dialog(selected_shipper):
     target_excel_col = st.text_input("Excel Column (उदा: C, F, H):", value="K")
     source_type_opts = [
         "PDF Row Item", 
-        "Extract After Keyword (MID/SEARCH)", 
-        "Extract Between Two Words", 
         "Header Field Mapping", 
-        "Constant Text"
+        "Constant Text", 
+        "DEEC Declaration (PDF/Excel)", 
+        "GST Invoice (PDF/Excel)"
     ]
     sel_source_type = st.selectbox("Source Type / Mode:", source_type_opts)
     
@@ -124,7 +132,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Shipper Rules & Advanced Extraction Manager")
-    st.caption("एक्सेल फॉर्मूलों और ग्लोबल लॉजिक्स (INDEX-MATCH, MID, SEARCH, TRIM) पर आधारित स्मार्ट मैपिंग टूल।")
+    st.caption("पूर्ण रूप से अपडेटेड हेडर मैपिंग, मैच मोड्स, फिल्टर्स और इंस्टेंट टेस्ट बटन के साथ।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -190,11 +198,12 @@ def render_shipper_data():
                 st.success(f"📄 PDF लोड हो गई है ({len(pdf_lines)} पंक्तियाँ)।")
 
             curr_pdf_text = st.session_state.get("cached_pdf_text", "")
+            curr_pdf_lines = st.session_state.get("cached_pdf_lines", [])
             if curr_pdf_text:
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # 🛠️ 3. Header Fields Mapping & Advanced Regex/Logic Rules Table
+            # 🛠️ 3. Header Fields Mapping & Smart Modes Table (With Test Button)
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
             with c_title:
@@ -205,56 +214,83 @@ def render_shipper_data():
             
             current_rules = shipper_info.get("mapping_rules", {})
             updated_rules = {}
+            
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
-            
-            # आपके एक्सेल फॉर्मूलों पर आधारित स्मार्ट एक्सट्रैक्शन मोड्स
-            extraction_mode_options = [
-                "Right (आगे का शब्द)", 
-                "Below (नीचे की लाइन)", 
-                "Relative Offset Index (MATCH + 1)", 
-                "Extract After Keyword (MID/SEARCH)", 
-                "Between Two Words", 
-                "📦 Extract Inside Box (डब्बा)"
-            ]
-            
+            position_options = ["Right (आगे)", "Below (नीचे)", "📦 Extract Inside Box (डब्बा)"]
+            match_mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords"]
+            filter_options = ["None", "Numbers Only", "Letters Only", "Clean Date", "Remove Spaces"]
+
             if current_rules:
-                h1, h2, h3, h4, h5, h6, h7 = st.columns([1.4, 1.1, 1.5, 1.3, 0.6, 1.6, 0.4])
-                with h1: st.markdown("**Field Name**")
-                with h2: st.markdown("**Source Doc**")
-                with h3: st.markdown("**Extraction Mode**")
-                with h4: st.markdown("**Keyword / Anchor**")
-                with h5: st.markdown("**Cell**")
-                with h6: st.markdown("**Result Example**")
-                with h7: st.markdown("**Del**")
+                # कॉलम लेआउट: Field Name | Keyword | Position | Cell | Mode | Filter | Source | Fallback | Del | Test
+                h1, h2, h3, h4, h5, h6, h7, h8, h9, h10 = st.columns([1.2, 1.2, 1.0, 0.6, 1.1, 1.0, 1.0, 1.0, 0.4, 0.6])
+                with h1: st.markdown("**Field**")
+                with h2: st.markdown("**Keyword**")
+                with h3: st.markdown("**Position**")
+                with h4: st.markdown("**Cell**")
+                with h5: st.markdown("**Match Mode**")
+                with h6: st.markdown("**Filter**")
+                with h7: st.markdown("**Source**")
+                with h8: st.markdown("**Fallback**")
+                with h9: st.markdown("**Del**")
+                with h10: st.markdown("**Test**")
 
             for field in list(current_rules.keys()):
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7 = st.columns([1.4, 1.1, 1.5, 1.3, 0.6, 1.6, 0.4])
+                c1, c2, c3, c4, c5, c6, c7, c8, c9, c10 = st.columns([1.2, 1.2, 1.0, 0.6, 1.1, 1.0, 1.0, 1.0, 0.4, 0.6])
                 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
-                with c2: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=doc_source_options.index(s_val.get("logic", doc_source_options[0])) if s_val.get("logic") in doc_source_options else 0, label_visibility="collapsed") 
+                with c2: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
                 
-                saved_mode = s_val.get("extraction_mode", extraction_mode_options[0])
-                if saved_mode not in extraction_mode_options: saved_mode = extraction_mode_options[0]
-                with c3: ext_mode = st.selectbox(f"mode_{field}", extraction_mode_options, index=extraction_mode_options.index(saved_mode), label_visibility="collapsed")
+                saved_pos = s_val.get("position", position_options[0])
+                if saved_pos not in position_options: saved_pos = position_options[0]
+                with c3: pos = st.selectbox(f"pos_{field}", position_options, index=position_options.index(saved_pos), label_visibility="collapsed")
                 
-                with c4: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), placeholder="कीवर्ड या मार्कर", label_visibility="collapsed")
-                with c5: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), placeholder="AH2", label_visibility="collapsed")
-                with c6: res_ex = st.text_input(f"ex_{field}", value=s_val.get("result_example", ""), placeholder="उदा: 109 / MONREALE", label_visibility="collapsed")
+                with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
                 
-                with c7:
+                saved_mode = s_val.get("match_mode", match_mode_options[0])
+                if saved_mode not in match_mode_options: saved_mode = match_mode_options[0]
+                with c5: mode = st.selectbox(f"mode_{field}", match_mode_options, index=match_mode_options.index(saved_mode), label_visibility="collapsed")
+                
+                saved_flt = s_val.get("filter", filter_options[0])
+                if saved_flt not in filter_options: saved_flt = filter_options[0]
+                with c6: flt = st.selectbox(f"flt_{field}", filter_options, index=filter_options.index(saved_flt), label_visibility="collapsed")
+                
+                saved_logic = s_val.get("logic", doc_source_options[0])
+                if saved_logic not in doc_source_options: saved_logic = doc_source_options[0]
+                with c7: logic = st.selectbox(f"logic_{field}", doc_source_options, index=doc_source_options.index(saved_logic), label_visibility="collapsed")
+                
+                with c8: fallback = st.text_input(f"fb_{field}", value=s_val.get("fallback", ""), placeholder="अगर ब्लैंक हो", label_visibility="collapsed")
+                
+                with c9:
                     if st.button("🗑️", key=f"del_h_{field}"):
                         del shipper_info["mapping_rules"][field]
                         save_local_shippers()
                         st.rerun()
                 
+                with c10:
+                    if st.button("⚡ Test", key=f"test_h_{field}"):
+                        if not curr_pdf_text:
+                            st.error("कृपया ऊपर पहले सैंपल PDF अपलोड करें!")
+                        else:
+                            pdf_b_cache = st.session_state.get("cached_pdf_bytes", None)
+                            res = extract_header_value(
+                                curr_pdf_lines, curr_pdf_text, ky, pos, mode, "", flt, field_label=edited_name, pdf_bytes=pdf_b_cache
+                            )
+                            if res and res != "MODE":
+                                st.success(f"**{edited_name}**: `{res}`")
+                            else:
+                                st.warning(f"**{edited_name}**: नहीं मिला!")
+
                 updated_rules[edited_name] = {
-                    "logic": final_logic, 
-                    "extraction_mode": ext_mode, 
+                    "logic": logic, 
                     "keyword": ky, 
+                    "position": pos,
                     "cell": cl, 
-                    "result_example": res_ex,
-                    "extracted_logic": s_val.get("extracted_logic", "")
+                    "match_mode": mode,
+                    "stop_kw": s_val.get("stop_kw", ""),
+                    "filter": flt,
+                    "fallback": fallback,
+                    "result_example": s_val.get("result_example", "")
                 }
             shipper_info["mapping_rules"] = updated_rules
 
@@ -291,8 +327,6 @@ def render_shipper_data():
 
             source_type_opts = [
                 "PDF Row Item", 
-                "Extract After Keyword (MID/SEARCH)", 
-                "Extract Between Two Words", 
                 "Header Field Mapping", 
                 "Constant Text",
                 "DEEC Declaration (PDF/Excel)", 
@@ -342,4 +376,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save All Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स, एडवांस्ड एक्सट्रैक्शन मोड्स और मैपिंग गूगल शीट पर सफलतापूर्वक सिंक हो गए हैं!")
+                st.success("🎉 आपके सारे रूल्स, एडवांस्ड फिल्टर्स और टेस्ट बटन्स के साथ मैपिंग गूगल शीट पर सफलतापूर्वक सिंक हो गई है!")
