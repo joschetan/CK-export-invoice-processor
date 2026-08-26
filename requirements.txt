@@ -1,5 +1,0 @@
-streamlit
-pdfplumber
-openpyxl
-requests
-google-generativeai
