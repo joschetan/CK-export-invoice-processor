@@ -134,7 +134,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Shipper Rules & Advanced Extraction Manager")
-    st.caption("स्क्रीनशॉट के अनुसार सभी सही ड्रॉपडाउन, फिल्टर्स और टेस्ट बटन के साथ।")
+    st.caption("मास्टर टेस्ट बटन और नीचे आने वाले प्रैक्टिकल टेस्ट रिजल्ट्स के साथ अपडेटेड मैनेजर।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -219,31 +219,10 @@ def render_shipper_data():
             
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
             position_options = ["Right (आगे का शब्द)", "Below (नीचे की लाइन)", "📦 Extract Inside Box (डब्बा)"]
-            
-            # इमेज 3rd के अनुसार सभी मैच मोड्स
-            match_mode_options = [
-                "Exact Word", 
-                "Word Position", 
-                "Full Line", 
-                "After Word", 
-                "Between Keywords", 
-                "Table Row Match"
-            ]
-            
-            # इमेज 4th के अनुसार सभी फिल्टर्स
-            filter_options = [
-                "None", 
-                "Text Inside", 
-                "Numbers Only", 
-                "Letters Only", 
-                "Container", 
-                "Clean Date", 
-                "Exact Keyword", 
-                "Remove All"
-            ]
+            match_mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords", "Table Row Match"]
+            filter_options = ["None", "Text Inside", "Numbers Only", "Letters Only", "Container", "Clean Date", "Exact Keyword", "Remove All"]
 
             if current_rules:
-                # 10 कॉलम लेआउट
                 h1, h2, h3, h4, h5, h6, h7, h8, h9, h10 = st.columns([1.2, 1.2, 1.0, 0.6, 1.1, 1.0, 1.0, 1.0, 0.4, 0.6])
                 with h1: st.markdown("**Field**")
                 with h2: st.markdown("**Keyword**")
@@ -255,6 +234,10 @@ def render_shipper_data():
                 with h8: st.markdown("**Fallback**")
                 with h9: st.markdown("**Del**")
                 with h10: st.markdown("**Test**")
+
+            # सिंगल रो टेस्ट रिजल्ट स्टोर करने के लिए स्टेट की
+            if f"test_results_{selected_shipper}" not in st.session_state:
+                st.session_state[f"test_results_{selected_shipper}"] = {}
 
             for field in list(current_rules.keys()):
                 s_val = current_rules[field]
@@ -298,10 +281,7 @@ def render_shipper_data():
                             res = extract_header_value(
                                 curr_pdf_lines, curr_pdf_text, ky, pos, mode, "", flt, field_label=edited_name, pdf_bytes=pdf_b_cache
                             )
-                            if res and res != "MODE":
-                                st.success(f"**{edited_name}**: `{res}`")
-                            else:
-                                st.warning(f"**{edited_name}**: नहीं मिला!")
+                            st.session_state[f"test_results_{selected_shipper}"][edited_name] = res
 
                 updated_rules[edited_name] = {
                     "logic": logic, 
@@ -315,6 +295,42 @@ def render_shipper_data():
                     "result_example": s_val.get("result_example", "")
                 }
             shipper_info["mapping_rules"] = updated_rules
+
+            # 🚀 MASTER TEST BUTTON FOR ALL HEADER FIELDS (नीचे साफ-सुथरा परिणाम दिखाने के लिए)
+            st.write("##")
+            master_col1, master_col2 = st.columns([2, 4])
+            with master_col1:
+                if st.button("🚀 Run Master Test (Check All Headers)", type="primary", use_container_width=True):
+                    if not curr_pdf_text:
+                        st.error("कृपया पहले सैंपल PDF अपलोड करें!")
+                    else:
+                        pdf_b_cache = st.session_state.get("cached_pdf_bytes", None)
+                        batch_res = {}
+                        for f_name, f_rule in shipper_info.get("mapping_rules", {}).items():
+                            val = extract_header_value(
+                                curr_pdf_lines, curr_pdf_text, 
+                                f_rule.get("keyword", ""), 
+                                f_rule.get("position", ""), 
+                                f_rule.get("match_mode", ""), 
+                                "", 
+                                f_rule.get("filter", ""), 
+                                field_label=f_name, 
+                                pdf_bytes=pdf_b_cache
+                            )
+                            batch_res[f_name] = val
+                        st.session_state[f"master_test_res_{selected_shipper}"] = batch_res
+
+            # यदि कोई मास्टर टेस्ट या सिंगल टेस्ट रिजल्ट मौजूद है, तो उसे नीचे एक बड़े और स्पष्ट बॉक्स में दिखाएं
+            if f"master_test_res_{selected_shipper}" in st.session_state and st.session_state[f"master_test_res_{selected_shipper}"]:
+                st.info("📋 **Master Test Results (सभी हेडर फील्ड्स का रिजल्ट):**")
+                st.json(st.session_state[f"master_test_res_{selected_shipper}"])
+
+            # व्यक्तिगत टेस्ट रिजल्ट्स को रो के नीचे साफ़ दिखाने के लिए
+            test_res_dict = st.session_state.get(f"test_results_{selected_shipper}", {})
+            if test_res_dict:
+                with st.expander("🔍 View Individual Test Field Results (हाल के टेस्ट रिजल्ट्स)", expanded=True):
+                    for k, v in test_res_dict.items():
+                        st.markdown(f"• **{k}** 👉 `value: {v}`")
 
             # 🛠️ 4. Dynamic Item Table Rules & Mapping Table
             st.write("---")
@@ -400,4 +416,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save All Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स, सभी एडवांस्ड ड्रॉपडाउन और टेस्ट बटन्स के साथ मैपिंग गूगल शीट पर सफलतापर्वक सिंक हो गई है!")
+                st.success("🎉 आपके सारे रूल्स, मास्टर टेस्ट फीचर्स और मैपिंग गूगल शीट पर सफलतापर्वक सिंक हो गई है!")
