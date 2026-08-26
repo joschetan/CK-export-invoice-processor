@@ -123,6 +123,8 @@ def add_custom_table_column_dialog(selected_shipper):
             item_rules[col_name.strip()] = {
                 "col": target_excel_col.strip().upper(),
                 "type": sel_source_type,
+                "match_mode": "Exact Word",
+                "filter": "None",
                 "rule": "",
                 "result_example": ""
             }
@@ -134,7 +136,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Shipper Rules & Advanced Extraction Manager")
-    st.caption("मास्टर टेस्ट बटन और नीचे आने वाले प्रैक्टिकल टेस्ट रिजल्ट्स के साथ अपडेटेड मैनेजर।")
+    st.caption("हेडर और आइटम टेबल दोनों के लिए एडवांस ड्रॉपडाउन, फिल्टर्स और मास्टर टेस्ट बटन्स के साथ।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -235,7 +237,6 @@ def render_shipper_data():
                 with h9: st.markdown("**Del**")
                 with h10: st.markdown("**Test**")
 
-            # सिंगल रो टेस्ट रिजल्ट स्टोर करने के लिए स्टेट की
             if f"test_results_{selected_shipper}" not in st.session_state:
                 st.session_state[f"test_results_{selected_shipper}"] = {}
 
@@ -275,7 +276,7 @@ def render_shipper_data():
                 with c10:
                     if st.button("⚡ Test", key=f"test_h_{field}"):
                         if not curr_pdf_text:
-                            st.error("कृपया ऊपर पहले सैंपल PDF अपलोड करें!")
+                            st.error("कृपया पहले सैंपल PDF अपलोड करें!")
                         else:
                             pdf_b_cache = st.session_state.get("cached_pdf_bytes", None)
                             res = extract_header_value(
@@ -296,43 +297,39 @@ def render_shipper_data():
                 }
             shipper_info["mapping_rules"] = updated_rules
 
-            # 🚀 MASTER TEST BUTTON FOR ALL HEADER FIELDS (नीचे साफ-सुथरा परिणाम दिखाने के लिए)
+            # 🚀 MASTER TEST BUTTON FOR HEADERS
             st.write("##")
-            master_col1, master_col2 = st.columns([2, 4])
-            with master_col1:
-                if st.button("🚀 Run Master Test (Check All Headers)", type="primary", use_container_width=True):
-                    if not curr_pdf_text:
-                        st.error("कृपया पहले सैंपल PDF अपलोड करें!")
-                    else:
-                        pdf_b_cache = st.session_state.get("cached_pdf_bytes", None)
-                        batch_res = {}
-                        for f_name, f_rule in shipper_info.get("mapping_rules", {}).items():
-                            val = extract_header_value(
-                                curr_pdf_lines, curr_pdf_text, 
-                                f_rule.get("keyword", ""), 
-                                f_rule.get("position", ""), 
-                                f_rule.get("match_mode", ""), 
-                                "", 
-                                f_rule.get("filter", ""), 
-                                field_label=f_name, 
-                                pdf_bytes=pdf_b_cache
-                            )
-                            batch_res[f_name] = val
-                        st.session_state[f"master_test_res_{selected_shipper}"] = batch_res
+            if st.button("🚀 Run Master Test for All Headers", type="primary", use_container_width=True):
+                if not curr_pdf_text:
+                    st.error("कृपया पहले सैंपल PDF अपलोड करें!")
+                else:
+                    pdf_b_cache = st.session_state.get("cached_pdf_bytes", None)
+                    batch_res = {}
+                    for f_name, f_rule in shipper_info.get("mapping_rules", {}).items():
+                        val = extract_header_value(
+                            curr_pdf_lines, curr_pdf_text, 
+                            f_rule.get("keyword", ""), 
+                            f_rule.get("position", ""), 
+                            f_rule.get("match_mode", ""), 
+                            "", 
+                            f_rule.get("filter", ""), 
+                            field_label=f_name, 
+                            pdf_bytes=pdf_b_cache
+                        )
+                        batch_res[f_name] = val
+                    st.session_state[f"master_test_res_{selected_shipper}"] = batch_res
 
-            # यदि कोई मास्टर टेस्ट या सिंगल टेस्ट रिजल्ट मौजूद है, तो उसे नीचे एक बड़े और स्पष्ट बॉक्स में दिखाएं
             if f"master_test_res_{selected_shipper}" in st.session_state and st.session_state[f"master_test_res_{selected_shipper}"]:
-                st.info("📋 **Master Test Results (सभी हेडर फील्ड्स का रिजल्ट):**")
+                st.info("📋 **Master Test Results (हेडर फील्ड्स):**")
                 st.json(st.session_state[f"master_test_res_{selected_shipper}"])
 
-            # व्यक्तिगत टेस्ट रिजल्ट्स को रो के नीचे साफ़ दिखाने के लिए
             test_res_dict = st.session_state.get(f"test_results_{selected_shipper}", {})
             if test_res_dict:
-                with st.expander("🔍 View Individual Test Field Results (हाल के टेस्ट रिजल्ट्स)", expanded=True):
+                with st.expander("🔍 View Individual Header Test Results", expanded=True):
                     for k, v in test_res_dict.items():
                         st.markdown(f"• **{k}** 👉 `value: {v}`")
 
-            # 🛠️ 4. Dynamic Item Table Rules & Mapping Table
+            # 🛠️ 4. Dynamic Item Table Rules & Mapping Table (अब हेडर जैसी एडवांस सुविधाओं के साथ)
             st.write("---")
             c_it_title, c_it_add = st.columns([7, 3])
             with c_it_title:
@@ -354,15 +351,6 @@ def render_shipper_data():
             item_rules = shipper_info.setdefault("item_table_rules", {})
             updated_item_rules = {}
             
-            if item_rules:
-                it_c1, it_c2, it_c3, it_c4, it_c5, it_c6 = st.columns([1.5, 0.8, 1.8, 2.0, 1.5, 0.5])
-                with it_c1: st.markdown("**Item Field Name**")
-                with it_c2: st.markdown("**Excel Col**")
-                with it_c3: st.markdown("**Source Type / Mode**")
-                with it_c4: st.markdown("**Rule / Keyword / Formula Hint**")
-                with it_c5: st.markdown("**Result Example**")
-                with it_c6: st.markdown("**Del**")
-
             source_type_opts = [
                 "PDF Row Item", 
                 "Extract After Keyword (MID/SEARCH)", 
@@ -373,32 +361,100 @@ def render_shipper_data():
                 "GST Invoice (PDF/Excel)"
             ]
 
+            if item_rules:
+                # आइटम टेबल के लिए भी एडवांस कॉलम लेआउट (Field | Col | Source | Match Mode | Filter | Rule | Del | Test)
+                it_c1, it_c2, it_c3, it_c4, it_c5, it_c6, it_c7, it_c8 = st.columns([1.2, 0.6, 1.4, 1.1, 1.0, 1.3, 0.4, 0.6])
+                with it_c1: st.markdown("**Item Field**")
+                with it_c2: st.markdown("**Col**")
+                with it_c3: st.markdown("**Source Type**")
+                with it_c4: st.markdown("**Match Mode**")
+                with it_c5: st.markdown("**Filter**")
+                with it_c6: st.markdown("**Rule / Keyword**")
+                with it_c7: st.markdown("**Del**")
+                with it_c8: st.markdown("**Test**")
+
+            if f"it_test_results_{selected_shipper}" not in st.session_state:
+                st.session_state[f"it_test_results_{selected_shipper}"] = {}
+
             for it_field, it_val in list(item_rules.items()):
-                ic1, ic2, ic3, ic4, ic5, ic6 = st.columns([1.5, 0.8, 1.8, 2.0, 1.5, 0.5])
+                ic1, ic2, ic3, ic4, ic5, ic6, ic7, ic8 = st.columns([1.2, 0.6, 1.4, 1.1, 1.0, 1.3, 0.4, 0.6])
                 
                 with ic1: edited_it_name = st.text_input(f"it_name_{it_field}", value=it_field, label_visibility="collapsed")
                 with ic2: it_col = st.text_input(f"it_col_{it_field}", value=it_val.get("col", "K"), label_visibility="collapsed")
                 
-                saved_type = it_val.get("type", "PDF Row Item")
+                saved_type = it_val.get("type", source_type_opts[0])
                 if saved_type not in source_type_opts: saved_type = source_type_opts[0]
                 with ic3: it_type = st.selectbox(f"it_type_{it_field}", source_type_opts, index=source_type_opts.index(saved_type), label_visibility="collapsed")
                 
-                with ic4: it_rule = st.text_input(f"it_rule_{it_field}", value=it_val.get("rule", ""), placeholder="कीवर्ड या सर्च स्ट्रिंग", label_visibility="collapsed")
-                with ic5: it_ex = st.text_input(f"it_ex_{it_field}", value=it_val.get("result_example", ""), placeholder="उदा: 8544...", label_visibility="collapsed")
+                saved_it_mode = it_val.get("match_mode", match_mode_options[0])
+                if saved_it_mode not in match_mode_options: saved_it_mode = match_mode_options[0]
+                with ic4: it_mode = st.selectbox(f"it_mode_{it_field}", match_mode_options, index=match_mode_options.index(saved_it_mode), label_visibility="collapsed")
                 
-                with ic6:
+                saved_it_flt = it_val.get("filter", filter_options[0])
+                if saved_it_flt not in filter_options: saved_it_flt = filter_options[0]
+                with ic5: it_flt = st.selectbox(f"it_flt_{it_field}", filter_options, index=filter_options.index(saved_it_flt), label_visibility="collapsed")
+                
+                with ic6: it_rule = st.text_input(f"it_rule_{it_field}", value=it_val.get("rule", ""), placeholder="कीवर्ड या सर्च स्ट्रिंग", label_visibility="collapsed")
+                
+                with ic7:
                     if st.button("🗑️", key=f"del_it_{it_field}"):
                         del shipper_info["item_table_rules"][it_field]
                         save_local_shippers()
                         st.rerun()
                 
+                with ic8:
+                    if st.button("⚡ Test", key=f"test_it_{it_field}"):
+                        if not curr_pdf_text:
+                            st.error("कृपया पहले सैंपल PDF अपलोड करें!")
+                        else:
+                            # आइटम टेबल के लिए क्विक टेस्ट रन लॉजिक
+                            pdf_b_cache = st.session_state.get("cached_pdf_bytes", None)
+                            res = extract_header_value(
+                                curr_pdf_lines, curr_pdf_text, it_rule, "Below (नीचे की लाइन)", it_mode, "", it_flt, field_label=edited_it_name, pdf_bytes=pdf_b_cache
+                            )
+                            st.session_state[f"it_test_results_{selected_shipper}"][edited_it_name] = res
+
                 updated_item_rules[edited_it_name] = {
                     "col": it_col.upper(),
                     "type": it_type,
+                    "match_mode": it_mode,
+                    "filter": it_flt,
                     "rule": it_rule,
-                    "result_example": it_ex
+                    "result_example": it_val.get("result_example", "")
                 }
             shipper_info["item_table_rules"] = updated_item_rules
+
+            # 🚀 MASTER TEST BUTTON FOR ITEM TABLE
+            st.write("##")
+            if st.button("🚀 Run Master Test for Item Table Columns", type="primary", use_container_width=True):
+                if not curr_pdf_text:
+                    st.error("कृपया पहले सैंपल PDF अपलोड करें!")
+                else:
+                    pdf_b_cache = st.session_state.get("cached_pdf_bytes", None)
+                    it_batch_res = {}
+                    for col_name, col_rule in shipper_info.get("item_table_rules", {}).items():
+                        val = extract_header_value(
+                            curr_pdf_lines, curr_pdf_text, 
+                            col_rule.get("rule", ""), 
+                            "Below (नीचे की लाइन)", 
+                            col_rule.get("match_mode", ""), 
+                            "", 
+                            col_rule.get("filter", ""), 
+                            field_label=col_name, 
+                            pdf_bytes=pdf_b_cache
+                        )
+                        it_batch_res[col_name] = val
+                    st.session_state[f"it_master_test_res_{selected_shipper}"] = it_batch_res
+
+            if f"it_master_test_res_{selected_shipper}" in st.session_state and st.session_state[f"it_master_test_res_{selected_shipper}"]:
+                st.info("📋 **Master Test Results (आइटम टेबल कॉलम):**")
+                st.json(st.session_state[f"it_master_test_res_{selected_shipper}"])
+
+            it_test_res_dict = st.session_state.get(f"it_test_results_{selected_shipper}", {})
+            if it_test_res_dict:
+                with st.expander("🔍 View Individual Item Table Test Results", expanded=True):
+                    for k, v in it_test_res_dict.items():
+                        st.markdown(f"• **{k}** 👉 `value: {v}`")
 
             # 🛠️ 5. IGST & Lut Configuration
             st.write("---")
@@ -416,4 +472,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save All Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स, मास्टर टेस्ट फीचर्स और मैपिंग गूगल शीट पर सफलतापर्वक सिंक हो गई है!")
+                st.success("🎉 आपके सारे रूल्स, आइटम टेबल के एडवांस मोड्स और मास्टर टेस्ट फीचर्स गूगल शीट पर सफलतापूर्वक सिंक हो गए हैं!")
