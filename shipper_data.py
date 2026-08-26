@@ -87,7 +87,7 @@ def add_custom_header_field_dialog(selected_shipper):
             rules[new_field.strip()] = {
                 "logic": doc_source, 
                 "keyword": "", 
-                "position": "Right (आगे)", 
+                "position": "Right (आगे का शब्द)", 
                 "cell": "", 
                 "match_mode": "Exact Word", 
                 "stop_kw": "", 
@@ -96,7 +96,7 @@ def add_custom_header_field_dialog(selected_shipper):
                 "result_example": ""
             }
             save_local_shippers()
-            st.success(f"🎉 फ़ील्ड '{new_field}' सफलतापर्वक जोड़ दिया गया है!")
+            st.success(f"🎉 फ़ील्ड '{new_field}' सफलतापूर्वक जोड़ दिया गया है!")
             st.rerun()
 
 @st.dialog("➕ Add New Table Column Rule")
@@ -106,8 +106,10 @@ def add_custom_table_column_dialog(selected_shipper):
     target_excel_col = st.text_input("Excel Column (उदा: C, F, H):", value="K")
     source_type_opts = [
         "PDF Row Item", 
+        "Extract After Keyword (MID/SEARCH)", 
+        "Extract Between Two Words", 
         "Header Field Mapping", 
-        "Constant Text", 
+        "Constant Text",
         "DEEC Declaration (PDF/Excel)", 
         "GST Invoice (PDF/Excel)"
     ]
@@ -132,7 +134,7 @@ def render_shipper_data():
     load_local_shippers()
     
     st.header("🏢 Shipper Rules & Advanced Extraction Manager")
-    st.caption("पूर्ण रूप से अपडेटेड हेडर मैपिंग, मैच मोड्स, फिल्टर्स और इंस्टेंट टेस्ट बटन के साथ।")
+    st.caption("स्क्रीनशॉट के अनुसार सभी सही ड्रॉपडाउन, फिल्टर्स और टेस्ट बटन के साथ।")
     
     shippers_list = sorted(list(st.session_state["shipper_database"].keys()))
     if shippers_list:
@@ -203,7 +205,7 @@ def render_shipper_data():
                 with st.expander("👁️ View PDF Raw Text (यहाँ से वैल्यू देखें)", expanded=False):
                     st.text_area("PDF Raw Text:", value=curr_pdf_text[:4000], height=180, key=f"raw_txt_{selected_shipper}")
 
-            # 🛠️ 3. Header Fields Mapping & Smart Modes Table (With Test Button)
+            # 🛠️ 3. Header Fields Mapping Table
             st.write("---")
             c_title, c_add_h = st.columns([7, 3])
             with c_title:
@@ -216,12 +218,32 @@ def render_shipper_data():
             updated_rules = {}
             
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
-            position_options = ["Right (आगे)", "Below (नीचे)", "📦 Extract Inside Box (डब्बा)"]
-            match_mode_options = ["Exact Word", "Word Position", "Full Line", "After Word", "Between Keywords"]
-            filter_options = ["None", "Numbers Only", "Letters Only", "Clean Date", "Remove Spaces"]
+            position_options = ["Right (आगे का शब्द)", "Below (नीचे की लाइन)", "📦 Extract Inside Box (डब्बा)"]
+            
+            # इमेज 3rd के अनुसार सभी मैच मोड्स
+            match_mode_options = [
+                "Exact Word", 
+                "Word Position", 
+                "Full Line", 
+                "After Word", 
+                "Between Keywords", 
+                "Table Row Match"
+            ]
+            
+            # इमेज 4th के अनुसार सभी फिल्टर्स
+            filter_options = [
+                "None", 
+                "Text Inside", 
+                "Numbers Only", 
+                "Letters Only", 
+                "Container", 
+                "Clean Date", 
+                "Exact Keyword", 
+                "Remove All"
+            ]
 
             if current_rules:
-                # कॉलम लेआउट: Field Name | Keyword | Position | Cell | Mode | Filter | Source | Fallback | Del | Test
+                # 10 कॉलम लेआउट
                 h1, h2, h3, h4, h5, h6, h7, h8, h9, h10 = st.columns([1.2, 1.2, 1.0, 0.6, 1.1, 1.0, 1.0, 1.0, 0.4, 0.6])
                 with h1: st.markdown("**Field**")
                 with h2: st.markdown("**Keyword**")
@@ -327,6 +349,8 @@ def render_shipper_data():
 
             source_type_opts = [
                 "PDF Row Item", 
+                "Extract After Keyword (MID/SEARCH)", 
+                "Extract Between Two Words", 
                 "Header Field Mapping", 
                 "Constant Text",
                 "DEEC Declaration (PDF/Excel)", 
@@ -376,4 +400,4 @@ def render_shipper_data():
             st.write("---")
             if st.button("💾 Save All Rules & Sync to Google Sheet", type="primary", use_container_width=True, key="btn_save_rules_local"):
                 save_local_shippers()
-                st.success("🎉 आपके सारे रूल्स, एडवांस्ड फिल्टर्स और टेस्ट बटन्स के साथ मैपिंग गूगल शीट पर सफलतापूर्वक सिंक हो गई है!")
+                st.success("🎉 आपके सारे रूल्स, सभी एडवांस्ड ड्रॉपडाउन और टेस्ट बटन्स के साथ मैपिंग गूगल शीट पर सफलतापर्वक सिंक हो गई है!")
