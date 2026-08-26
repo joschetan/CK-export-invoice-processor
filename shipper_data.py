@@ -4,6 +4,7 @@ import pdfplumber
 import os
 import re
 import io
+import pandas as pd
 from io import BytesIO
 
 from pdf_engine import extract_header_value, detect_igst_status
@@ -283,7 +284,6 @@ def render_shipper_data():
                 st.session_state["cached_pdf_text"] = pdf_text
                 st.success(f"📄 PDF अपलोड है ({len(pdf_lines)} पंक्तियाँ)। अब नीचे ⚡ Test बटन दबाएँ!")
 
-                # 🔍 PDFPlumber Raw Structure Debugger (Previous Project Feature Added)
                 with st.expander("🔍 PDFPlumber Raw Structure Debugger (शब्द और कोऑर्डिनेट्स देखें)"):
                     if st.button("📊 Inspect PDF Raw Words & Layout", key=f"inspect_pdf_{selected_shipper}"):
                         try:
@@ -381,15 +381,16 @@ def render_shipper_data():
             
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
             
-            c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 = st.columns([1.6, 2.0, 1.2, 0.6, 1.3, 1.1, 1.3, 1.3, 1.5, 0.6, 0.9])
+            # 🔄 2nd Requirement Implemented: Field Name ke turant baad Source Doc
+            c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 = st.columns([1.6, 1.3, 2.0, 1.2, 0.6, 1.3, 1.1, 1.3, 1.5, 0.6, 0.9])
             with c1: st.markdown("**Field Name**")
-            with c2: st.markdown("**Keyword**")
-            with c3: st.markdown("**Position**")
-            with c4: st.markdown("**Cell**")
-            with c5: st.markdown("**Match Mode**")
-            with c6: st.markdown("**Stop / Word**")
-            with c7: st.markdown("**Filter**")
-            with c8: st.markdown("**Source Doc**")  
+            with c2: st.markdown("**Source Doc**")  
+            with c3: st.markdown("**Keyword**")
+            with c4: st.markdown("**Position**")
+            with c5: st.markdown("**Cell**")
+            with c6: st.markdown("**Match Mode**")
+            with c7: st.markdown("**Stop / Word**")
+            with c8: st.markdown("**Filter**")
             with c9: st.markdown("**Fallback**")
             with c10: st.markdown("**Del**")
             with c11: st.markdown("**⚡ Test**")
@@ -403,7 +404,7 @@ def render_shipper_data():
                     continue
 
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 = st.columns([1.6, 2.0, 1.2, 0.6, 1.3, 1.1, 1.3, 1.3, 1.5, 0.6, 0.9])
+                c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 = st.columns([1.6, 1.3, 2.0, 1.2, 0.6, 1.3, 1.1, 1.3, 1.5, 0.6, 0.9])
                 
                 saved_pos = s_val.get("position", "Right (आगे)")
                 pos_idx = pos_options.index(saved_pos) if saved_pos in pos_options else 0
@@ -420,13 +421,13 @@ def render_shipper_data():
                 logic_idx = doc_source_options.index(saved_logic) if saved_logic in doc_source_options else 0
 
                 with c1: edited_name = st.text_input(f"f_{field}", value=field, label_visibility="collapsed")
-                with c2: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
-                with c3: pos = st.selectbox(f"p_{field}", pos_options, index=pos_idx, label_visibility="collapsed")
-                with c4: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
-                with c5: m_mode = st.selectbox(f"mm_{field}", mode_options, index=mode_idx, label_visibility="collapsed")
-                with c6: stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), label_visibility="collapsed")
-                with c7: final_flt = st.selectbox(f"flt_{field}", filter_options, index=flt_idx, label_visibility="collapsed")
-                with c8: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=logic_idx, label_visibility="collapsed") 
+                with c2: final_logic = st.selectbox(f"logic_{field}", doc_source_options, index=logic_idx, label_visibility="collapsed") 
+                with c3: ky = st.text_input(f"k_{field}", value=s_val.get("keyword", ""), label_visibility="collapsed")
+                with c4: pos = st.selectbox(f"p_{field}", pos_options, index=pos_idx, label_visibility="collapsed")
+                with c5: cl = st.text_input(f"c_{field}", value=s_val.get("cell", ""), label_visibility="collapsed")
+                with c6: m_mode = st.selectbox(f"mm_{field}", mode_options, index=mode_idx, label_visibility="collapsed")
+                with c7: stop_kw = st.text_input(f"sk_{field}", value=s_val.get("stop_kw", ""), label_visibility="collapsed")
+                with c8: final_flt = st.selectbox(f"flt_{field}", filter_options, index=flt_idx, label_visibility="collapsed")
                 with c9: fb_val = st.text_input(f"fb_{field}", value=s_val.get("fallback", ""), label_visibility="collapsed", placeholder="अगर ब्लैंक हो")
                 with c10:
                     if st.button("🗑️", key=f"del_h_{field}"):
@@ -455,6 +456,70 @@ def render_shipper_data():
                 updated_rules[edited_name] = {"keyword": ky, "position": pos, "cell": cl, "match_mode": m_mode, "stop_kw": stop_kw, "filter": final_flt, "logic": final_logic, "fallback": fb_val}
                 
             shipper_info["mapping_rules"] = updated_rules
+
+            st.write("---")
+            
+            # 🔄 1st Requirement Implemented: Master Test Button Added for Headers & Items
+            st.subheader("🚀 Master Test Engine (All Rules Validator)")
+            st.caption("एक क्लिक में सभी हेडर और आइटम रूल्स को रन करें और देखें कि किस कीवर्ड से क्या एक्सट्रैक्ट हुआ है।")
+            
+            if st.button("⚡ Run Master Test for All Rules", type="primary", use_container_width=True):
+                if not curr_pdf_lines:
+                    st.error("⚠️ कृपया पहले Section 2 में टेस्ट PDF अपलोड करें!")
+                else:
+                    pdf_bytes = st.session_state.get("cached_pdf_bytes", None)
+                    master_results = []
+                    
+                    # Test Header Rules
+                    for f_name, f_rule in current_rules.items():
+                        res = extract_header_value(
+                            curr_pdf_lines, curr_pdf_text, f_rule.get("keyword", ""), 
+                            f_rule.get("position", ""), f_rule.get("match_mode", ""), 
+                            f_rule.get("stop_kw", ""), f_rule.get("filter", ""), 
+                            field_label=f_name, pdf_bytes=pdf_bytes
+                        )
+                        if not res or not res.strip():
+                            res = f_rule.get("fallback", "")
+                            
+                        master_results.append({
+                            "Type": "Header Field",
+                            "Name / Field": f_name,
+                            "Target Cell / Col": f_rule.get("cell", "N/A"),
+                            "Source Doc": f_rule.get("logic", "Main Invoice"),
+                            "Keyword Used": f_rule.get("keyword", "N/A"),
+                            "Extracted Value": res if res else "❌ Not Found"
+                        })
+                    
+                    # Test Item Rules
+                    for i_name, i_rule in shipper_info.get("item_table_rules", {}).items():
+                        i_rule_text = i_rule.get("rule", "")
+                        if i_rule.get("type") == "Header Field Mapping":
+                            h_rule = current_rules.get(i_rule_text, {})
+                            res = extract_header_value(
+                                curr_pdf_lines, curr_pdf_text, h_rule.get("keyword", ""), 
+                                h_rule.get("position", ""), h_rule.get("match_mode", ""), 
+                                h_rule.get("stop_kw", ""), h_rule.get("filter", ""), 
+                                field_label=i_rule_text, pdf_bytes=pdf_bytes
+                            )
+                        else:
+                            res = extract_header_value(
+                                curr_pdf_lines, curr_pdf_text, i_rule_text, 
+                                "Below (नीचे)", "Exact Word", "", "None", 
+                                field_label=i_name, pdf_bytes=pdf_bytes
+                            )
+                            
+                        master_results.append({
+                            "Type": "Item Column",
+                            "Name / Field": i_name,
+                            "Target Cell / Col": i_rule.get("col", "N/A"),
+                            "Source Doc": i_rule.get("logic", "Main Invoice"),
+                            "Keyword Used": i_rule_text,
+                            "Extracted Value": res if res else "❌ Not Found"
+                        })
+                    
+                    df_master = pd.DataFrame(master_results)
+                    st.success("🎉 Master Test Completed Successfully!")
+                    st.dataframe(df_master, use_container_width=True)
 
             st.write("---")
             st.subheader("🛡️ Column V Auto-Detection Configurator (LUT vs Paid 'P')")
