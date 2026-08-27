@@ -9,7 +9,7 @@ from parser_bkt import extract_bkt_items
 def render_universal_test_suite(selected_shipper):
     st.markdown("---")
     st.header("🚀 Comprehensive Test Suite & Validator")
-    st.caption("एक क्लिक में सभी हेडर और आइटम रूल्स को रन करें और नीचे टेबल में देखें कि किस कीवर्ड से क्या एक्सट्रैक्ट हुआ है।")
+    st.caption("एक क्लिक में सभी हेडर और आइटम रूल्स को रन करें या नीचे 'Pick Value' से लाइव पीडीएफ टेक्स्ट चुनकर विजुअली टेस्ट करें।")
 
     if "cached_pdf_lines" not in st.session_state or not st.session_state["cached_pdf_lines"]:
         st.info("💡 कृपया पहले Section 2 में अपनी इनवॉइस PDF अपलोड करें, फिर यहाँ टेस्ट रन करें।")
@@ -23,6 +23,25 @@ def render_universal_test_suite(selected_shipper):
     header_rules = shipper_info.get("mapping_rules", {})
     item_rules = shipper_info.get("item_table_rules", {})
     assigned_parser = shipper_info.get("item_table_rule_name", "parser_welspun").strip().lower()
+
+    # 🔍 NEW FEATURE: Visual Text Inspector & "Pick Value" Selector
+    with st.expander("🎯 Visual 'Pick Value' Inspector (PDF से सीधे वैल्यू चुनें)", expanded=False):
+        st.markdown("अपलोड की गई PDF के अंदर के मुख्य शब्द नीचे दिए गए हैं। आप यहाँ से वैल्यू देखकर कीवर्ड या रूल बना सकते हैं:")
+        try:
+            if pdf_bytes:
+                with pdfplumber.open(io.BytesIO(pdf_bytes) if 'io' in globals() else BytesIO(pdf_bytes)) as pdf_picker:
+                    picker_words = pdf_picker.pages[0].extract_words()
+                    word_list = [w['text'] for w in picker_words if len(w['text'].strip()) > 1]
+                    
+                    selected_picked_val = st.selectbox("📌 Pick Value from PDF Text:", options=["-- सिलेक्ट करें --"] + sorted(list(set(word_list))), key="pick_val_dropdown")
+                    if selected_picked_val and selected_picked_val != "-- सिलेक्ट करें --":
+                        st.info(f"💡 आपने चुनी है वैल्यू: `{selected_picked_val}` (इसे कॉपी करके अपने कीवर्ड या रूल में इस्तेमाल कर सकते हैं)")
+        except Exception:
+            # Fallback agar io module missing ho
+            all_words_flat = [w for line in pdf_lines for w in line.split() if len(w) > 1]
+            selected_picked_val = st.selectbox("📌 Pick Value from PDF Lines:", options=["-- सिलेक्ट करें --"] + sorted(list(set(all_words_flat))), key="pick_val_dropdown_fallback")
+            if selected_picked_val and selected_picked_val != "-- सिलेक्ट करें --":
+                st.info(f"💡 चुनी गई वैल्यू: `{selected_picked_val}`")
 
     if st.button("🚀 Run Comprehensive Test Suite", type="primary", use_container_width=True, key="btn_comprehensive_test_suite"):
         master_results = []
@@ -55,7 +74,7 @@ def render_universal_test_suite(selected_shipper):
                 "Extracted Value": res if res else "❌ Not Found"
             })
         
-        # 2. Test Item Table Rules
+        # 2. Test Item Table Rules[cite: 10]
         for i_name, i_rule in item_rules.items():
             if i_name.lower() in ["igst status", "igst mode"]:
                 continue
