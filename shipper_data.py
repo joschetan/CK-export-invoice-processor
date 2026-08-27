@@ -110,33 +110,6 @@ def show_field_test_dialog(field_name, rule_data, result_val):
         st.success("🎉 **SUCCESS! Extracted Value:**")
         st.code(result_val, language="text")
 
-# 🎯 NEW: Visual "Pick Value" Dialog to select values directly from PDF text
-@st.dialog("🎯 Visual Pick Value Selector")
-def show_pick_value_dialog(field_name, pdf_bytes, current_rules_dict):
-    st.write(f"### 🎯 Pick Value for: **`{field_name}`**")
-    st.caption("नीचे दी गई लिस्ट से अपनी मनचाही वैल्यू (जैसे 83940.000) चुनें।")
-    
-    if not pdf_bytes:
-        st.warning("⚠️ कृपया पहले Section 2 में PDF अपलोड करें।")
-        return
-
-    try:
-        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
-            words = pdf.pages[0].extract_words()
-            word_texts = [w['text'] for w in words if len(w['text'].strip()) > 0]
-            unique_words = sorted(list(set(word_texts)))
-            
-            picked_val = st.selectbox("📌 PDF में मिले शब्द / वैल्यू चुनें:", options=["-- चुनें --"] + unique_words, key=f"pick_sel_{field_name}")
-            
-            if picked_val and picked_val != "-- चुनें --":
-                st.success(f"✨ चुनी गई वैल्यू: `{picked_val}`")
-                if st.button("🚀 Apply & Save as Keyword", type="primary", key=f"apply_pick_{field_name}"):
-                    current_rules_dict[field_name]["keyword"] = picked_val
-                    st.success(f"🎉 कीवर्ड '{picked_val}' सफलतापूर्वक सेट हो गया!")
-                    st.rerun()
-    except Exception as e:
-        st.error(f"एरर: {str(e)}")
-
 @st.dialog("➕ Add New Custom Header Field")
 def add_custom_header_field_dialog(selected_shipper):
     st.write("यहाँ नया हेडर फ़ील्ड जोड़ें:")
@@ -408,8 +381,8 @@ def render_shipper_data():
             
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
             
-            # Updated columns layout to include Pick Value button column
-            c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12 = st.columns([1.5, 1.2, 1.8, 1.1, 0.5, 1.2, 1.0, 1.2, 1.3, 0.5, 0.8, 0.8])
+            # Reverted columns layout without Pick Value button column
+            c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 = st.columns([1.6, 1.3, 2.0, 1.2, 0.6, 1.3, 1.1, 1.3, 1.5, 0.6, 0.9])
             with c1: st.markdown("**Field Name**")
             with c2: st.markdown("**Source Doc**")  
             with c3: st.markdown("**Keyword**")
@@ -420,8 +393,7 @@ def render_shipper_data():
             with c8: st.markdown("**Filter**")
             with c9: st.markdown("**Fallback**")
             with c10: st.markdown("**Del**")
-            with c11: st.markdown("**🎯 Pick**")
-            with c12: st.markdown("**⚡ Test**")
+            with c11: st.markdown("**⚡ Test**")
             st.write("---")
             
             curr_pdf_lines = st.session_state.get("cached_pdf_lines", [])
@@ -432,7 +404,7 @@ def render_shipper_data():
                     continue
 
                 s_val = current_rules[field]
-                c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12 = st.columns([1.5, 1.2, 1.8, 1.1, 0.5, 1.2, 1.0, 1.2, 1.3, 0.5, 0.8, 0.8])
+                c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11 = st.columns([1.6, 1.3, 2.0, 1.2, 0.6, 1.3, 1.1, 1.3, 1.5, 0.6, 0.9])
                 
                 saved_pos = s_val.get("position", "Right (आगे)")
                 pos_idx = pos_options.index(saved_pos) if saved_pos in pos_options else 0
@@ -462,11 +434,7 @@ def render_shipper_data():
                         del st.session_state["shipper_database"][selected_shipper]["mapping_rules"][field]
                         st.rerun()
                 with c11:
-                    if st.button("🎯", key=f"pick_btn_{field}", help="PDF से सीधे वैल्यू पिक करें"):
-                        pdf_bytes_cache = st.session_state.get("cached_pdf_bytes", None)
-                        show_pick_value_dialog(edited_name, pdf_bytes_cache, current_rules)
-                with c12:
-                    if st.button("⚡", key=f"test_btn_{field}", help="टेस्ट रन करें"):
+                    if st.button("⚡ Test", key=f"test_btn_{field}"):
                         if not curr_pdf_lines:
                             st.toast("⚠️ पहले Section 2 में PDF अपलोड करें!")
                         else:
