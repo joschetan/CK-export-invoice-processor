@@ -47,7 +47,7 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
     """
     एक्सल शीट में Polycab का डेटा डायनेमिकली भरने का फंक्शन।
     यह सुनिश्चित करता है कि DESCRIPTION OF GOODS में सही लाइन ब्रेक और हेडिंग आए, 
-    तथा GST और DEEC का डेटा सही सेल में बैठे।
+    तथा GST और DEEC का डेटा सही सेल में बैठे। साथ ही आख़िरी पेज से Gross Wt (AW) और Net Wt (AX) भरता है।
     """
     current_row = start_excel_row
     overall_sr = start_overall_sr
@@ -92,5 +92,30 @@ def map_polycab_items_to_excel_dynamic(ws, parsed_items, resolved_item_rules, in
 
         current_row += 1
         overall_sr += 1
+
+    # 🚀 Polycab Hardcoded Logic: आख़िरी पेज के ग्रैंड टोटल से Gross Weight (AW) और Net Weight (AX) निकालना
+    try:
+        if pdf_text:
+            lines = pdf_text.split("\n")
+            gross_val = ""
+            net_val = ""
+            
+            # उल्टी दिशा में स्कैन करें ताकि एकदम आख़िरी वाला Grand Total (जैसे 83940.000 और 72053.071) मिले
+            for line in reversed(lines):
+                if "TOTAL" in line.upper():
+                    nums_in_line = re.findall(r'[\d,]+\.\d{3}', line)
+                    if len(nums_in_line) >= 2:
+                        gross_val = nums_in_line[0] # Gross Weight (उदा: 83940.000)[cite: 12]
+                        net_val = nums_in_line[1]   # Net Weight (उदा: 72053.071)[cite: 12]
+                        break
+            
+            # मल्टी-इनवॉइस सेट या डायनेमिक रो के हिसाब से AW और AX में वैल्यू सेट करना
+            target_fill_row = start_excel_row 
+            if gross_val:
+                ws[f"AW{target_fill_row}"] = gross_val
+            if net_val:
+                ws[f"AX{target_fill_row}"] = net_val
+    except Exception as e:
+        pass
 
     return ws, overall_sr, current_row
