@@ -110,7 +110,7 @@ def show_field_test_dialog(field_name, rule_data, result_val):
         st.success("🎉 **SUCCESS! Extracted Value:**")
         st.code(result_val, language="text")
 
-# 🎯 NEW: Visual "Pick Value" Dialog to select values directly from PDF text
+# 🎯 UPDATED: Visual Pick Value Selector (अब यह PDF के सभी पेजेस के शब्दों को स्कैन करेगा)
 @st.dialog("🎯 Visual Pick Value Selector")
 def show_pick_value_dialog(field_name, pdf_bytes, current_rules_dict):
     st.write(f"### 🎯 Pick Value for: **`{field_name}`**")
@@ -122,11 +122,18 @@ def show_pick_value_dialog(field_name, pdf_bytes, current_rules_dict):
 
     try:
         with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
-            words = pdf.pages[0].extract_words()
-            word_texts = [w['text'] for w in words if len(w['text'].strip()) > 0]
-            unique_words = sorted(list(set(word_texts)))
+            all_word_texts = []
+            # 🔄 सभी पेजेस पर लूप ताकि आखिरी पेज की वैल्यू (जैसे 83940.000) भी छूट न पाए
+            for page in pdf.pages:
+                words = page.extract_words()
+                for w in words:
+                    t = w.get('text', '').strip()
+                    if t:
+                        all_word_texts.append(t)
+                        
+            unique_words = sorted(list(set(all_word_texts)))
             
-            picked_val = st.selectbox("📌 PDF में मिले शब्द / वैल्यू चुनें:", options=["-- चुनें --"] + unique_words, key=f"pick_sel_{field_name}")
+            picked_val = st.selectbox("📌 PDF में मिले सभी शब्द / वैल्यू चुनें:", options=["-- चुनें --"] + unique_words, key=f"pick_sel_{field_name}")
             
             if picked_val and picked_val != "-- चुनें --":
                 st.success(f"✨ चुनी गई वैल्यू: `{picked_val}`")
@@ -408,7 +415,6 @@ def render_shipper_data():
             
             doc_source_options = ["Main Invoice", "GST Invoice (PDF/Excel)", "DEEC Declaration (PDF/Excel)"]
             
-            # Updated columns layout to include Pick Value button column
             c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12 = st.columns([1.5, 1.2, 1.8, 1.1, 0.5, 1.2, 1.0, 1.2, 1.3, 0.5, 0.8, 0.8])
             with c1: st.markdown("**Field Name**")
             with c2: st.markdown("**Source Doc**")  
