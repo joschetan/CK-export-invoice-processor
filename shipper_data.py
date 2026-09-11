@@ -177,7 +177,7 @@ def render_shipper_data():
     with st.expander("➕ Add New Shipper (नया शिपर जोड़ें)", expanded=False):
         new_shipper_name = st.text_input("नया शिपर कंपनी का नाम दर्ज करें:", key="input_new_shipper_name")
         
-        available_parsers = ["parser_welspun", "parser_bkt", "parser_polycab", "parser_vapi_welspun", "parser_mrl"]
+        available_parsers = ["parser_welspun", "parser_bkt", "parser_polycab", "parser_vapi_welspun", "parser_mrl", "parser_grasim"]
         selected_parser_rule = st.selectbox("इस शिपर के लिए पार्सर रूल (Parser File) चुनें:", available_parsers, key="input_new_shipper_parser")
         
         if st.button("Create New Shipper Profile", type="primary", key="btn_create_shipper"):
