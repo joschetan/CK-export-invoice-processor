@@ -214,7 +214,7 @@ def render_shipper_data():
             shipper_info = st.session_state["shipper_database"][selected_shipper]
             
             current_assigned_parser = shipper_info.get("item_table_rule_name", "parser_welspun")
-            available_parsers = ["parser_welspun", "parser_bkt", "parser_polycab", "parser_vapi_welspun"]
+            available_parsers = ["parser_welspun", "parser_bkt", "parser_polycab", "parser_vapi_welspun", "parser_mrl", "parser_grasim"]
             p_idx = available_parsers.index(current_assigned_parser) if current_assigned_parser in available_parsers else 0
             
             updated_parser_choice = st.selectbox("📌 इस शिपर के लिए एक्टिव पार्सर रूल (Parser File):", available_parsers, index=p_idx, key=f"sel_parser_{selected_shipper}")
